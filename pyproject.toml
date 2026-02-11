@@ -1,0 +1,32 @@
+[project]
+name = "nhp-capacity-conversion-logic"
+version = "0.1.0"
+description = "Repository for converting hospital activity into capacity estimates"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "azure-core>=1.38.0",
+    "azure-data-tables>=12.7.0",
+    "azure-identity>=1.25.1",
+    "azure-storage-blob>=12.28.0",
+    "dotenv>=0.9.9",
+    "nhp-products",
+    "pandas>=3.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=80", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+nhp-products = { git = "https://github.com/the-strategy-unit/nhp_products.git", rev = "v4.4.0" }
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "ruff>=0.15.0",
+]
