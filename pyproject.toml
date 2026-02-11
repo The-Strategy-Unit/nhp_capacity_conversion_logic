@@ -12,6 +12,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "nhp-products",
     "pandas>=3.0.0",
+    "pandas-stubs>=3.0.0.260204",
 ]
 
 [build-system]
@@ -30,3 +31,12 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.15.0",
 ]
+
+[tool.pyright]
+ignore = [      
+    "build",
+]
+
+[tool.pytest.ini_options]
+addopts = "--ignore=tests"
+testpaths = ["tests/unit"]
