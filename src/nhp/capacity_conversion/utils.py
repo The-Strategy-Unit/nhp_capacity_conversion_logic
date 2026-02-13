@@ -18,5 +18,6 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     return pd.read_csv(path_to_csv).set_index("assumption_name").sort_index()
 
 
-def save_results_to_csv(data, filename):
+def save_results_to_csv(data: pd.DataFrame, filename: str):
+    # TODO: #9 For now it's extremely rudimentary!
     data.to_csv(f"{filename}.csv")

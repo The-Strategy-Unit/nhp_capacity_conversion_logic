@@ -1,19 +1,8 @@
-# Command line argument - guid for the folder to convert to capacity
-# Load the data from Azure
-# Convert data into capacity - separate functions for:
-# adult_minor_bays
-# adult_major_beds
-# resus_beds
-# children_minor_bays
-# children_major_beds
-# sdec_spaces
-# Output data into Excel spreadsheet together with all assumptions and original data
-
-
 from nhpy.utils import configure_logging, get_logger
+from numpy import save
 import pandas as pd
 from nhpy.az import connect_to_container, load_parquet_file
-from nhp.capacity_conversion.utils import load_assumptions
+from nhp.capacity_conversion.utils import load_assumptions, save_results_to_csv
 import argparse
 from typing import cast
 import sys
@@ -238,7 +227,7 @@ def main():
     )
     functional_areas_summarised = process_aae(aae_aggregations)
     aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
-    print(aae_capacity_df)
+    save_results_to_csv(aae_capacity_df, "results/aae")
 
 
 if __name__ == "__main__":
