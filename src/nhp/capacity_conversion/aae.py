@@ -1,5 +1,4 @@
 from nhpy.utils import configure_logging, get_logger
-from numpy import save
 import pandas as pd
 from nhpy.az import connect_to_container, load_parquet_file
 from nhp.capacity_conversion.utils import load_assumptions, save_results_to_csv
