@@ -148,13 +148,13 @@ def calculate_aae_capacity(
     logger.info("Calculating A&E capacity")
     results_dict = {}
     for capacity_requirement in [
-        "adult_major_beds",
-        "adult_minor_bays",
-        "child_major_beds",
-        "child_minor_bays",
+        "adult_major_spaces",
+        "adult_minor_spaces",
+        "child_major_spaces",
+        "child_minor_spaces",
         "sdec_spaces",
-        "adult_resus_beds",
-        "child_resus_beds",  # TODO: see #8
+        "adult_resus_spaces",
+        "child_resus_spaces",  # TODO: see #8
     ]:
         results = {}
         assumed_los_mins = cast(
