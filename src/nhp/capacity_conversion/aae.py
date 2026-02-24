@@ -8,6 +8,7 @@ import sys
 import os
 from dotenv import load_dotenv
 from logging import INFO
+from datetime import datetime
 
 logger = get_logger()
 
@@ -203,6 +204,7 @@ def main():
         int: Exit code (0 for success, 2 for errors)
     """
     configure_logging(INFO)
+    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
     parser = argparse.ArgumentParser(
         description="Generate A&E capacity outputs given functional area aggregations of A&E activity"
     )
@@ -226,7 +228,8 @@ def main():
     )
     functional_areas_summarised = process_aae(aae_aggregations)
     aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
-    save_results_to_csv(aae_capacity_df, "results/aae")
+    guid = args.aggregations_path.strip("/").split("/")[-1]
+    save_results_to_csv(aae_capacity_df, guid, capacity_conversion_runtime, "aae")
 
 
 if __name__ == "__main__":
