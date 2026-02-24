@@ -153,8 +153,7 @@ def calculate_aae_capacity(
         "child_major_beds",
         "child_minor_bays",
         "sdec_spaces",
-        "adult_resus_beds",
-        "child_resus_beds",  # TODO: see #8
+        "resus_spaces",
     ]:
         results = {}
         assumed_los_mins = cast(
