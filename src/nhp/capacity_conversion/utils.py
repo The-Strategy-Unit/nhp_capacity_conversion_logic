@@ -1,5 +1,6 @@
 import pandas as pd
 from nhpy.utils import get_logger
+import os
 
 logger = get_logger()
 
@@ -18,6 +19,22 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     return pd.read_csv(path_to_csv).set_index("assumption_name").sort_index()
 
 
-def save_results_to_csv(data: pd.DataFrame, filename: str):
-    # TODO: #9 For now it's extremely rudimentary!
-    data.to_csv(f"{filename}.csv")
+def save_results_to_csv(
+    data: pd.DataFrame,
+    guid: str,
+    capacity_conversion_runtime: str,
+    activity_type: str,
+) -> None:
+    """Saves results as CSV files to filepath "results/GUID/CAPACITY_CONVERSION_RUNTIME/"
+
+    Args:
+        data (pd.DataFrame): Data to be saved
+        guid (str): GUID for functional aggregations used for capacity conversion
+        capacity_conversion_runtime (str): Runtime of capacity conversion
+        activity_type (str): Activity type: one of aae, op, ip
+    """
+    directory = os.path.join("results", guid, capacity_conversion_runtime)
+    os.makedirs(directory, exist_ok=True)
+    filepath = os.path.join(directory, f"{activity_type}.csv")
+    data.to_csv(filepath)
+    logger.info(f"💾 Results saved to {filepath}")
