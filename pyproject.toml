@@ -29,13 +29,18 @@ nhp-products = { git = "https://github.com/the-strategy-unit/nhp_products.git", 
 dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
     "ruff>=0.15.0",
+    "ty>=0.0.19",
 ]
 
 [tool.pyright]
 ignore = [      
     "build",
 ]
+
+[tool.coverage.run]
+omit=["tests/*"]
 
 [tool.pytest.ini_options]
 addopts = "--ignore=tests"
