@@ -1,7 +1,12 @@
 import pandas as pd
 from pandas.testing import assert_series_equal
 
-from nhp.capacity_conversion.aae import map_unknown, load_aae_aggregations, process_aae
+from nhp.capacity_conversion.aae import (
+    map_unknown,
+    load_aae_aggregations,
+    process_aae,
+    convert_aae_capacity,
+)
 
 
 def test_load_aae_aggregations(mocker, caplog):
@@ -70,3 +75,25 @@ def test_map_unknown():
             ]
         ),
     )
+
+
+def test_convert_aae_capacity():
+    # arrange
+    attendances = 10000
+    assumed_los_mins = 240
+    operating_weeks_per_year = 52
+    operating_hours_per_week = 168
+    utilisation_rate = 0.5
+
+    expected = 40000 / 4368
+
+    # act
+    actual = convert_aae_capacity(
+        attendances,
+        assumed_los_mins,
+        operating_weeks_per_year,
+        operating_hours_per_week,
+        utilisation_rate,
+    )
+    # assert
+    assert actual == expected
