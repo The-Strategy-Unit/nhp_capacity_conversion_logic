@@ -6,6 +6,7 @@ from nhp.capacity_conversion.aae import (
     load_aae_aggregations,
     process_aae,
     convert_aae_capacity,
+    map_aae_capacity_to_functional_area,
 )
 
 
@@ -95,5 +96,15 @@ def test_convert_aae_capacity():
         operating_hours_per_week,
         utilisation_rate,
     )
+    # assert
+    assert actual == expected
+
+
+def test_map_aae_capacity_to_functional_area():
+    # arrange
+    capacity_requirement_string = "sdec_spaces"
+    expected = "sdec_attendances"
+    # act
+    actual = map_aae_capacity_to_functional_area(capacity_requirement_string)
     # assert
     assert actual == expected
