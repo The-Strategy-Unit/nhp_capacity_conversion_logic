@@ -8,6 +8,7 @@ from nhp.capacity_conversion.aae import (
     convert_aae_capacity,
     map_aae_capacity_to_functional_area,
     calculate_aae_capacity,
+    main,
 )
 
 
@@ -169,8 +170,72 @@ def test_calculate_aae_capacity(mocker, caplog):
     # check arguments in calls to convert_aae_capacity
     first_call = mock_convert.call_args_list[0]
     args = first_call.args
-
     assert args[1] == 240  # assumed_los
     assert args[2] == 52  # operating_weeks
     assert args[3] == 168  # operating_hours
     assert args[4] == 0.5  # utilisation
+
+
+def test_main(mocker):
+    # arrange
+    module_path = "nhp.capacity_conversion.aae"
+
+    mock_now = mocker.Mock()
+    mock_now.strftime.return_value = "20250101_120000"
+    mocker.patch(f"{module_path}.datetime").now.return_value = mock_now
+
+    mock_parser = mocker.Mock()
+    mock_args = mocker.Mock()
+    mock_args.aggregations_path = "functional-aggregations/V1/GUID123/"
+    mock_args.path_to_assumptions_file = "assumptions.csv"
+
+    mock_parser.parse_args.return_value = mock_args
+    mocker.patch(f"{module_path}.argparse.ArgumentParser", return_value=mock_parser)
+
+    mocker.patch(f"{module_path}.load_dotenv")
+    mocker.patch(f"{module_path}.os.getenv", side_effect=["account_url", "container"])
+
+    mock_assumptions = pd.DataFrame()
+    mocker.patch(f"{module_path}.load_assumptions", return_value=mock_assumptions)
+
+    mock_aggregations = pd.DataFrame()
+    mocker.patch(f"{module_path}.load_aae_aggregations", return_value=mock_aggregations)
+
+    mock_functional_summary = {"area": {"mean": 1}}
+    mocker.patch(
+        f"{module_path}.process_aae",
+        return_value=mock_functional_summary,
+    )
+
+    mock_capacity_df = pd.DataFrame({"mean": [1]})
+    mocker.patch(
+        f"{module_path}.calculate_aae_capacity",
+        return_value=mock_capacity_df,
+    )
+
+    mock_save = mocker.patch(f"{module_path}.save_results_to_csv")
+
+    # act
+
+    main()
+
+    # assert
+
+    module = __import__(module_path, fromlist=["dummy"])
+    module.load_assumptions.assert_called_once_with("assumptions.csv")
+    module.load_aae_aggregations.assert_called_once_with(
+        "account_url",
+        "container",
+        "functional-aggregations/V1/GUID123/",
+    )
+    module.process_aae.assert_called_once_with(mock_aggregations)
+    module.calculate_aae_capacity.assert_called_once_with(
+        mock_functional_summary,
+        mock_assumptions,
+    )
+    mock_save.assert_called_once_with(
+        mock_capacity_df,
+        "GUID123",
+        "20250101_120000",
+        "aae",
+    )

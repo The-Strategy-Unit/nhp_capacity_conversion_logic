@@ -43,6 +43,9 @@ ignore = [
 [tool.coverage.run]
 omit=["tests/*"]
 
+[tool.coverage.report]
+exclude_also = ['if __name__ == .__main__.:']
+
 [tool.pytest.ini_options]
 addopts = "--ignore=tests"
 testpaths = ["tests/unit"]
