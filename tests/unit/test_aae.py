@@ -45,6 +45,10 @@ def test_process_aae(mocker):
         "nhp.capacity_conversion.aae.map_unknown",
         return_value=aae_aggregations["grouping"],
     )
+    mocker.patch(
+        "nhp.capacity_conversion.aae.calculate_prediction_intervals_and_mean",
+        return_value={"mean": 4.5, "p10": 4.1, "p90": 4.9},
+    )
 
     expected = {
         "a": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
