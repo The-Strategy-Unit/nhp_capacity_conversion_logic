@@ -1,7 +1,14 @@
-from nhpy.utils import configure_logging, get_logger
+from nhpy.utils import (
+    configure_logging,
+    get_logger,
+)
 import pandas as pd
 from nhpy.az import connect_to_container, load_parquet_file
-from nhp.capacity_conversion.utils import load_assumptions, save_results_to_csv
+from nhp.capacity_conversion.utils import (
+    load_assumptions,
+    save_results_to_csv,
+    calculate_prediction_intervals_and_mean,
+)
 import argparse
 from typing import cast
 import sys
@@ -48,23 +55,6 @@ def map_unknown(groupings_column: pd.Series) -> pd.Series:
             "child_unknown": "child_minor_attendances",
         },
     )
-
-
-def calculate_prediction_intervals_and_mean(
-    arrivals_column: pd.Series,
-) -> dict[str, float]:
-    """Calculate p10, p90 and mean for activity in each functional area
-
-    Args:
-        arrivals_column (pd.Series): Column with activity counts for each functional area
-
-    Returns:
-        dict[str, float]: Dictionary with p10, p90 and mean as keys
-    """
-    results_dict = {"mean": float(arrivals_column.mean())}
-    results_dict["p10"] = float(arrivals_column.quantile(0.1))
-    results_dict["p90"] = float(arrivals_column.quantile(0.9))
-    return results_dict
 
 
 def process_aae(aae_aggregations: pd.DataFrame) -> dict[str, dict]:
