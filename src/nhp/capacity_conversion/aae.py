@@ -15,8 +15,6 @@ from nhp.capacity_conversion.utils import (
 import argparse
 from typing import cast
 import sys
-import os
-from dotenv import load_dotenv
 from logging import INFO
 from datetime import datetime
 
