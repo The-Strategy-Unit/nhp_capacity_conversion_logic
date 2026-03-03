@@ -5,6 +5,23 @@ import os
 logger = get_logger()
 
 
+def calculate_prediction_intervals_and_mean(
+    activity_column: pd.Series,
+) -> dict[str, float]:
+    """Calculate p10, p90 and mean for activity in each functional area
+
+    Args:
+        activity_column (pd.Series): Column with activity counts for each functional area
+
+    Returns:
+        dict[str, float]: Dictionary with p10, p90 and mean as keys
+    """
+    results_dict = {"mean": float(activity_column.mean())}
+    results_dict["p10"] = float(activity_column.quantile(0.1))
+    results_dict["p90"] = float(activity_column.quantile(0.9))
+    return results_dict
+
+
 def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     """Loads assumptions for use in model
     TODO: #7 Currently loads from CSV but later we should allow users to set in another way
