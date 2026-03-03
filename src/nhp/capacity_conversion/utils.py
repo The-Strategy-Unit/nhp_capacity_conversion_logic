@@ -1,5 +1,9 @@
 import pandas as pd
 from nhpy.utils import get_logger
+from azure.data.tables import TableClient
+from azure.identity import DefaultAzureCredential
+from azure.core.exceptions import ResourceNotFoundError
+from dotenv import load_dotenv
 import os
 
 logger = get_logger()
@@ -55,3 +59,83 @@ def save_results_to_csv(
     filepath = os.path.join(directory, f"{activity_type}.csv")
     data.to_csv(filepath)
     logger.info(f"💾 Results saved to {filepath}")
+
+
+def load_metadata_from_ats(
+    guid: str,
+    storage_endpoint: str,
+    table_name: str,
+    capacity_model_version: str,
+) -> dict:
+    """Loads metadata for scenario converted to functional area aggregations
+    from Azure Table Storage
+
+    Args:
+        guid (str): GUID for functional area aggregation
+        storage_endpoint (str): Azure Table Storage endpoint, in format "https://{storage_account_name}.table.core.windows.net"
+        table_name (str): Table name containing metadata for Functional Area Aggregations
+        capacity_model_version (str): Version of capacity model.
+
+    Returns:
+        dict: Dictionary with metadata for given Functional Area aggregation
+    """
+    credential = DefaultAzureCredential()
+    table_client = TableClient(
+        endpoint=storage_endpoint, table_name=table_name, credential=credential
+    )
+    try:
+        entity = table_client.get_entity(
+            partition_key=capacity_model_version, row_key=guid
+        )
+        metadata = dict(entity)
+        metadata["guid"] = guid
+        metadata["capacity_model_version"] = capacity_model_version
+        return metadata
+    except ResourceNotFoundError:
+        raise
+
+
+def create_aggregations_path(metadata: dict) -> str:
+    """Create path to aggregations parquet files on Azure Storage
+
+    Args:
+        metadata (dict): Dictionary of metadata for capacity conversion
+
+    Returns:
+        str: Full path to the specific functional area aggregations to be converted to capacity
+    """
+    return f"functional-aggregations/{metadata['capacity_model_version']}/{metadata['guid']}/"
+
+
+def validate_required_env_vars() -> dict:
+    """
+    Loads environment variables and ensures required variables are present.
+    Raises EnvironmentError if any are missing or empty.
+    Returns a dictionary of the validated variables.
+    """
+
+    load_dotenv()
+
+    required_vars = [
+        "AZ_STORAGE_EP",
+        "AZ_STORAGE_RESULTS",
+        "TABLE_NAME",
+        "AZ_TABLE_ENDPOINT",
+    ]
+
+    values = {}
+    missing = []
+
+    for var in required_vars:
+        value = os.getenv(var)
+        if not value:
+            missing.append(var)
+        else:
+            values[var] = value
+
+    if missing:
+        raise EnvironmentError(
+            f"Missing required environment variables in .env: {', '.join(missing)}"
+        )
+
+    return values
