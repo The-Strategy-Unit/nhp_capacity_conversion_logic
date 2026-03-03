@@ -190,14 +190,32 @@ def test_main(mocker):
 
     mock_parser = mocker.Mock()
     mock_args = mocker.Mock()
-    mock_args.aggregations_path = "functional-aggregations/V1/GUID123/"
+    mock_args.guid = "GUID123"
     mock_args.path_to_assumptions_file = "assumptions.csv"
+    mock_args.capacity_model_version = "dev"
 
     mock_parser.parse_args.return_value = mock_args
     mocker.patch(f"{module_path}.argparse.ArgumentParser", return_value=mock_parser)
-
-    mocker.patch(f"{module_path}.load_dotenv")
-    mocker.patch(f"{module_path}.os.getenv", side_effect=["account_url", "container"])
+    env_vars_dict = {
+        "AZ_STORAGE_EP": "AZ_STORAGE_EP",
+        "AZ_STORAGE_RESULTS": "AZ_STORAGE_RESULTS",
+        "TABLE_NAME": "TABLE_NAME",
+        "AZ_TABLE_ENDPOINT": "AZ_TABLE_ENDPOINT",
+    }
+    mocker.patch(
+        f"{module_path}.validate_required_env_vars", return_value=env_vars_dict
+    )
+    metadata_dict = {
+        "guid": "GUID123",
+        "capacity_model_version": "dev",
+    }
+    mocker.patch(
+        f"{module_path}.load_metadata_from_ats",
+        return_value=metadata_dict,
+    )
+    mocker.patch(
+        f"{module_path}.create_aggregations_path", return_value="aggregations_path"
+    )
 
     mock_assumptions = pd.DataFrame()
     mocker.patch(f"{module_path}.load_assumptions", return_value=mock_assumptions)
@@ -226,11 +244,15 @@ def test_main(mocker):
     # assert
 
     module = __import__(module_path, fromlist=["dummy"])
+    module.load_metadata_from_ats.assert_called_once_with(
+        "GUID123", "AZ_TABLE_ENDPOINT", "TABLE_NAME", "dev"
+    )
     module.load_assumptions.assert_called_once_with("assumptions.csv")
+    module.create_aggregations_path.assert_called_once_with(metadata_dict)
     module.load_aae_aggregations.assert_called_once_with(
-        "account_url",
-        "container",
-        "functional-aggregations/V1/GUID123/",
+        "AZ_STORAGE_EP",
+        "AZ_STORAGE_RESULTS",
+        "aggregations_path",
     )
     module.process_aae.assert_called_once_with(mock_aggregations)
     module.calculate_aae_capacity.assert_called_once_with(
