@@ -8,12 +8,13 @@ from nhp.capacity_conversion.utils import (
     load_assumptions,
     save_results_to_csv,
     calculate_prediction_intervals_and_mean,
+    load_metadata_from_ats,
+    create_aggregations_path,
+    validate_required_env_vars,
 )
 import argparse
 from typing import cast
 import sys
-import os
-from dotenv import load_dotenv
 from logging import INFO
 from datetime import datetime
 
@@ -198,9 +199,13 @@ def main():
         description="Generate A&E capacity outputs given functional area aggregations of A&E activity"
     )
     parser.add_argument(
-        "aggregations_path",
-        help="Path to existing functional area aggregations \
-        (e.g. 'functional-aggregations/CAPACITY_MODEL_VERSION/GUID/')",
+        "guid",
+        help="GUID of functional area aggregation to convert into capacity",
+    )
+    parser.add_argument(
+        "--capacity_model_version",
+        help="Capacity model version",
+        default="dev",
     )
     parser.add_argument(
         "--path_to_assumptions_file",
@@ -208,17 +213,21 @@ def main():
         default="data/reference/default_assumptions.csv",
     )
     args = parser.parse_args()
-    load_dotenv()
-    account_url = os.getenv("AZ_STORAGE_EP", "")
-    results_container = os.getenv("AZ_STORAGE_RESULTS", "")
+    config = validate_required_env_vars()
+    metadata = load_metadata_from_ats(
+        args.guid,
+        config["AZ_TABLE_ENDPOINT"],
+        config["TABLE_NAME"],
+        args.capacity_model_version,
+    )
     assumptions = load_assumptions(args.path_to_assumptions_file)
+    aggregations_path = create_aggregations_path(metadata)
     aae_aggregations = load_aae_aggregations(
-        account_url, results_container, args.aggregations_path
+        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path
     )
     functional_areas_summarised = process_aae(aae_aggregations)
     aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
-    guid = args.aggregations_path.strip("/").split("/")[-1]
-    save_results_to_csv(aae_capacity_df, guid, capacity_conversion_runtime, "aae")
+    save_results_to_csv(aae_capacity_df, args.guid, capacity_conversion_runtime, "aae")
 
 
 if __name__ == "__main__":

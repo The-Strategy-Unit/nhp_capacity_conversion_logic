@@ -1,9 +1,14 @@
 import pandas as pd
+import pytest
 from pandas.testing import assert_frame_equal
+from azure.core.exceptions import ResourceNotFoundError
 from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
     load_assumptions,
     save_results_to_csv,
+    load_metadata_from_ats,
+    create_aggregations_path,
+    validate_required_env_vars,
 )
 import os
 
@@ -50,3 +55,131 @@ def test_save_results_to_csv(mocker, caplog):
     mock_makedirs.assert_called_once_with(directory, exist_ok=True)
     mock_to_csv.assert_called_once_with(csv)
     assert f"💾 Results saved to {csv}" in caplog.text
+
+
+def test_load_metadata_from_ats(mocker):
+    # arrange
+    guid = "GUID123"
+    endpoint = "https://example.table.core.windows.net"
+    table_name = "demotable"
+    capacity_model_version = "dev"
+
+    mock_credential = mocker.Mock()
+    mock_table_client = mocker.Mock()
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.DefaultAzureCredential",
+        return_value=mock_credential,
+    )
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.TableClient",
+        return_value=mock_table_client,
+    )
+
+    mock_entity = {"some_field": "some_value"}
+    mock_table_client.get_entity.return_value = mock_entity
+
+    # act
+    result = load_metadata_from_ats(
+        guid=guid,
+        storage_endpoint=endpoint,
+        table_name=table_name,
+        capacity_model_version=capacity_model_version,
+    )
+
+    # assert
+    mock_table_client.get_entity.assert_called_once_with(
+        partition_key=capacity_model_version,
+        row_key=guid,
+    )
+
+    assert result["some_field"] == "some_value"
+    assert result["guid"] == guid
+    assert result["capacity_model_version"] == capacity_model_version
+
+
+def test_load_metadata_from_ats_not_found(mocker):
+    guid = "missing-guid"
+    endpoint = "https://example.table.core.windows.net"
+    table_name = "demotable"
+    capacity_model_version = "dev"
+
+    mocker.patch("nhp.capacity_conversion.utils.DefaultAzureCredential")
+    mock_table_client = mocker.Mock()
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.TableClient",
+        return_value=mock_table_client,
+    )
+
+    mock_table_client.get_entity.side_effect = ResourceNotFoundError
+
+    with pytest.raises(ResourceNotFoundError):
+        load_metadata_from_ats(
+            guid=guid,
+            storage_endpoint=endpoint,
+            table_name=table_name,
+            capacity_model_version=capacity_model_version,
+        )
+
+
+def test_create_aggregations_path():
+    # arrange
+    metadata = {"capacity_model_version": "test", "guid": "GUID123"}
+
+    # act
+    actual = create_aggregations_path(metadata)
+    expected = "functional-aggregations/test/GUID123/"
+
+    # assert
+    assert actual == expected
+
+
+def test_validate_required_env_vars_success(mocker):
+    # arrange
+    mocker.patch("nhp.capacity_conversion.utils.load_dotenv")
+
+    mock_env = {
+        "AZ_STORAGE_EP": "endpoint",
+        "AZ_STORAGE_RESULTS": "results",
+        "TABLE_NAME": "table",
+        "AZ_TABLE_ENDPOINT": "table_endpoint",
+    }
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.os.getenv",
+        side_effect=lambda key: mock_env.get(key),
+    )
+
+    # act
+    result = validate_required_env_vars()
+
+    # assert
+    assert result == mock_env
+
+
+def test_validate_required_env_vars_missing(mocker):
+    # arrange
+    mocker.patch("nhp.capacity_conversion.utils.load_dotenv")
+
+    mock_env = {
+        "AZ_STORAGE_EP": "endpoint",
+        "AZ_STORAGE_RESULTS": None,
+        "TABLE_NAME": "",
+        "AZ_TABLE_ENDPOINT": "table_endpoint",
+    }
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.os.getenv",
+        side_effect=lambda key: mock_env.get(key),
+    )
+
+    # act / assert
+    with pytest.raises(EnvironmentError) as exc_info:
+        validate_required_env_vars()
+
+    error_message = str(exc_info.value)
+
+    assert "AZ_STORAGE_RESULTS" in error_message
+    assert "TABLE_NAME" in error_message
