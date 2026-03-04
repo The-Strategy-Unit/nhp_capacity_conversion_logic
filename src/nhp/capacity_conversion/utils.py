@@ -3,6 +3,8 @@ from nhpy.utils import get_logger
 from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import ResourceNotFoundError
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
 from dotenv import load_dotenv
 import os
 
@@ -40,24 +42,32 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     return pd.read_csv(path_to_csv).set_index("assumption_name").sort_index()
 
 
-def save_results_to_csv(
-    data: pd.DataFrame,
-    guid: str,
-    capacity_conversion_runtime: str,
-    activity_type: str,
-) -> None:
-    """Saves results as CSV files to filepath "results/GUID/CAPACITY_CONVERSION_RUNTIME/"
+def save_results_to_excel(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> None:
+    """Saves results of capacity conversion pipeline to Excel
 
     Args:
-        data (pd.DataFrame): Data to be saved
-        guid (str): GUID for functional aggregations used for capacity conversion
-        capacity_conversion_runtime (str): Runtime of capacity conversion
-        activity_type (str): Activity type: one of aae, op, ip
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included. At minimum should include "metadata" key and dataframe.
     """
-    directory = os.path.join("results", guid, capacity_conversion_runtime)
+    directory = os.path.join(
+        "results",
+        str(data_to_save["metadata"].loc["guid"]),
+        str(data_to_save["metadata"].loc["capacity_conversion_runtime"]),
+    )
     os.makedirs(directory, exist_ok=True)
-    filepath = os.path.join(directory, f"{activity_type}.csv")
-    data.to_csv(filepath)
+    filepath = os.path.join(directory, "capacity_conversion_results.xlsx")
+    wb = Workbook()
+    default_sheet = wb.active
+    wb.remove(default_sheet)
+    for sheet_name, df in data_to_save.items():
+        ws = wb.create_sheet(title=sheet_name)
+        for r_idx, row in enumerate(
+            dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
+            start=1,
+        ):
+            for c_idx, value in enumerate(row, start=1):
+                ws.cell(row=r_idx, column=c_idx, value=value)
+    wb.save(filepath)
     logger.info(f"💾 Results saved to {filepath}")
 
 

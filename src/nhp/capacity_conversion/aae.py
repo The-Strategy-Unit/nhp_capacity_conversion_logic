@@ -6,7 +6,7 @@ import pandas as pd
 from nhpy.az import connect_to_container, load_parquet_file
 from nhp.capacity_conversion.utils import (
     load_assumptions,
-    save_results_to_csv,
+    save_results_to_excel,
     calculate_prediction_intervals_and_mean,
     load_metadata_from_ats,
     create_aggregations_path,
@@ -214,20 +214,28 @@ def main():
     )
     args = parser.parse_args()
     config = validate_required_env_vars()
+    data_to_save = {}
     metadata = load_metadata_from_ats(
         args.guid,
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
         args.capacity_model_version,
     )
+    metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
+    data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
     assumptions = load_assumptions(args.path_to_assumptions_file)
+    data_to_save["assumptions"] = assumptions
     aggregations_path = create_aggregations_path(metadata)
     aae_aggregations = load_aae_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path
     )
     functional_areas_summarised = process_aae(aae_aggregations)
+    data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
+        functional_areas_summarised, orient="index"
+    )
     aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
-    save_results_to_csv(aae_capacity_df, args.guid, capacity_conversion_runtime, "aae")
+    data_to_save["aae_capacity"] = aae_capacity_df
+    save_results_to_excel(data_to_save)
 
 
 if __name__ == "__main__":
