@@ -1,5 +1,5 @@
 import pandas as pd
-from pandas.testing import assert_series_equal
+from pandas.testing import assert_series_equal, assert_frame_equal
 
 from nhp.capacity_conversion.aae import (
     map_unknown,
@@ -206,6 +206,8 @@ def test_main(mocker):
         f"{module_path}.validate_required_env_vars", return_value=env_vars_dict
     )
     metadata_dict = {
+        "PartitionKey": "PartitionKey",
+        "RowKey": "RowKey",
         "guid": "GUID123",
         "capacity_model_version": "dev",
     }
@@ -235,7 +237,7 @@ def test_main(mocker):
         return_value=mock_capacity_df,
     )
 
-    mock_save = mocker.patch(f"{module_path}.save_results_to_csv")
+    mock_save = mocker.patch(f"{module_path}.save_results_to_excel")
 
     # act
 
@@ -259,9 +261,21 @@ def test_main(mocker):
         mock_functional_summary,
         mock_assumptions,
     )
-    mock_save.assert_called_once_with(
-        mock_capacity_df,
-        "GUID123",
-        "20250101_120000",
-        "aae",
+    mock_save.assert_called_once()
+    mock_data_to_save = mock_save.call_args_list[0].args[0]
+    assert_series_equal(
+        mock_data_to_save["metadata"],
+        pd.Series(
+            {
+                "guid": "GUID123",
+                "capacity_model_version": "dev",
+                "capacity_conversion_runtime": "20250101_120000",
+            }
+        ),
     )
+    assert_frame_equal(mock_data_to_save["assumptions"], pd.DataFrame())
+    assert_frame_equal(
+        mock_data_to_save["aae_functional_areas"],
+        pd.DataFrame.from_dict(mock_functional_summary, orient="index"),
+    )
+    assert_frame_equal(mock_data_to_save["aae_capacity"], mock_capacity_df)
