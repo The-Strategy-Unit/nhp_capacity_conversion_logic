@@ -67,6 +67,9 @@ def save_results_to_excel(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> 
         ):
             for c_idx, value in enumerate(row, start=1):
                 ws.cell(row=r_idx, column=c_idx, value=value)
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 2
     wb.save(filepath)
     logger.info(f"💾 Results saved to {filepath}")
 
