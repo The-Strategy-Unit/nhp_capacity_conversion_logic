@@ -5,12 +5,11 @@ from azure.core.exceptions import ResourceNotFoundError
 from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
     load_assumptions,
-    save_results_to_csv,
+    save_results_to_excel,
     load_metadata_from_ats,
     create_aggregations_path,
     validate_required_env_vars,
 )
-import os
 
 
 def test_calculate_prediction_intervals_and_mean():
@@ -39,22 +38,54 @@ def test_load_assumptions(mocker):
     mock_read_csv.assert_called_once_with("test_path")
 
 
-def test_save_results_to_csv(mocker, caplog):
+def test_save_results_to_excel(mocker):
     # arrange
-    caplog.set_level("INFO")
-    mock_makedirs = mocker.patch("os.makedirs")
-    mock_to_csv = mocker.patch("pandas.DataFrame.to_csv")
-    data = pd.DataFrame()
-    directory = os.path.join("results", "guid", "runtime")
-    csv = os.path.join(directory, "activity_type.csv")
+
+    mock_makedirs = mocker.patch("nhp.capacity_conversion.utils.os.makedirs")
+    mocker.patch(
+        "nhp.capacity_conversion.utils.os.path.join", side_effect=lambda *x: "/".join(x)
+    )
+    mock_wb = mocker.Mock()
+    mock_ws = mocker.Mock()
+    mock_cell = mocker.Mock()
+    mock_cell.value = "val"
+    mock_cell.column_letter = "A"
+    mock_ws.columns = [(mock_cell,), (mock_cell,)]
+    mock_ws.column_dimensions = {"A": mocker.Mock()}
+    mocker.patch("nhp.capacity_conversion.utils.Workbook", return_value=mock_wb)
+    mock_wb.active = mocker.Mock()
+    mock_wb.create_sheet.return_value = mock_ws
+    mocker.patch(
+        "nhp.capacity_conversion.utils.dataframe_to_rows",
+        return_value=[
+            ["col1", "col2"],
+            ["val1", "val2"],
+        ],
+    )
+    mock_logger = mocker.patch("nhp.capacity_conversion.utils.logger")
+    metadata = pd.Series(
+        {
+            "guid": "123",
+            "capacity_conversion_runtime": "456",
+        }
+    )
+    df = pd.DataFrame({"col1": ["val1"], "col2": ["val2"]})
+    data_to_save = {
+        "metadata": metadata,
+        "results": df,
+    }
 
     # act
-    save_results_to_csv(data, "guid", "runtime", "activity_type")
+    save_results_to_excel(data_to_save)
 
     # assert
-    mock_makedirs.assert_called_once_with(directory, exist_ok=True)
-    mock_to_csv.assert_called_once_with(csv)
-    assert f"💾 Results saved to {csv}" in caplog.text
+    mock_makedirs.assert_called_once_with("results/123/456", exist_ok=True)
+    mock_wb.remove.assert_called_once_with(mock_wb.active)
+    assert mock_wb.create_sheet.call_count == len(data_to_save)
+    mock_wb.save.assert_called_once_with(
+        "results/123/456/capacity_conversion_results.xlsx"
+    )
+    mock_logger.info.assert_called_once()
 
 
 def test_load_metadata_from_ats(mocker):
