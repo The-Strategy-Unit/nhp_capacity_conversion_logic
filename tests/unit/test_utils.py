@@ -47,6 +47,11 @@ def test_save_results_to_excel(mocker):
     )
     mock_wb = mocker.Mock()
     mock_ws = mocker.Mock()
+    mock_cell = mocker.Mock()
+    mock_cell.value = "val"
+    mock_cell.column_letter = "A"
+    mock_ws.columns = [(mock_cell,), (mock_cell,)]
+    mock_ws.column_dimensions = {"A": mocker.Mock()}
     mocker.patch("nhp.capacity_conversion.utils.Workbook", return_value=mock_wb)
     mock_wb.active = mocker.Mock()
     mock_wb.create_sheet.return_value = mock_ws
