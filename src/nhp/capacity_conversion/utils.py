@@ -1,5 +1,6 @@
 import pandas as pd
 from nhpy.utils import get_logger
+from nhpy.az import connect_to_container, load_parquet_file
 from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import ResourceNotFoundError
@@ -152,3 +153,28 @@ def validate_required_env_vars() -> dict:
         )
 
     return values
+
+
+def load_aggregations(
+    account_url: str,
+    results_container: str,
+    aggregations_path: str,
+    aggregation_type: str,
+) -> pd.DataFrame:
+    """Loads aggregated A&E data from Azure
+
+    Args:
+        account_url (str): Azure Storage account URL
+        results_container (str): Azure Storage container name with results
+        aggregations_path (str): Path to "folder" with data to load
+        aggregation_type (str): Path to
+
+    Returns:
+        pd.DataFrame: Loads aggregated A&E data
+    """
+    logger.info(f"Loading {aggregation_type} data from {aggregations_path}...")
+    results_connection = connect_to_container(account_url, results_container)
+    aae_aggregations = load_parquet_file(
+        results_connection, f"{aggregations_path}/{aggregation_type}.parquet"
+    )
+    return aae_aggregations

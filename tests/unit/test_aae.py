@@ -3,33 +3,12 @@ from pandas.testing import assert_series_equal, assert_frame_equal
 
 from nhp.capacity_conversion.aae import (
     map_unknown,
-    load_aae_aggregations,
     process_aae,
     convert_aae_capacity,
     map_aae_capacity_to_functional_area,
     calculate_aae_capacity,
     main,
 )
-
-
-def test_load_aae_aggregations(mocker, caplog):
-    # arrange
-    caplog.set_level("INFO")
-    mock_connection = mocker.Mock()
-    mocker.patch(
-        "nhp.capacity_conversion.aae.connect_to_container",
-        return_value=mock_connection,
-    )
-    mocker.patch(
-        "nhp.capacity_conversion.aae.load_parquet_file",
-        return_value=pd.DataFrame({"col": [1]}),
-    )
-
-    # act
-    load_aae_aggregations("url", "container", "path")
-
-    # assert
-    assert "Loading A&E data from path..." in caplog.text
 
 
 def test_process_aae(mocker):
@@ -223,7 +202,7 @@ def test_main(mocker):
     mocker.patch(f"{module_path}.load_assumptions", return_value=mock_assumptions)
 
     mock_aggregations = pd.DataFrame()
-    mocker.patch(f"{module_path}.load_aae_aggregations", return_value=mock_aggregations)
+    mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)
 
     mock_functional_summary = {"area": {"mean": 1}}
     mocker.patch(
@@ -251,10 +230,8 @@ def test_main(mocker):
     )
     module.load_assumptions.assert_called_once_with("assumptions.csv")
     module.create_aggregations_path.assert_called_once_with(metadata_dict)
-    module.load_aae_aggregations.assert_called_once_with(
-        "AZ_STORAGE_EP",
-        "AZ_STORAGE_RESULTS",
-        "aggregations_path",
+    module.load_aggregations.assert_called_once_with(
+        "AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"
     )
     module.process_aae.assert_called_once_with(mock_aggregations)
     module.calculate_aae_capacity.assert_called_once_with(

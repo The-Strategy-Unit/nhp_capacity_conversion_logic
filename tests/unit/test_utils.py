@@ -9,6 +9,7 @@ from nhp.capacity_conversion.utils import (
     load_metadata_from_ats,
     create_aggregations_path,
     validate_required_env_vars,
+    load_aggregations,
 )
 
 
@@ -214,3 +215,23 @@ def test_validate_required_env_vars_missing(mocker):
 
     assert "AZ_STORAGE_RESULTS" in error_message
     assert "TABLE_NAME" in error_message
+
+
+def test_load_aggregations(mocker, caplog):
+    # arrange
+    caplog.set_level("INFO")
+    mock_connection = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_container",
+        return_value=mock_connection,
+    )
+    mocker.patch(
+        "nhp.capacity_conversion.utils.load_parquet_file",
+        return_value=pd.DataFrame({"col": [1]}),
+    )
+
+    # act
+    load_aggregations("url", "container", "path", "type")
+
+    # assert
+    assert "Loading type data from path..." in caplog.text

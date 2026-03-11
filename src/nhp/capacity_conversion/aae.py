@@ -3,7 +3,6 @@ from nhpy.utils import (
     get_logger,
 )
 import pandas as pd
-from nhpy.az import connect_to_container, load_parquet_file
 from nhp.capacity_conversion.utils import (
     load_assumptions,
     save_results_to_excel,
@@ -11,6 +10,7 @@ from nhp.capacity_conversion.utils import (
     load_metadata_from_ats,
     create_aggregations_path,
     validate_required_env_vars,
+    load_aggregations,
 )
 import argparse
 from typing import cast
@@ -19,27 +19,6 @@ from logging import INFO
 from datetime import datetime
 
 logger = get_logger()
-
-
-def load_aae_aggregations(
-    account_url: str, results_container: str, aggregations_path: str
-) -> pd.DataFrame:
-    """Loads aggregated A&E data from Azure
-
-    Args:
-        account_url (str): Azure Storage account URL
-        results_container (str): Azure Storage container name with results
-        aggregations_path (str): Path to "folder" with data to load
-
-    Returns:
-        pd.DataFrame: Loads aggregated A&E data
-    """
-    logger.info(f"Loading A&E data from {aggregations_path}...")
-    results_connection = connect_to_container(account_url, results_container)
-    aae_aggregations = load_parquet_file(
-        results_connection, f"{aggregations_path}/aae.parquet"
-    )
-    return aae_aggregations
 
 
 def map_unknown(groupings_column: pd.Series) -> pd.Series:
@@ -226,8 +205,8 @@ def main():
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
     aggregations_path = create_aggregations_path(metadata)
-    aae_aggregations = load_aae_aggregations(
-        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path
+    aae_aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
     functional_areas_summarised = process_aae(aae_aggregations)
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
