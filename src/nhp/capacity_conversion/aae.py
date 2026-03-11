@@ -77,7 +77,7 @@ def process_aae(aae_aggregations: pd.DataFrame) -> dict[str, dict]:
     functional_areas_summarised = {}
     for grouping in aae.index.unique(level="grouping"):
         functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
-            aae.loc[(slice(None), grouping), :]["arrivals"]
+            aae.loc[(slice(None), grouping), :]["total"]
         )
     return functional_areas_summarised
 
