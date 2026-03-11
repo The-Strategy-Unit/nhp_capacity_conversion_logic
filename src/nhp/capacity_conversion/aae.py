@@ -37,7 +37,7 @@ def map_unknown(groupings_column: pd.Series) -> pd.Series:
     )
 
 
-def process_aae(aae_aggregations: pd.DataFrame) -> dict[str, dict]:
+def summarise_aae_functional_areas(aae_aggregations: pd.DataFrame) -> dict[str, dict]:
     """Process A&E data ready for conversion to capacity
 
     Args:
@@ -208,7 +208,7 @@ def main():
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
-    functional_areas_summarised = process_aae(aae_aggregations)
+    functional_areas_summarised = summarise_aae_functional_areas(aae_aggregations)
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )

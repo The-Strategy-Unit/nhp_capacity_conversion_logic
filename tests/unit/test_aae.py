@@ -3,7 +3,7 @@ from pandas.testing import assert_series_equal, assert_frame_equal
 
 from nhp.capacity_conversion.aae import (
     map_unknown,
-    process_aae,
+    summarise_aae_functional_areas,
     convert_aae_capacity,
     map_aae_capacity_to_functional_area,
     calculate_aae_capacity,
@@ -11,7 +11,7 @@ from nhp.capacity_conversion.aae import (
 )
 
 
-def test_process_aae(mocker):
+def test_summarise_aae_functional_areas(mocker):
     # arrange
     aae_aggregations = pd.DataFrame(
         {
@@ -36,7 +36,7 @@ def test_process_aae(mocker):
     }
 
     # act
-    actual = process_aae(aae_aggregations)
+    actual = summarise_aae_functional_areas(aae_aggregations)
 
     # assert
     assert actual == expected
@@ -206,7 +206,7 @@ def test_main(mocker):
 
     mock_functional_summary = {"area": {"mean": 1}}
     mocker.patch(
-        f"{module_path}.process_aae",
+        f"{module_path}.summarise_aae_functional_areas",
         return_value=mock_functional_summary,
     )
 
@@ -233,7 +233,7 @@ def test_main(mocker):
     module.load_aggregations.assert_called_once_with(
         "AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"
     )
-    module.process_aae.assert_called_once_with(mock_aggregations)
+    module.summarise_aae_functional_areas.assert_called_once_with(mock_aggregations)
     module.calculate_aae_capacity.assert_called_once_with(
         mock_functional_summary,
         mock_assumptions,
