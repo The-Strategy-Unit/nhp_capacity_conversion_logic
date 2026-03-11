@@ -173,7 +173,7 @@ def test_main(mocker):
         {
             "grouping": ["a", "b", "c"] * 3,
             "model_run": [0] * 3 + [1] * 3 + [2] * 3,
-            "arrivals": [3] * 3 + [4] * 3 + [5] * 3,
+            "total": [3] * 3 + [4] * 3 + [5] * 3,
         }
     )
     mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)

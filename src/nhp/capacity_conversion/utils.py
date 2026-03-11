@@ -198,6 +198,6 @@ def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
     functional_areas_summarised = {}
     for grouping in df.index.unique(level="grouping"):
         functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
-            df.loc[(slice(None), grouping), :]["arrivals"]
+            df.loc[(slice(None), grouping), :]["total"]
         )
     return functional_areas_summarised
