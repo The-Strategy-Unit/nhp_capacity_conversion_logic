@@ -145,10 +145,10 @@ def test_calculate_aae_capacity(mocker, caplog):
     }
     assumptions_data = {}
     for req in capacity_requirements:
-        assumptions_data[f"{req}_assumed_los"] = {"assumption_value": 240}
+        assumptions_data[f"{req}_assumed_los_mins"] = {"assumption_value": 240}
         assumptions_data[f"{req}_operating_hours"] = {"assumption_value": 168}
         assumptions_data[f"{req}_operating_weeks"] = {"assumption_value": 52}
-        assumptions_data[f"{req}_utilisation"] = {"assumption_value": 0.5}
+        assumptions_data[f"{req}_utilisation_rate"] = {"assumption_value": 0.5}
 
     assumptions_df = pd.DataFrame.from_dict(assumptions_data, orient="index")
 
