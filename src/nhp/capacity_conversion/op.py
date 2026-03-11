@@ -5,6 +5,7 @@ from nhpy.utils import (
 import pandas as pd
 from nhp.capacity_conversion.utils import (
     load_assumptions,
+    summarise_functional_areas,
     save_results_to_excel,
     calculate_prediction_intervals_and_mean,
     load_metadata_from_ats,
@@ -19,29 +20,6 @@ from logging import INFO
 from datetime import datetime
 
 logger = get_logger()
-
-
-def summarise_op_functional_areas(op_aggregations: pd.DataFrame) -> dict[str, dict]:
-    """Process OP data ready for conversion to capacity
-
-    Args:
-        op_aggregations (pd.DataFrame): Dataframe with OP functional areas and activity
-
-    Returns:
-        dict[str, dict]: Dictionary with p10, p90 and mean for each functional area
-    """
-    op_aggregations = (
-        op_aggregations.reset_index()
-        .groupby(["model_run", "grouping"])
-        .sum(numeric_only=True)
-    )
-    op = op_aggregations.drop([0], axis=0)  # model_run 0 is baseline
-    functional_areas_summarised = {}
-    for grouping in op.index.unique(level="grouping"):
-        functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
-            op.loc[(slice(None), grouping), :]["arrivals"]
-        )
-    return functional_areas_summarised
 
 
 def main():
@@ -87,7 +65,7 @@ def main():
     op_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "op"
     )
-    functional_areas_summarised = summarise_op_functional_areas(op_aggregations)
+    functional_areas_summarised = summarise_functional_areas(op_aggregations)
     return functional_areas_summarised
     # data_to_save["op_functional_areas"] = pd.DataFrame.from_dict(
     #     functional_areas_summarised, orient="index"

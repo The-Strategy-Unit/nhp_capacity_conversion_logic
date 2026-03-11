@@ -3,43 +3,11 @@ from pandas.testing import assert_series_equal, assert_frame_equal
 
 from nhp.capacity_conversion.aae import (
     map_unknown,
-    summarise_aae_functional_areas,
     convert_aae_capacity,
     map_aae_capacity_to_functional_area,
     calculate_aae_capacity,
     main,
 )
-
-
-def test_summarise_aae_functional_areas(mocker):
-    # arrange
-    aae_aggregations = pd.DataFrame(
-        {
-            "grouping": ["a", "b", "c"] * 3,
-            "model_run": [0] * 3 + [1] * 3 + [2] * 3,
-            "arrivals": [3] * 3 + [4] * 3 + [5] * 3,
-        }
-    ).set_index("model_run")
-    mocker.patch(
-        "nhp.capacity_conversion.aae.map_unknown",
-        return_value=aae_aggregations["grouping"],
-    )
-    mocker.patch(
-        "nhp.capacity_conversion.aae.calculate_prediction_intervals_and_mean",
-        return_value={"mean": 4.5, "p10": 4.1, "p90": 4.9},
-    )
-
-    expected = {
-        "a": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
-        "b": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
-        "c": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
-    }
-
-    # act
-    actual = summarise_aae_functional_areas(aae_aggregations)
-
-    # assert
-    assert actual == expected
 
 
 def test_map_unknown():
@@ -201,12 +169,23 @@ def test_main(mocker):
     mock_assumptions = pd.DataFrame()
     mocker.patch(f"{module_path}.load_assumptions", return_value=mock_assumptions)
 
-    mock_aggregations = pd.DataFrame()
+    mock_aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b", "c"] * 3,
+            "model_run": [0] * 3 + [1] * 3 + [2] * 3,
+            "arrivals": [3] * 3 + [4] * 3 + [5] * 3,
+        }
+    )
     mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)
+
+    mocker.patch(
+        "nhp.capacity_conversion.aae.map_unknown",
+        return_value=pd.Series({"grouping": ["a", "b", "d"] * 3}),
+    )
 
     mock_functional_summary = {"area": {"mean": 1}}
     mocker.patch(
-        f"{module_path}.summarise_aae_functional_areas",
+        f"{module_path}.summarise_functional_areas",
         return_value=mock_functional_summary,
     )
 
@@ -233,7 +212,7 @@ def test_main(mocker):
     module.load_aggregations.assert_called_once_with(
         "AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"
     )
-    module.summarise_aae_functional_areas.assert_called_once_with(mock_aggregations)
+    module.summarise_functional_areas.assert_called_once_with(mock_aggregations)
     module.calculate_aae_capacity.assert_called_once_with(
         mock_functional_summary,
         mock_assumptions,

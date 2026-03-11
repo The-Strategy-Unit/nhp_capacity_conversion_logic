@@ -6,11 +6,11 @@ import pandas as pd
 from nhp.capacity_conversion.utils import (
     load_assumptions,
     save_results_to_excel,
-    calculate_prediction_intervals_and_mean,
     load_metadata_from_ats,
     create_aggregations_path,
     validate_required_env_vars,
     load_aggregations,
+    summarise_functional_areas,
 )
 import argparse
 from typing import cast
@@ -35,30 +35,6 @@ def map_unknown(groupings_column: pd.Series) -> pd.Series:
             "child_unknown": "child_minor_attendances",
         },
     )
-
-
-def summarise_aae_functional_areas(aae_aggregations: pd.DataFrame) -> dict[str, dict]:
-    """Process A&E data ready for conversion to capacity
-
-    Args:
-        aae_aggregations (pd.DataFrame): Dataframe with A&E functional areas and activity
-
-    Returns:
-        dict[str, dict]: Dictionary with p10, p90 and mean for each functional area
-    """
-    aae_aggregations.loc[:, "grouping"] = map_unknown(aae_aggregations["grouping"])
-    aae_aggregations = (
-        aae_aggregations.reset_index()
-        .groupby(["model_run", "grouping"])
-        .sum(numeric_only=True)
-    )
-    aae = aae_aggregations.drop([0], axis=0)  # model_run 0 is baseline
-    functional_areas_summarised = {}
-    for grouping in aae.index.unique(level="grouping"):
-        functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
-            aae.loc[(slice(None), grouping), :]["arrivals"]
-        )
-    return functional_areas_summarised
 
 
 def convert_aae_capacity(
@@ -208,7 +184,8 @@ def main():
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
-    functional_areas_summarised = summarise_aae_functional_areas(aae_aggregations)
+    aae_aggregations.loc[:, "grouping"] = map_unknown(aae_aggregations["grouping"])
+    functional_areas_summarised = summarise_functional_areas(aae_aggregations)
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )

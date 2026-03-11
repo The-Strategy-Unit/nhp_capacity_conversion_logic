@@ -178,3 +178,26 @@ def load_aggregations(
         results_connection, f"{aggregations_path}/{aggregation_type}.parquet"
     )
     return aggregations
+
+
+def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
+    """Process A&E data ready for conversion to capacity
+
+    Args:
+        aggregations (pd.DataFrame): Dataframe with A&E functional areas and activity
+
+    Returns:
+        dict[str, dict]: Dictionary with p10, p90 and mean for each functional area
+    """
+    aggregations = (
+        aggregations.reset_index()
+        .groupby(["model_run", "grouping"])
+        .sum(numeric_only=True)
+    )
+    df = aggregations.drop([0], axis=0)  # model_run 0 is baseline
+    functional_areas_summarised = {}
+    for grouping in df.index.unique(level="grouping"):
+        functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
+            df.loc[(slice(None), grouping), :]["arrivals"]
+        )
+    return functional_areas_summarised

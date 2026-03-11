@@ -10,6 +10,7 @@ from nhp.capacity_conversion.utils import (
     create_aggregations_path,
     validate_required_env_vars,
     load_aggregations,
+    summarise_functional_areas,
 )
 
 
@@ -235,3 +236,30 @@ def test_load_aggregations(mocker, caplog):
 
     # assert
     assert "Loading type data from path..." in caplog.text
+
+
+def test_summarise_functional_areas(mocker):
+    # arrange
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b", "c"] * 3,
+            "model_run": [0] * 3 + [1] * 3 + [2] * 3,
+            "arrivals": [3] * 3 + [4] * 3 + [5] * 3,
+        }
+    ).set_index("model_run")
+    mocker.patch(
+        "nhp.capacity_conversion.utils.calculate_prediction_intervals_and_mean",
+        return_value={"mean": 4.5, "p10": 4.1, "p90": 4.9},
+    )
+
+    expected = {
+        "a": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
+        "b": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
+        "c": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
+    }
+
+    # act
+    actual = summarise_functional_areas(aggregations)
+
+    # assert
+    assert actual == expected
