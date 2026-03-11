@@ -46,3 +46,4 @@ op_procedures_dna_time_mins,20
 op_procedures_operational_hours,55
 op_procedures_operational_weeks,48
 op_procedures_utilisation_rate,0.85
+op_procedures_duration_mins,30
