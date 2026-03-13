@@ -31,6 +31,20 @@ def convert_op_capacity(
     operational_weeks: float,
     utilisation_rate: float,
 ) -> float:
+    """Formula used for converting all OP functional area activity to capacity requirements
+
+    Args:
+        attendances (float): Number of attendances
+        duration (float): Indicative appointment duration (mins)
+        dna_rate (float): Indicative DNA rate
+        dna_time (float): Indicative DNA time consumed (mins)
+        operational_hours (float): Room operational hours per week
+        operational_weeks (float): Room operational weeks per year
+        utilisation_rate (float): Room utilisation rate
+
+    Returns:
+        float: Calculated capacity requirement
+    """
     return (((attendances * duration) + (dna_rate * attendances * dna_time)) / 60) / (
         operational_hours * operational_weeks * utilisation_rate
     )
