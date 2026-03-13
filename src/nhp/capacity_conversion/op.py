@@ -13,7 +13,6 @@ from nhp.capacity_conversion.utils import (
     load_aggregations,
 )
 import argparse
-import re
 from typing import cast
 import sys
 from logging import INFO
@@ -72,6 +71,15 @@ def map_op_capacity_to_functional_area(capacity_requirement_string: str) -> str:
 def calculate_op_capacity(
     functional_areas_summarised: dict, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
+    """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
+
+    Args:
+        functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        pd.DataFrame: DataFrame of calculated OP capacity requirements
+    """
     logger.info("Calculating OP capacity")
     results_dict = {}
     for capacity_requirement in [
