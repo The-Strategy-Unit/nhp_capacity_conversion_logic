@@ -32,3 +32,16 @@ def test_convert_op_capacity():
     )
     # assert
     assert actual == expected
+
+
+def test_map_op_capacity_to_functional_area():
+    # arrange
+    capacity_requirement_strings = ["op_procedures", "op_first"]
+    expected = ["outpatient_procedures", "outpatient_first_attendances"]
+    # act
+    actual = [
+        map_op_capacity_to_functional_area(var_name)
+        for var_name in capacity_requirement_strings
+    ]
+    # assert
+    assert actual == expected

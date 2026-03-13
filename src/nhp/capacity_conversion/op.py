@@ -51,6 +51,15 @@ def convert_op_capacity(
 
 
 def map_op_capacity_to_functional_area(capacity_requirement_string: str) -> str:
+    """Alters string so that we can look up the correct functional area to use for
+    each capacity requirement
+
+    Args:
+        capacity_requirement_string (str): Capacity requirement name
+
+    Returns:
+        str: Corresponding functional area name
+    """
     capacity_requirement_string = capacity_requirement_string.replace(
         "op_", "outpatient_"
     )
