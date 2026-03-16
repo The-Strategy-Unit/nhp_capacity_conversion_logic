@@ -106,7 +106,7 @@ def calculate_aae_capacity(
         assumed_los_mins = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_assumed_los", "assumption_value"
+                capacity_requirement + "_assumed_los_mins", "assumption_value"
             ],
         )
         operating_hours_per_week = cast(
@@ -124,7 +124,7 @@ def calculate_aae_capacity(
         utilisation_rate = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_utilisation", "assumption_value"
+                capacity_requirement + "_utilisation_rate", "assumption_value"
             ],
         )
 
