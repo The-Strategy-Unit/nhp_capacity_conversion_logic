@@ -1,5 +1,6 @@
 import pandas as pd
 from nhpy.utils import get_logger
+from nhpy.az import connect_to_container, load_parquet_file
 from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import ResourceNotFoundError
@@ -152,3 +153,51 @@ def validate_required_env_vars() -> dict:
         )
 
     return values
+
+
+def load_aggregations(
+    account_url: str,
+    results_container: str,
+    aggregations_path: str,
+    aggregation_type: str,
+) -> pd.DataFrame:
+    """Loads aggregated A&E data from Azure
+
+    Args:
+        account_url (str): Azure Storage account URL
+        results_container (str): Azure Storage container name with results
+        aggregations_path (str): Path to "folder" with data to load
+        aggregation_type (str): Path to
+
+    Returns:
+        pd.DataFrame: Loads aggregated A&E data
+    """
+    logger.info(f"Loading {aggregation_type} data from {aggregations_path}...")
+    results_connection = connect_to_container(account_url, results_container)
+    aggregations = load_parquet_file(
+        results_connection, f"{aggregations_path}/{aggregation_type}.parquet"
+    )
+    return aggregations
+
+
+def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
+    """Process A&E data ready for conversion to capacity
+
+    Args:
+        aggregations (pd.DataFrame): Dataframe with A&E functional areas and activity
+
+    Returns:
+        dict[str, dict]: Dictionary with p10, p90 and mean for each functional area
+    """
+    aggregations = (
+        aggregations.reset_index()
+        .groupby(["model_run", "grouping"])
+        .sum(numeric_only=True)
+    )
+    df = aggregations.drop([0], axis=0)  # model_run 0 is baseline
+    functional_areas_summarised = {}
+    for grouping in df.index.unique(level="grouping"):
+        functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
+            df.loc[(slice(None), grouping), :]["total"]
+        )
+    return functional_areas_summarised

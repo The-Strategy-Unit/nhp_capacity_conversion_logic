@@ -5,12 +5,12 @@ from nhpy.utils import (
 import pandas as pd
 from nhp.capacity_conversion.utils import (
     load_assumptions,
+    summarise_functional_areas,
     save_results_to_excel,
     load_metadata_from_ats,
     create_aggregations_path,
     validate_required_env_vars,
     load_aggregations,
-    summarise_functional_areas,
 )
 import argparse
 from typing import cast
@@ -21,47 +21,35 @@ from datetime import datetime
 logger = get_logger()
 
 
-def map_unknown(groupings_column: pd.Series) -> pd.Series:
-    """Map "unknown" activity in A&E to different functional area
-
-    Returns:
-        pd.Series: Column with activity mapped
-    """
-
-    # TODO: Mapping 'unknown' to 'minor' is a temporary workaround. See issue #6
-    return groupings_column.replace(
-        to_replace={
-            "adult_unknown": "adult_minor_attendances",
-            "child_unknown": "child_minor_attendances",
-        },
-    )
-
-
-def convert_aae_capacity(
+def convert_op_capacity(
     attendances: float,
-    assumed_los_mins: float,
-    operating_weeks_per_year: float,
-    operating_hours_per_week: float,
+    duration: float,
+    dna_rate: float,
+    dna_time: float,
+    operational_hours: float,
+    operational_weeks: float,
     utilisation_rate: float,
 ) -> float:
-    """Formula used for converting all A&E functional area activity to capacity requirements
+    """Formula used for converting all OP functional area activity to capacity requirements
 
     Args:
         attendances (float): Number of attendances
-        assumed_los_mins (float): Assumed length of stay in emergency department in minutes
-        operating_weeks_per_year (float): Number of operating weeks per year
-        operating_hours_per_week (float): Number of operating hours per week
-        utilisation_rate (float): Utilisation rate of the resource
+        duration (float): Indicative appointment duration (mins)
+        dna_rate (float): Indicative DNA rate
+        dna_time (float): Indicative DNA time consumed (mins)
+        operational_hours (float): Room operational hours per week
+        operational_weeks (float): Room operational weeks per year
+        utilisation_rate (float): Room utilisation rate
 
     Returns:
         float: Calculated capacity requirement
     """
-    return (attendances * assumed_los_mins / 60) / (
-        operating_weeks_per_year * operating_hours_per_week * utilisation_rate
+    return (((attendances * duration) + (dna_rate * attendances * dna_time)) / 60) / (
+        operational_hours * operational_weeks * utilisation_rate
     )
 
 
-def map_aae_capacity_to_functional_area(capacity_requirement_string: str) -> str:
+def map_op_capacity_to_functional_area(capacity_requirement_string: str) -> str:
     """Alters string so that we can look up the correct functional area to use for
     each capacity requirement
 
@@ -71,16 +59,16 @@ def map_aae_capacity_to_functional_area(capacity_requirement_string: str) -> str
     Returns:
         str: Corresponding functional area name
     """
-    words_to_replace = ["beds", "bays", "spaces"]
+    capacity_requirement_string = capacity_requirement_string.replace(
+        "op_", "outpatient_"
+    )
+    if "procedures" not in capacity_requirement_string:
+        capacity_requirement_string += "_attendances"
 
-    for word in words_to_replace:
-        capacity_requirement_string = capacity_requirement_string.replace(
-            word, "attendances"
-        )
     return capacity_requirement_string
 
 
-def calculate_aae_capacity(
+def calculate_op_capacity(
     functional_areas_summarised: dict, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
     """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
@@ -90,35 +78,43 @@ def calculate_aae_capacity(
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
-        pd.DataFrame: DataFrame of calculated A&E capacity requirements
+        pd.DataFrame: DataFrame of calculated OP capacity requirements
     """
-    logger.info("Calculating A&E capacity")
+    logger.info("Calculating OP capacity")
     results_dict = {}
     for capacity_requirement in [
-        "adult_major_spaces",
-        "adult_minor_spaces",
-        "child_major_spaces",
-        "child_minor_spaces",
-        "sdec_spaces",
-        "resus_spaces",
+        "op_first",
+        "op_followup",
+        "op_virtual",
+        "op_procedures",
     ]:
         results = {}
-        assumed_los_mins = cast(
+        duration = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_assumed_los_mins", "assumption_value"
+                capacity_requirement + "_duration_mins", "assumption_value"
             ],
         )
-        operating_hours_per_week = cast(
+        dna_rate = cast(
+            float,
+            assumptions_df.at[capacity_requirement + "_dna_rate", "assumption_value"],
+        )
+        dna_time = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_operating_hours", "assumption_value"
+                capacity_requirement + "_dna_time_mins", "assumption_value"
             ],
         )
-        operating_weeks_per_year = cast(
+        operational_hours = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_operating_weeks", "assumption_value"
+                capacity_requirement + "_operational_hours", "assumption_value"
+            ],
+        )
+        operational_weeks = cast(
+            float,
+            assumptions_df.at[
+                capacity_requirement + "_operational_weeks", "assumption_value"
             ],
         )
         utilisation_rate = cast(
@@ -127,18 +123,27 @@ def calculate_aae_capacity(
                 capacity_requirement + "_utilisation_rate", "assumption_value"
             ],
         )
-
         for value in ["p10", "mean", "p90"]:
-            functional_area = map_aae_capacity_to_functional_area(capacity_requirement)
-            results[value] = convert_aae_capacity(
+            functional_area = map_op_capacity_to_functional_area(capacity_requirement)
+            results[value] = convert_op_capacity(
                 functional_areas_summarised[functional_area][value],
-                assumed_los_mins,
-                operating_weeks_per_year,
-                operating_hours_per_week,
+                duration,
+                dna_rate,
+                dna_time,
+                operational_hours,
+                operational_weeks,
                 utilisation_rate,
             )
         results_dict[capacity_requirement] = results
-    return pd.DataFrame.from_dict(results_dict, orient="index")
+    op_capacity = pd.DataFrame.from_dict(results_dict, orient="index")
+    rename_dict = {
+        "op_virtual": "op_virtual_consultation_rooms",
+        "op_procedures": "op_procedure_rooms",
+    }
+    op_capacity.loc["op_consultation_rooms"] = (
+        op_capacity.loc["op_first"] + op_capacity.loc["op_followup"]
+    )
+    return op_capacity.rename(index=rename_dict)
 
 
 def main():
@@ -181,16 +186,15 @@ def main():
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
     aggregations_path = create_aggregations_path(metadata)
-    aae_aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
+    op_aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "op"
     )
-    aae_aggregations.loc[:, "grouping"] = map_unknown(aae_aggregations["grouping"])
-    functional_areas_summarised = summarise_functional_areas(aae_aggregations)
-    data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
+    functional_areas_summarised = summarise_functional_areas(op_aggregations)
+    data_to_save["op_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )
-    aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
-    data_to_save["aae_capacity"] = aae_capacity_df
+    op_capacity_df = calculate_op_capacity(functional_areas_summarised, assumptions)
+    data_to_save["op_capacity"] = op_capacity_df
     save_results_to_excel(data_to_save)
 
 

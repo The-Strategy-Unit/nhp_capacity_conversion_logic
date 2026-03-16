@@ -9,6 +9,8 @@ from nhp.capacity_conversion.utils import (
     load_metadata_from_ats,
     create_aggregations_path,
     validate_required_env_vars,
+    load_aggregations,
+    summarise_functional_areas,
 )
 
 
@@ -214,3 +216,50 @@ def test_validate_required_env_vars_missing(mocker):
 
     assert "AZ_STORAGE_RESULTS" in error_message
     assert "TABLE_NAME" in error_message
+
+
+def test_load_aggregations(mocker, caplog):
+    # arrange
+    caplog.set_level("INFO")
+    mock_connection = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_container",
+        return_value=mock_connection,
+    )
+    mocker.patch(
+        "nhp.capacity_conversion.utils.load_parquet_file",
+        return_value=pd.DataFrame({"col": [1]}),
+    )
+
+    # act
+    load_aggregations("url", "container", "path", "type")
+
+    # assert
+    assert "Loading type data from path..." in caplog.text
+
+
+def test_summarise_functional_areas(mocker):
+    # arrange
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b", "c"] * 3,
+            "model_run": [0] * 3 + [1] * 3 + [2] * 3,
+            "total": [3] * 3 + [4] * 3 + [5] * 3,
+        }
+    ).set_index("model_run")
+    mocker.patch(
+        "nhp.capacity_conversion.utils.calculate_prediction_intervals_and_mean",
+        return_value={"mean": 4.5, "p10": 4.1, "p90": 4.9},
+    )
+
+    expected = {
+        "a": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
+        "b": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
+        "c": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
+    }
+
+    # act
+    actual = summarise_functional_areas(aggregations)
+
+    # assert
+    assert actual == expected
