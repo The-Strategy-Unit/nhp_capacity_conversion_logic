@@ -51,8 +51,8 @@ paediatric_surgical_daycase_stay_hours,9.3
 adult_surgical_daycase_stay_hours,9.3
 adult_medical_daycase_stay_hours,7
 paediatric_medical_daycase_stay_hours,7
-adult_daycase_recovery_occupancy_rate,85
-paediatric_daycase_recovery_occupancy_rate,85
+adult_daycase_recovery_occupancy_rate,0.85
+paediatric_daycase_recovery_occupancy_rate,0.85
 adult_daycase_operational_days,288
 paediatric_daycase_operational_days,288
 adult_daycase_operational_hours,14
