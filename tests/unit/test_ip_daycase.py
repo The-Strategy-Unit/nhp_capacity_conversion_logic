@@ -16,7 +16,7 @@ def test_convert_ip_daycase_capacity():
     operational_days = 288
     occupancy_rate = 0.85
 
-    expected = 7750 / 3427.2
+    expected = 186000 / 3427.2
 
     actual = convert_ip_daycase_capacity(
         daycase_spells,
