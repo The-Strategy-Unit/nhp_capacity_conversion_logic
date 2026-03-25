@@ -161,7 +161,7 @@ def load_aggregations(
     aggregations_path: str,
     aggregation_type: str,
 ) -> pd.DataFrame:
-    """Loads aggregated A&E data from Azure
+    """Loads aggregated data from Azure
 
     Args:
         account_url (str): Azure Storage account URL
@@ -170,7 +170,7 @@ def load_aggregations(
         aggregation_type (str): Path to
 
     Returns:
-        pd.DataFrame: Loads aggregated A&E data
+        pd.DataFrame: Loads aggregated data
     """
     logger.info(f"Loading {aggregation_type} data from {aggregations_path}...")
     results_connection = connect_to_container(account_url, results_container)
@@ -181,10 +181,10 @@ def load_aggregations(
 
 
 def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
-    """Process A&E data ready for conversion to capacity
+    """Process functional areas data ready for conversion to capacity
 
     Args:
-        aggregations (pd.DataFrame): Dataframe with A&E functional areas and activity
+        aggregations (pd.DataFrame): Dataframe with functional areas and activity
 
     Returns:
         dict[str, dict]: Dictionary with p10, p90 and mean for each functional area

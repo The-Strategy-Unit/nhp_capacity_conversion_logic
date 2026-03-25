@@ -156,7 +156,7 @@ def main():
     configure_logging(INFO)
     capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
     parser = argparse.ArgumentParser(
-        description="Generate A&E capacity outputs given functional area aggregations of OP activity"
+        description="Generate OP capacity outputs given functional area aggregations of OP activity"
     )
     parser.add_argument(
         "guid",
