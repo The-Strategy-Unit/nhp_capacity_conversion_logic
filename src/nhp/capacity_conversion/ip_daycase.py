@@ -40,7 +40,7 @@ def convert_ip_daycase_capacity(
     Returns:
         float: Calculated capacity requirement
     """
-    return (daycase_spells * (assumed_los_hours / 24)) / (
+    return (daycase_spells * (assumed_los_hours)) / (
         operational_hours * operational_days * occupancy_rate
     )
 
