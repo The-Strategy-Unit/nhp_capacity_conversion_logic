@@ -67,10 +67,8 @@ def calculate_assessment_beddays(
     beddays_dict: dict[str, float],
     assumptions_df: pd.DataFrame,
 ) -> dict[str, dict[str, float]]:
-    key = (
-        "adult_assessment_bed_hours"
-        if "adult" in functional_area_name
-        else "paediatric_assessment_bed_hours"
+    key = functional_area_name.replace("spells", "assessment_hours").replace(
+        "_0los", ""
     )
     assessment_los_hours = cast(
         float,
