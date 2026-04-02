@@ -1,24 +1,30 @@
+import argparse
+import sys
+from datetime import datetime
+from logging import INFO
+
+import pandas as pd
 from nhpy.utils import (
     configure_logging,
     get_logger,
 )
-import pandas as pd
-from nhp.capacity_conversion.utils import (
-    load_assumptions,
-    summarise_functional_areas,
-    save_results_to_excel,
-    load_metadata_from_ats,
-    create_aggregations_path,
-    validate_required_env_vars,
-    load_aggregations,
-)
-from nhp.capacity_conversion.op import calculate_op_capacity
+
 from nhp.capacity_conversion.aae import calculate_aae_capacity, map_unknown
 from nhp.capacity_conversion.ip_daycase import calculate_ip_daycase_capacity
-import argparse
-import sys
-from logging import INFO
-from datetime import datetime
+from nhp.capacity_conversion.ip_wards import (
+    calculate_ip_wards_capacity,
+    calculate_separate_bedday_pools,
+)
+from nhp.capacity_conversion.op import calculate_op_capacity
+from nhp.capacity_conversion.utils import (
+    create_aggregations_path,
+    load_aggregations,
+    load_assumptions,
+    load_metadata_from_ats,
+    save_results_to_excel,
+    summarise_functional_areas,
+    validate_required_env_vars,
+)
 
 logger = get_logger()
 
@@ -99,6 +105,24 @@ def main():
         functional_areas_summarised, assumptions
     )
     data_to_save["ip_daycase_capacity"] = ip_daycase_capacity_df
+    # ip_wards
+
+    ip_wards_aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"],
+        config["AZ_STORAGE_RESULTS"],
+        aggregations_path,
+        "ip_wards",
+    )
+    functional_areas_summarised = summarise_functional_areas(ip_wards_aggregations)
+    data_to_save["ip_wards_functional_areas"] = pd.DataFrame.from_dict(
+        functional_areas_summarised, orient="index"
+    )
+    bedday_pools = calculate_separate_bedday_pools(
+        functional_areas_summarised, assumptions
+    )
+    data_to_save["calculated_bedday_pools"] = bedday_pools
+    ip_wards_capacity_df = calculate_ip_wards_capacity(bedday_pools, assumptions)
+    data_to_save["ip_wards_capacity"] = ip_wards_capacity_df
     save_results_to_excel(data_to_save)
 
 

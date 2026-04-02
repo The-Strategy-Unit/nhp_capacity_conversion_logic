@@ -181,9 +181,10 @@ def convert_ip_beddays_to_beds(
 
 
 def calculate_ip_wards_capacity(
-    grouped_bedday_pools: pd.DataFrame, assumptions_df: pd.DataFrame
+    bedday_pools: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
     logger.info("Calculating IP critical care, assessment, and wards capacity")
+    grouped_bedday_pools = group_bedday_pools(bedday_pools)
     bedday_pools_dict = grouped_bedday_pools.to_dict(orient="index")
     results_dict = {}
     for bedday_pool, values_dict in bedday_pools_dict.items():
@@ -274,10 +275,7 @@ def main():
         functional_areas_summarised, assumptions
     )
     data_to_save["calculated_bedday_pools"] = bedday_pools
-    grouped_bedday_pools = group_bedday_pools(bedday_pools)
-    ip_wards_capacity_df = calculate_ip_wards_capacity(
-        grouped_bedday_pools, assumptions
-    )
+    ip_wards_capacity_df = calculate_ip_wards_capacity(bedday_pools, assumptions)
     data_to_save["ip_wards_capacity"] = ip_wards_capacity_df
     save_results_to_excel(data_to_save)
 
