@@ -28,6 +28,17 @@ def calculate_critical_care_beddays(
     beddays_dict: dict[str, float],
     assumptions_df: pd.DataFrame,
 ) -> dict[str, dict[str, float]]:
+    """Calculates critical care beddays from the IP wards functional areas
+
+    Args:
+        functional_area_name (str): Functional area to be converted to critical care beddays
+        beddays_dict (dict[str, float]): Dictionary of values, usually with the keys "p10", "mean" and "p90"
+        assumptions_df (pd.DataFrame): DataFrame of assumptions to use,
+        including adult_cc_beddays_proportion and paediatric_cc_beddays_proportion values
+
+    Returns:
+        dict[str, dict[str, float]]: Dictionary with calculated critical care beddays for the given functional area
+    """
 
     key = (
         "adult_cc_beddays_proportion"
