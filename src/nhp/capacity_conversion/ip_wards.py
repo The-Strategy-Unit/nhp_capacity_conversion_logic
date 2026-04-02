@@ -106,6 +106,36 @@ def calculate_assessment_beddays(
     return {name_adjusted: assessment_beddays}
 
 
+def calculate_ward_beddays(functional_areas_summarised, bedday_pools):
+    ip_ward_beddays_dict = {}
+    functional_areas = [
+        "adult_elective_medical",
+        "adult_nonelective_medical",
+        "adult_elective_surgical",
+        "adult_nonelective_surgical",
+        "paediatric_elective_medical",
+        "paediatric_nonelective_medical",
+        "paediatric_elective_surgical",
+        "paediatric_nonelective_surgical",
+    ]
+
+    for f_a in functional_areas:
+        results = {}
+        for value in ["p10", "mean", "p90"]:
+            total_adjusted_beddays = (
+                functional_areas_summarised[f_a + "_beddays"][value]
+                + bedday_pools[f_a + "_0los_beddays"][value]
+            )
+            assessment_beddays = bedday_pools.get(
+                f_a + "_assessment_beddays", {"p10": 0, "mean": 0, "p90": 0}
+            )[value]  # elective activity will not have any assesssment beddays
+            cc_beddays = bedday_pools[f_a + "_cc_beddays"][value]
+            ward_beddays = total_adjusted_beddays - assessment_beddays - cc_beddays
+            results[value] = ward_beddays
+        ip_ward_beddays_dict[f_a + "_ward_beddays"] = results
+    return ip_ward_beddays_dict
+
+
 def calculate_separate_bedday_pools(
     functional_areas_summarised: dict, assumptions_df: pd.DataFrame
 ):
@@ -133,20 +163,26 @@ def calculate_separate_bedday_pools(
                     functional_area, functional_area_dict, assumptions_df
                 )
             )
+    # ward beds
+    bedday_pools.update(
+        calculate_ward_beddays(functional_areas_summarised, bedday_pools)
+    )
     return bedday_pools
 
 
-def calculate_critical_care_beds():
-    pass
+def convert_ip_beddays_to_beds(
+    total_beddays: float, operational_days_per_year: float, occupancy_rate: float
+) -> float:
+    return total_beddays / (operational_days_per_year * occupancy_rate)
 
 
 def calculate_ip_wards_capacity(
-    functional_areas_summarised: dict, assumptions_df: pd.DataFrame
+    bedday_pools: dict, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
     """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
 
     Args:
-        functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+        bedday_pools (dict): Dict with p10, p90 and mean for each of the IP bedday pools
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
@@ -155,10 +191,8 @@ def calculate_ip_wards_capacity(
     logger.info("Calculating IP daycase capacity")
     results_dict = {}
 
-    return calculate_separate_bedday_pools(
-        functional_areas_summarised, assumptions_df
-    )  # return dict with all the different types of beddays for critical care, assessment, ward
-    # Calculate critical care beddays first
+    for bedday_pool, values_dict in bedday_pools.items():
+        pass
     # Calculate assessment beddays
     # Calculate ward beddays
 
@@ -169,39 +203,6 @@ def calculate_ip_wards_capacity(
     # # Calculate assessment beds
     # # Calculate ward beds
 
-    # for capacity_requirement in [
-    #     "adult_surgical_daycase",
-    #     "adult_medical_daycase",
-    #     "paediatric_surgical_daycase",
-    #     "paediatric_medical_daycase",
-    # ]:
-    #     results = {}
-    #     assumed_los_hours = cast(
-    #         float,
-    #         assumptions_df.at[capacity_requirement + "_stay_hours", "assumption_value"],
-    #     )
-
-    #     operational_hours = cast(
-    #         float,
-    #         assumptions_df.at[
-    #             capacity_requirement.split("_")[0] + "_daycase_operational_hours",
-    #             "assumption_value",
-    #         ],
-    #     )
-    #     operational_days = cast(
-    #         float,
-    #         assumptions_df.at[
-    #             capacity_requirement.split("_")[0] + "_daycase_operational_days",
-    #             "assumption_value",
-    #         ],
-    #     )
-    #     occupancy_rate = cast(
-    #         float,
-    #         assumptions_df.at[
-    #             capacity_requirement.split("_")[0] + "_daycase_recovery_occupancy_rate",
-    #             "assumption_value",
-    #         ],
-    #     )
     #     for value in ["p10", "mean", "p90"]:
     #         results[value] = convert_ip_wards_capacity(
     #             functional_areas_summarised[capacity_requirement][value],
@@ -266,10 +267,13 @@ def main():
     data_to_save["ip_wards_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )
-    print(calculate_separate_bedday_pools(functional_areas_summarised, assumptions))
-    # ip_wards_capacity_df = calculate_ip_wards_capacity(
-    #     functional_areas_summarised, assumptions
-    # )
+    bedday_pools = calculate_separate_bedday_pools(
+        functional_areas_summarised, assumptions
+    )
+    print(bedday_pools)
+    # data_to_save["calculated_bedday_pools"] = bedday_pools
+    # ip_wards_capacity_df = calculate_ip_wards_capacity(bedday_pools, assumptions)
+    # print(ip_wards_capacity_df)
     # data_to_save["ip_wards_capacity"] = ip_wards_capacity_df
     # save_results_to_excel(data_to_save)
 
