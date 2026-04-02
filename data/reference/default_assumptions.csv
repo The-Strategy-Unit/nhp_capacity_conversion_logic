@@ -71,3 +71,7 @@ adult_ward_occupancy_rate,0.92
 adult_ward_operational_days,365
 paediatric_ward_occupancy_rate,0.92
 paediatric_ward_operational_days,365
+adult_assessment_operational_days,365
+paediatric_assessment_operational_days,365
+adult_assessment_occupancy_rate,0.92
+paediatric_assessment_occupancy_rate,0.92

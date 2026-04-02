@@ -15,35 +15,12 @@ from nhp.capacity_conversion.utils import (
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
+    save_results_to_excel,
     summarise_functional_areas,
     validate_required_env_vars,
 )
 
 logger = get_logger()
-
-
-def convert_ip_wards_capacity(
-    daycase_spells: float,
-    assumed_los_hours: float,
-    operational_hours: float,
-    operational_days: float,
-    occupancy_rate: float,
-) -> float:
-    """Formula used for converting IP daycase functional area activity to capacity requirements
-
-    Args:
-        daycase_spells (float): Number of daycase spells
-        assumed_los_hours (float): Indicative stay in hours
-        operational_hours (float): Operational hours per day
-        operational_days (float): Operational days per year
-        occupancy_rate (float): Occupancy rate
-
-    Returns:
-        float: Calculated capacity requirement
-    """
-    return (daycase_spells * (assumed_los_hours)) / (
-        operational_hours * operational_days * occupancy_rate
-    )
 
 
 def calculate_critical_care_beddays(
@@ -167,7 +144,36 @@ def calculate_separate_bedday_pools(
     bedday_pools.update(
         calculate_ward_beddays(functional_areas_summarised, bedday_pools)
     )
-    return bedday_pools
+    return pd.DataFrame.from_dict(bedday_pools, orient="index")
+
+
+def group_bedday_pools(bedday_pools):
+    # We have separate rows for 0los_assessment_beddays and _assessment_beddays which need to be combined
+    assessment_only = bedday_pools[bedday_pools.index.str.contains("assessment")]
+    all_other_bedday_pools = bedday_pools[
+        ~bedday_pools.index.str.contains("assessment")
+    ]
+
+    new_rows = {}
+
+    for idx in assessment_only.index:
+        if idx.endswith("_0los_assessment_beddays"):
+            prefix = idx.replace("_0los_assessment_beddays", "")
+            base_idx = f"{prefix}_assessment_beddays"
+            total_idx = f"{prefix}_total_assessment_beddays"
+
+            if base_idx in assessment_only.index:
+                new_rows[total_idx] = (
+                    assessment_only.loc[idx] + assessment_only.loc[base_idx]
+                )
+
+    # Append new rows
+    new_bedday_pools = pd.concat(
+        [all_other_bedday_pools, pd.DataFrame.from_dict(new_rows, orient="index")]
+    )
+    # We don't need 0los_beddays anymore as they should already be in the ward_beddays
+    new_bedday_pools = new_bedday_pools[~new_bedday_pools.index.str.contains("0los")]
+    return new_bedday_pools
 
 
 def convert_ip_beddays_to_beds(
@@ -177,44 +183,43 @@ def convert_ip_beddays_to_beds(
 
 
 def calculate_ip_wards_capacity(
-    bedday_pools: dict, assumptions_df: pd.DataFrame
+    grouped_bedday_pools: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
-    """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
-
-    Args:
-        bedday_pools (dict): Dict with p10, p90 and mean for each of the IP bedday pools
-        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
-
-    Returns:
-        pd.DataFrame: DataFrame of calculated IP daycase capacity requirements
-    """
-    logger.info("Calculating IP daycase capacity")
+    logger.info("Calculating IP critical care, assessment, and wards capacity")
+    bedday_pools_dict = grouped_bedday_pools.to_dict(orient="index")
     results_dict = {}
-
-    for bedday_pool, values_dict in bedday_pools.items():
-        pass
-    # Calculate assessment beddays
-    # Calculate ward beddays
-
-    # convert_ip_cc_capacity()
-    # convert_ip_assessment_capacity()
-    # convert_ip_wards_capacity()
-    # # Calculate critical care beds
-    # # Calculate assessment beds
-    # # Calculate ward beds
-
-    #     for value in ["p10", "mean", "p90"]:
-    #         results[value] = convert_ip_wards_capacity(
-    #             functional_areas_summarised[capacity_requirement][value],
-    #             assumed_los_hours,
-    #             operational_hours,
-    #             operational_days,
-    #             occupancy_rate,
-    #         )
-    #     results_dict[capacity_requirement] = results
-    # ip_daycase_capacity = pd.DataFrame.from_dict(results_dict, orient="index")
-    # ip_daycase_capacity.index = [i + "_beds" for i in ip_daycase_capacity.index]
-    # return ip_daycase_capacity
+    for bedday_pool, values_dict in bedday_pools_dict.items():
+        results = {}
+        bedday_pool = str(bedday_pool)
+        capacity_name = bedday_pool.replace("_beddays", "_beds").replace("_total", "")
+        # which assumptions to use?
+        if bedday_pool.startswith("adult"):
+            lookup = "adult_"
+        else:
+            lookup = "paediatric_"
+        if "_cc_" in bedday_pool:
+            lookup += "cc_"
+        elif "assessment" in bedday_pool:
+            lookup += "assessment_"
+        elif "ward" in bedday_pool:
+            lookup += "ward_"
+        operational_days = cast(
+            float,
+            assumptions_df.at[lookup + "operational_days", "assumption_value"],
+        )
+        occupancy_rate = cast(
+            float,
+            assumptions_df.at[lookup + "occupancy_rate", "assumption_value"],
+        )
+        for value in ["p10", "mean", "p90"]:
+            results[value] = convert_ip_beddays_to_beds(
+                bedday_pools_dict[bedday_pool][value],
+                operational_days,
+                occupancy_rate,
+            )
+        results_dict[capacity_name] = results
+    ip_wards_capacity = pd.DataFrame.from_dict(results_dict, orient="index")
+    return ip_wards_capacity
 
 
 def main():
@@ -270,12 +275,13 @@ def main():
     bedday_pools = calculate_separate_bedday_pools(
         functional_areas_summarised, assumptions
     )
-    print(bedday_pools)
-    # data_to_save["calculated_bedday_pools"] = bedday_pools
-    # ip_wards_capacity_df = calculate_ip_wards_capacity(bedday_pools, assumptions)
-    # print(ip_wards_capacity_df)
-    # data_to_save["ip_wards_capacity"] = ip_wards_capacity_df
-    # save_results_to_excel(data_to_save)
+    data_to_save["calculated_bedday_pools"] = bedday_pools
+    grouped_bedday_pools = group_bedday_pools(bedday_pools)
+    ip_wards_capacity_df = calculate_ip_wards_capacity(
+        grouped_bedday_pools, assumptions
+    )
+    data_to_save["ip_wards_capacity"] = ip_wards_capacity_df
+    save_results_to_excel(data_to_save)
 
 
 if __name__ == "__main__":
