@@ -91,6 +91,23 @@ def calculate_assessment_beddays(
     beddays_dict: dict[str, float],
     assumptions_df: pd.DataFrame,
 ) -> dict[str, dict[str, float]]:
+    """Calculates assessment beddays from the IP wards functional areas
+
+       Args:
+           functional_area_name (str): Functional area to be converted to assessment beddays
+           beddays_dict (dict[str, float]): Dictionary of values, usually with the keys "p10", "mean" and "p90"
+           assumptions_df (pd.DataFrame): DataFrame of assumptions to use,
+           including adult_elective_medical_assessment_hours, adult_elective_surgical_assessment_hours,
+           adult_nonelective_medical_assessment_hours, adult_nonelective_surgical_assessment_hours,
+           paediatric_elective_medical_assessment_hours, paediatric_elective_surgical_assessment_hours,
+           paediatric_nonelective_medical_assessment_hours, and paediatric_nonelective_surgical_assessment_hours
+
+
+    values
+
+       Returns:
+           dict[str, dict[str, float]]: Dictionary with calculated assessment beddays for the given functional area
+    """
     key = functional_area_name.replace("spells", "assessment_hours").replace(
         "_0los", ""
     )
