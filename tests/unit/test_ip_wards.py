@@ -6,9 +6,9 @@ from nhp.capacity_conversion.ip_wards import (
     calculate_0los_beddays,
     calculate_assessment_beddays,
     calculate_critical_care_beddays,
+    calculate_separate_bedday_pools,
     calculate_ward_beddays,
     convert_ip_beddays_to_beds,
-    # calculate_separate_bedday_pools,
     # group_bedday_pools,
     main,
 )
@@ -175,6 +175,55 @@ def test_calculate_ward_beddays():
     actual = calculate_ward_beddays(functional_areas_summarised, bedday_pools)
     # assert
     assert actual == expected
+
+
+def test_calculate_separate_bedday_pools(mocker):
+    # arrange
+    mock_dict = {"value": 100}
+    functional_areas = [
+        "adult_elective_medical_0los_beddays",
+        "adult_elective_medical_0los_spells",
+        "adult_nonelective_medical_beddays",
+        "adult_nonelective_medical_spells",
+    ]
+    assumptions_df = pd.DataFrame()
+    functional_areas_summarised = {f_a: mock_dict for f_a in functional_areas}
+    mock_cc = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.calculate_critical_care_beddays",
+        return_value={"cc": mock_dict},
+    )
+    mock_0los = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.calculate_0los_beddays",
+        return_value={"0los": mock_dict},
+    )
+    mock_assessment = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.calculate_assessment_beddays",
+        return_value={"assessment": mock_dict},
+    )
+    mock_ward = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.calculate_ward_beddays",
+        return_value={"ward": mock_dict},
+    )
+    bedday_pools_dict = {k: mock_dict for k in ["cc", "0los", "assessment", "ward"]}
+    # act
+    actual = calculate_separate_bedday_pools(
+        functional_areas_summarised, assumptions_df
+    )
+    # assert
+    mock_cc.assert_called_once_with(
+        "adult_nonelective_medical_beddays", mock_dict, assumptions_df
+    )
+    mock_0los.assert_called_once_with(
+        "adult_elective_medical_0los_spells", mock_dict, assumptions_df
+    )
+    mock_assessment.assert_called_once_with(
+        "adult_nonelective_medical_spells", mock_dict, assumptions_df
+    )
+    mock_ward.assert_called_once_with(functional_areas_summarised, bedday_pools_dict)
+    expected = pd.DataFrame(
+        {"value": [100] * 4}, index=["0los", "cc", "assessment", "ward"]
+    )
+    assert_frame_equal(actual, expected)
 
 
 def test_calculate_ip_wards_capacity(mocker, caplog):

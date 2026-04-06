@@ -154,7 +154,17 @@ def calculate_ward_beddays(functional_areas_summarised, bedday_pools):
 
 def calculate_separate_bedday_pools(
     functional_areas_summarised: dict, assumptions_df: pd.DataFrame
-):
+) -> pd.DataFrame:
+    """Calculates separate bedday pools from functional areas
+
+    Args:
+        functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        pd.DataFrame: DataFrame of calculated bedday pools. There should be
+        _cc_beddays, _assessment_beddays and _0los_beddays for each of the functional areas
+    """
 
     bedday_pools = {}
     for functional_area, functional_area_dict in functional_areas_summarised.items():
@@ -172,7 +182,7 @@ def calculate_separate_bedday_pools(
                     functional_area, functional_area_dict, assumptions_df
                 )
             )
-        # assessment
+        # assessment (only for nonelective activity)
         if "nonelective" in functional_area and functional_area.endswith("spells"):
             bedday_pools.update(
                 calculate_assessment_beddays(
