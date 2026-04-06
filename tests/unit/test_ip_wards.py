@@ -27,7 +27,7 @@ def test_calculate_critical_care_beddays(
     functional_area_name, expected_new_name, expected_result
 ):
     # arrange
-    beddays_dict = {"value": 1}
+    beddays_dict = {"value": 1.0}
     assumptions_df = pd.DataFrame(
         {"assumption_value": [0.1, 0.2]},
         index=["adult_cc_beddays_proportion", "paediatric_cc_beddays_proportion"],
@@ -61,7 +61,7 @@ def test_calculate_assessment_beddays(
 ):
 
     # arrange
-    beddays_dict = {"value": 1}
+    beddays_dict = {"value": 1.0}
     assumptions_df = pd.DataFrame(
         {"assumption_value": [2, 3]},
         index=[
@@ -98,7 +98,7 @@ def test_calculate_0los_beddays(
 ):
 
     # arrange
-    beddays_dict = {"value": 1}
+    beddays_dict = {"value": 1.0}
     assumptions_df = pd.DataFrame(
         {"assumption_value": [2, 3]},
         index=[
