@@ -4,13 +4,12 @@ from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.ip_wards import (
     calculate_critical_care_beddays,
+    convert_ip_beddays_to_beds,
     # calculate_0los_beddays,
     # calculate_assessment_beddays,
     # calculate_ward_beddays,
     # calculate_separate_bedday_pools,
     # group_bedday_pools,
-    # convert_ip_beddays_to_beds,
-    # calculate_ip_wards_capacity,
     main,
 )
 
@@ -44,20 +43,16 @@ def test_calculate_critical_care_beddays(
     assert results_dict == expected
 
 
-def test_convert_ip_daycase_capacity():
+def test_convert_ip_beddays_to_beds():
     # arrange
-    daycase_spells = 20000
-    assumed_los_hours = 9.3
-    operational_hours = 14
-    operational_days = 288
-    occupancy_rate = 0.85
+    total_beddays = 10000
+    operational_days = 365
+    occupancy_rate = 0.8
 
-    expected = 186000 / 3427.2
+    expected = 10000 / (365 * 0.8)
 
-    actual = convert_ip_daycase_capacity(
-        daycase_spells,
-        assumed_los_hours,
-        operational_hours,
+    actual = convert_ip_beddays_to_beds(
+        total_beddays,
         operational_days,
         occupancy_rate,
     )

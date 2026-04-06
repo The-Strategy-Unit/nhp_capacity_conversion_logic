@@ -188,6 +188,16 @@ def group_bedday_pools(bedday_pools):
 def convert_ip_beddays_to_beds(
     total_beddays: float, operational_days_per_year: float, occupancy_rate: float
 ) -> float:
+    """Formula used for converting IP wards functional area activity to capacity requirements
+
+    Args:
+        total_beddays (float): Number of beddays (speldur, NOT beddays + 1)
+        operational_days_per_year (float): Operational days per year
+        occupancy_rate (float): Occupancy rate
+
+    Returns:
+        float: Calculated beds required
+    """
     return total_beddays / (operational_days_per_year * occupancy_rate)
 
 
