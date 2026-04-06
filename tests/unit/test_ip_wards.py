@@ -6,8 +6,8 @@ from nhp.capacity_conversion.ip_wards import (
     calculate_0los_beddays,
     calculate_assessment_beddays,
     calculate_critical_care_beddays,
+    calculate_ward_beddays,
     convert_ip_beddays_to_beds,
-    # calculate_ward_beddays,
     # calculate_separate_bedday_pools,
     # group_bedday_pools,
     main,
@@ -95,7 +95,7 @@ def test_calculate_assessment_beddays(
         ),
     ],
 )
-def test_calculate_assessment_beddays(
+def test_calculate_0los_beddays(
     functional_area_name, expected_new_name, expected_result
 ):
 
@@ -125,11 +125,54 @@ def test_convert_ip_beddays_to_beds():
 
     expected = 10000 / (365 * 0.8)
 
+    # act
     actual = convert_ip_beddays_to_beds(
         total_beddays,
         operational_days,
         occupancy_rate,
     )
+    # assert
+    assert actual == expected
+
+
+def test_calculate_ward_beddays():
+    # arrange
+    functional_areas = [
+        "adult_elective_medical",
+        "adult_nonelective_medical",
+        "adult_elective_surgical",
+        "adult_nonelective_surgical",
+        "paediatric_elective_medical",
+        "paediatric_nonelective_medical",
+        "paediatric_elective_surgical",
+        "paediatric_nonelective_surgical",
+    ]
+    values_dict = {"p10": 100, "mean": 100, "p90": 100}
+    functional_areas_summarised = {
+        f_a + "_beddays": values_dict for f_a in functional_areas
+    }
+    # 0los first
+    bedday_pools = {f_a + "_0los_beddays": values_dict for f_a in functional_areas}
+    # assessment first
+    assessment = {
+        f_a + "_assessment_beddays": values_dict
+        for f_a in functional_areas
+        if "nonelective" in f_a
+    }
+    bedday_pools.update(assessment)
+    # add critical care
+    critical_care = {f_a + "_cc_beddays": values_dict for f_a in functional_areas}
+    bedday_pools.update(critical_care)
+    results_dict_nonelective = {"p10": 0, "mean": 0, "p90": 0}
+    results_dict_elective = {"p10": 100, "mean": 100, "p90": 100}
+    expected = {
+        f_a + "_ward_beddays": (
+            results_dict_nonelective if "nonelective" in f_a else results_dict_elective
+        )
+        for f_a in functional_areas
+    }
+    # act
+    actual = calculate_ward_beddays(functional_areas_summarised, bedday_pools)
     # assert
     assert actual == expected
 
