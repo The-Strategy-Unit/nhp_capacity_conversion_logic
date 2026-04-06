@@ -59,6 +59,17 @@ def calculate_0los_beddays(
     beddays_dict: dict[str, float],
     assumptions_df: pd.DataFrame,
 ) -> dict[str, dict[str, float]]:
+    """Calculates 0 LOS beddays from the IP wards functional areas
+
+    Args:
+        functional_area_name (str): Functional area to be converted to 0 LOS beddays
+        beddays_dict (dict[str, float]): Dictionary of values, usually with the keys "p10", "mean" and "p90"
+        assumptions_df (pd.DataFrame): DataFrame of assumptions to use,
+        including adult_0los_indicative_los_hours and paediatric_0los_indicative_los_hours values
+
+    Returns:
+        dict[str, dict[str, float]]: Dictionary with calculated 0 LOS beddays for the given functional area
+    """
     key = (
         "adult_0los_indicative_los_hours"
         if "adult" in functional_area_name
@@ -69,7 +80,9 @@ def calculate_0los_beddays(
         assumptions_df.at[key, "assumption_value"],
     )
     name_0los_adjusted = functional_area_name.replace("spells", "beddays")
-    beddays_0los = {k: float(v * indicative_los_hours) for k, v in beddays_dict.items()}
+    beddays_0los = {
+        k: float(v * (indicative_los_hours / 24)) for k, v in beddays_dict.items()
+    }
     return {name_0los_adjusted: beddays_0los}
 
 

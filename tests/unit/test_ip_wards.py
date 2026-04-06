@@ -3,9 +3,9 @@ import pytest
 from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.ip_wards import (
+    calculate_0los_beddays,
     calculate_critical_care_beddays,
     convert_ip_beddays_to_beds,
-    # calculate_0los_beddays,
     # calculate_assessment_beddays,
     # calculate_ward_beddays,
     # calculate_separate_bedday_pools,
@@ -36,6 +36,43 @@ def test_calculate_critical_care_beddays(
     )
     # act
     results_dict = calculate_critical_care_beddays(
+        functional_area_name, beddays_dict, assumptions_df
+    )
+    expected = {expected_new_name: {"value": expected_result}}
+    # assert
+    assert results_dict == expected
+
+
+@pytest.mark.parametrize(
+    argnames="functional_area_name, expected_new_name, expected_result",
+    argvalues=[
+        (
+            "paediatric_elective_medical_0los_spells",
+            "paediatric_elective_medical_0los_beddays",
+            3 / 24,
+        ),
+        (
+            "adult_nonelective_surgical_0los_spells",
+            "adult_nonelective_surgical_0los_beddays",
+            2 / 24,
+        ),
+    ],
+)
+def test_calculate_0l0s_beddays(
+    functional_area_name, expected_new_name, expected_result
+):
+
+    # arrange
+    beddays_dict = {"value": 1}
+    assumptions_df = pd.DataFrame(
+        {"assumption_value": [2, 3]},
+        index=[
+            "adult_0los_indicative_los_hours",
+            "paediatric_0los_indicative_los_hours",
+        ],
+    )
+    # act
+    results_dict = calculate_0los_beddays(
         functional_area_name, beddays_dict, assumptions_df
     )
     expected = {expected_new_name: {"value": expected_result}}
