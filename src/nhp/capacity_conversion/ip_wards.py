@@ -196,7 +196,17 @@ def calculate_separate_bedday_pools(
     return pd.DataFrame.from_dict(bedday_pools, orient="index")
 
 
-def group_bedday_pools(bedday_pools):
+def group_bedday_pools(bedday_pools: pd.DataFrame) -> pd.DataFrame:
+    """Groups bedday pools together so bedday calculations can be simplified
+
+    Args:
+        bedday_pools (pd.DataFrame): DataFrame with bedday pools for assessment, 0los, critical care,
+        and other admissions
+
+    Returns:
+        pd.DataFrame: DataFrame with the assessment beddays grouped together, and the
+        0los_beddays removed as they have already been included in the ward beddays
+    """
     # We have separate rows for 0los_assessment_beddays and _assessment_beddays which need to be combined
     assessment_only = bedday_pools[bedday_pools.index.str.contains("assessment")]
     all_other_bedday_pools = bedday_pools[
