@@ -280,7 +280,8 @@ def calculate_ip_wards_capacity(
             lookup += "cc_"
         elif "assessment" in bedday_pool:
             lookup += "assessment_"
-        elif "ward" in bedday_pool:
+        else:
+            assert "ward" in bedday_pool
             lookup += "ward_"
         operational_days = cast(
             float,
