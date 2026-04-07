@@ -9,6 +9,7 @@ from nhp.capacity_conversion.ip_wards import (
     calculate_separate_bedday_pools,
     calculate_ward_beddays,
     convert_ip_beddays_to_beds,
+    group_bedday_pools,
 )
 
 
@@ -222,3 +223,28 @@ def test_calculate_separate_bedday_pools(mocker):
         {"value": [100] * 4}, index=["0los", "cc", "assessment", "ward"]
     )
     assert_frame_equal(actual, expected)
+
+
+def test_group_bedday_pools():
+    # arrange
+    bedday_pools = pd.DataFrame(
+        {"value": [1, 2, 3, 4]},
+        index=[
+            "a_0los_assessment_beddays",
+            "a_assessment_beddays",
+            "a_cc_beddays",
+            "b_0los_beddays",
+        ],
+    )
+    expected = pd.DataFrame(
+        {"value": [3, 3]},
+        index=[
+            "a_total_assessment_beddays",
+            "a_cc_beddays",
+        ],
+    )
+    # act
+    actual = group_bedday_pools(bedday_pools)
+
+    # assert
+    assert_frame_equal(actual.sort_index(), expected.sort_index())
