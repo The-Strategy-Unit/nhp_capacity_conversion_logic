@@ -221,10 +221,9 @@ def group_bedday_pools(bedday_pools: pd.DataFrame) -> pd.DataFrame:
             base_idx = f"{prefix}_assessment_beddays"
             total_idx = f"{prefix}_total_assessment_beddays"
 
-            if base_idx in assessment_only.index:
-                new_rows[total_idx] = (
-                    assessment_only.loc[idx] + assessment_only.loc[base_idx]
-                )
+            new_rows[total_idx] = (
+                assessment_only.loc[idx] + assessment_only.loc[base_idx]
+            )
 
     # Append new rows
     new_bedday_pools = pd.concat(
