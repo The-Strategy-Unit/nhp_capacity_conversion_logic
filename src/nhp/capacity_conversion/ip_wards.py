@@ -254,6 +254,16 @@ def convert_ip_beddays_to_beds(
 def calculate_ip_wards_capacity(
     bedday_pools: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
+    """Converts p10, p90 and mean for calculated inpatients bedpools into capacity requirements using supplied assumptions
+
+    Args:
+        bedday_pools (pd.DataFrame): Calculated bedday pools with p10, p90 and mean values for each.
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        pd.DataFrame: DataFrame of calculated IP daycase capacity requirements
+    """
+
     logger.info("Calculating IP critical care, assessment, and wards capacity")
     grouped_bedday_pools = group_bedday_pools(bedday_pools)
     bedday_pools_dict = grouped_bedday_pools.to_dict(orient="index")

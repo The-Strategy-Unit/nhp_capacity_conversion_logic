@@ -6,6 +6,7 @@ from nhp.capacity_conversion.ip_wards import (
     calculate_0los_beddays,
     calculate_assessment_beddays,
     calculate_critical_care_beddays,
+    calculate_ip_wards_capacity,
     calculate_separate_bedday_pools,
     calculate_ward_beddays,
     convert_ip_beddays_to_beds,
@@ -248,3 +249,49 @@ def test_group_bedday_pools():
 
     # assert
     assert_frame_equal(actual.sort_index(), expected.sort_index())
+
+
+def test_calculate_ip_wards_capacity(mocker):
+    # arrange
+    bedday_pools = pd.DataFrame(
+        {k: [1, 1, 1] for k in ["p10", "mean", "p90"]},
+        index=[
+            "adult_elective_medical_ward_beddays",
+            "paediatric_nonelective_surgical_cc_beddays",
+            "adult_nonelective_medical_assessment_beddays",
+        ],
+    )
+    assumptions_df = pd.DataFrame(
+        {"assumption_value": [1, 2, 3, 4, 5, 6]},
+        index=[
+            "adult_ward_operational_days",
+            "adult_ward_occupancy_rate",
+            "paediatric_cc_operational_days",
+            "paediatric_cc_occupancy_rate",
+            "adult_assessment_operational_days",
+            "adult_assessment_occupancy_rate",
+        ],
+    )
+
+    mock_group = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.group_bedday_pools",
+        return_value=bedday_pools,
+    )
+    mock_convert = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.convert_ip_beddays_to_beds",
+        return_value=1,
+    )
+    expected = pd.DataFrame(
+        {"p10": [1] * 3, "mean": [1] * 3, "p90": [1] * 3},
+        index=[
+            "adult_elective_medical_ward_beds",
+            "paediatric_nonelective_surgical_cc_beds",
+            "adult_nonelective_medical_assessment_beds",
+        ],
+    )
+    # act
+    actual = calculate_ip_wards_capacity(bedday_pools, assumptions_df)
+    # assert
+    mock_group.assert_called_once_with(bedday_pools)
+    assert mock_convert.call_count == 9
+    assert_frame_equal(actual, expected)
