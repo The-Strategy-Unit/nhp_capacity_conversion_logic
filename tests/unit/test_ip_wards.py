@@ -137,7 +137,6 @@ def test_convert_ip_beddays_to_beds():
 
 
 def test_calculate_ward_beddays():
-    # arrange
     functional_areas = [
         "adult_elective_medical",
         "adult_nonelective_medical",
@@ -148,34 +147,46 @@ def test_calculate_ward_beddays():
         "paediatric_elective_surgical",
         "paediatric_nonelective_surgical",
     ]
-    values_dict = {"p10": 100, "mean": 100, "p90": 100}
+    total_beddays = {"p10": 1000, "mean": 1000, "p90": 1000}
+    los0_beddays = {"p10": 200, "mean": 200, "p90": 200}
+    cc_beddays = {"p10": 30, "mean": 30, "p90": 30}  # ~3%
+    assessment_bd = {"p10": 100, "mean": 100, "p90": 100}
+    assessment_0los = {"p10": 20, "mean": 20, "p90": 20}
+
     functional_areas_summarised = {
-        f_a + "_beddays": values_dict for f_a in functional_areas
+        f_a + "_beddays": total_beddays for f_a in functional_areas
     }
-    # 0los first
-    bedday_pools = {f_a + "_0los_beddays": values_dict for f_a in functional_areas}
-    # assessment first
-    assessment = {
-        f_a + "_assessment_beddays": values_dict
-        for f_a in functional_areas
-        if "nonelective" in f_a
-    }
-    bedday_pools.update(assessment)
-    # add critical care
-    critical_care = {f_a + "_cc_beddays": values_dict for f_a in functional_areas}
-    bedday_pools.update(critical_care)
-    results_dict_nonelective = {"p10": 0, "mean": 0, "p90": 0}
-    results_dict_elective = {"p10": 100, "mean": 100, "p90": 100}
-    expected = {
-        f_a + "_ward_beddays": (
-            results_dict_nonelective if "nonelective" in f_a else results_dict_elective
-        )
-        for f_a in functional_areas
-    }
-    # act
-    actual = calculate_ward_beddays(functional_areas_summarised, bedday_pools)
-    # assert
-    assert actual == expected
+
+    bedday_pools = {}
+    bedday_pools.update(
+        {f_a + "_0los_beddays": los0_beddays for f_a in functional_areas}
+    )
+    bedday_pools.update({f_a + "_cc_beddays": cc_beddays for f_a in functional_areas})
+    bedday_pools.update(
+        {
+            f_a + "_assessment_beddays": assessment_bd
+            for f_a in functional_areas
+            if "nonelective" in f_a
+        }
+    )
+    bedday_pools.update(
+        {
+            f_a + "_0los_assessment_beddays": assessment_0los
+            for f_a in functional_areas
+            if "nonelective" in f_a
+        }
+    )
+
+    # nonelective: (1000 + 200) - 30 - 100 - 20 = 1050
+    # elective:    (1000 + 200) - 30            = 1170
+    expected_nonelective = {"p10": 1050.0, "mean": 1050.0, "p90": 1050.0}
+    expected_elective = {"p10": 1170.0, "mean": 1170.0, "p90": 1170.0}
+
+    result = calculate_ward_beddays(functional_areas_summarised, bedday_pools)
+
+    for f_a in functional_areas:
+        expected = expected_nonelective if "nonelective" in f_a else expected_elective
+        assert result[f_a + "_ward_beddays"] == pytest.approx(expected)
 
 
 def test_calculate_separate_bedday_pools(mocker):
