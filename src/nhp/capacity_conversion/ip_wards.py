@@ -144,7 +144,7 @@ def calculate_ward_beddays(functional_areas_summarised, bedday_pools):
             )
             assessment_beddays = bedday_pools.get(
                 f_a + "_assessment_beddays", {"p10": 0, "mean": 0, "p90": 0}
-            )[value]  # elective activity will not have any assesssment beddays
+            )[value]  # elective activity will not have any assessment beddays
             _0los_assessment_beddays = bedday_pools.get(
                 f_a + "_0los_assessment_beddays", {"p10": 0, "mean": 0, "p90": 0}
             )[value]
