@@ -136,15 +136,20 @@ def test_main(mocker):
         "metadata",
         "assumptions",
         "op_functional_areas",
+        "op_baseline",
         "op_capacity",
         "aae_functional_areas",
+        "aae_baseline",
         "aae_capacity",
         "ip_daycase_functional_areas",
+        "ip_daycase_baseline",
         "ip_daycase_capacity",
         "ip_wards_functional_areas",
+        "ip_wards_baseline",
         "calculated_bedday_pools",
         "ip_wards_capacity",
     ]
+
     assert_series_equal(
         mock_data_to_save["metadata"],
         pd.Series(

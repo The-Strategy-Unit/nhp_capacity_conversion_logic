@@ -1,15 +1,45 @@
-import pandas as pd
-from nhpy.utils import get_logger
-from nhpy.az import connect_to_container, load_parquet_file
-from azure.data.tables import TableClient
-from azure.identity import DefaultAzureCredential
-from azure.core.exceptions import ResourceNotFoundError
-from openpyxl import Workbook
-from openpyxl.utils.dataframe import dataframe_to_rows
-from dotenv import load_dotenv
 import os
 
+import pandas as pd
+from azure.core.exceptions import ResourceNotFoundError
+from azure.data.tables import TableClient
+from azure.identity import DefaultAzureCredential
+from dotenv import load_dotenv
+from nhpy.az import connect_to_container, load_parquet_file
+from nhpy.utils import get_logger
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
 logger = get_logger()
+
+# Suppression methodology follows NHS England HES standard:
+# https://digital.nhs.uk/data-and-information/publications/statistical/
+# hospital-admitted-patient-care-activity/supporting-information#suppression-methodology
+SUPPRESSION_THRESHOLD = 7  # suppress counts 1–7; round all others to nearest 5
+
+
+def get_baseline_activity(aggregations: pd.DataFrame) -> pd.Series:
+    """Extract baseline (model run 0) total activity per functional area.
+
+    Applies NHS England HES suppression rules:
+    - Values 1–7 are replaced with None (displayed as blank in Excel)
+    - All other non-zero values are rounded to the nearest 5
+
+    Args:
+        aggregations (pd.DataFrame): Raw aggregations with model_run index,
+            grouping and total columns
+
+    Returns:
+        pd.Series: Baseline activity per grouping, suppressed and rounded
+    """
+    baseline = aggregations[aggregations.index == 0].groupby("grouping")["total"].sum()
+
+    def _suppress_and_round(x: float) -> float | None:
+        if 1 <= x <= SUPPRESSION_THRESHOLD:
+            return None
+        return round(x / 5) * 5
+
+    return baseline.map(_suppress_and_round)
 
 
 def calculate_prediction_intervals_and_mean(
