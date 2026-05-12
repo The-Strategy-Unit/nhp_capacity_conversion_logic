@@ -18,6 +18,7 @@ from nhp.capacity_conversion.ip_wards import (
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
+    get_baseline_activity,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
@@ -77,6 +78,7 @@ def main():
     data_to_save["op_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )
+    data_to_save["op_baseline"] = get_baseline_activity(op_aggregations)
     op_capacity_df = calculate_op_capacity(functional_areas_summarised, assumptions)
     data_to_save["op_capacity"] = op_capacity_df
     # AAE
@@ -88,6 +90,7 @@ def main():
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )
+    data_to_save["aae_baseline"] = get_baseline_activity(aae_aggregations)
     aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
     data_to_save["aae_capacity"] = aae_capacity_df
     # ip_daycase
@@ -101,6 +104,7 @@ def main():
     data_to_save["ip_daycase_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )
+    data_to_save["ip_daycase_baseline"] = get_baseline_activity(ip_daycase_aggregations)
     ip_daycase_capacity_df = calculate_ip_daycase_capacity(
         functional_areas_summarised, assumptions
     )
@@ -117,6 +121,7 @@ def main():
     data_to_save["ip_wards_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
     )
+    data_to_save["ip_wards_baseline"] = get_baseline_activity(ip_wards_aggregations)
     bedday_pools = calculate_separate_bedday_pools(
         functional_areas_summarised, assumptions
     )

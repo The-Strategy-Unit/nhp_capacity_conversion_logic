@@ -1,17 +1,35 @@
 import pandas as pd
 import pytest
-from pandas.testing import assert_frame_equal
 from azure.core.exceptions import ResourceNotFoundError
+from pandas.testing import assert_frame_equal
+
 from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
-    load_assumptions,
-    save_results_to_excel,
-    load_metadata_from_ats,
     create_aggregations_path,
-    validate_required_env_vars,
+    get_baseline_activity,
     load_aggregations,
+    load_assumptions,
+    load_metadata_from_ats,
+    save_results_to_excel,
     summarise_functional_areas,
+    validate_required_env_vars,
 )
+
+
+def test_get_baseline_activity():
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b", "c"] * 3,
+            "model_run": [0] * 3 + [1] * 3 + [2] * 3,
+            "total": [3, 10, 100] * 3,
+        }
+    ).set_index("model_run")
+
+    result = get_baseline_activity(aggregations)
+
+    assert pd.isna(result["a"])  # 3 is suppressed (1–7)
+    assert result["b"] == 10  # 10 rounds to 10
+    assert result["c"] == 100  # 100 rounds to 100
 
 
 def test_calculate_prediction_intervals_and_mean():
