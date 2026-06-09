@@ -79,6 +79,8 @@ def calculate_ip_theatres_capacity(
         "adult_elective_theatres",
         "paediatric_nonelective_theatres",
         "paediatric_elective_theatres",
+        "adult_surgical_daycase_theatres",
+        "paediatric_surgical_daycase_theatres",
     ]:
         results = {}
 
@@ -103,9 +105,13 @@ def calculate_ip_theatres_capacity(
                 "assumption_value",
             ],
         )
-        functional_area_name = capacity_requirement.replace(
-            "theatres", "surgical_procedures"
-        )
+        if "daycase" in capacity_requirement:
+            functional_area_name = capacity_requirement.replace("_theatres", "")
+        else:
+            functional_area_name = capacity_requirement.replace(
+                "theatres", "surgical_procedures"
+            )
+
         average_theatre_time_mins = cast(
             float,
             assumptions_df.at[
