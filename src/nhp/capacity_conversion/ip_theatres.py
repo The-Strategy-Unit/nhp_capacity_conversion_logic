@@ -23,9 +23,19 @@ from nhp.capacity_conversion.utils import (
 logger = get_logger()
 
 
-def calculate_unknown_theatres_duration():
-    # for theatres spells with unknown duration, calculate duration time using default assumptions
-    pass
+def calculate_unknown_theatres_duration(
+    number_of_admissions: float, average_theatre_time_mins: float
+) -> float:
+    """Calculate total theatre time in minutes for surgical admissions without known theatre time
+
+    Args:
+        number_of_admissions (float): Number of surgical admissions with unknown theatre time
+        average_theatre_time_mins (float): Average theatre time for that type of admission
+
+    Returns:
+        float: Approximated total theatre time in minutes for surgical admissions with unknown theatre time
+    """
+    return number_of_admissions * average_theatre_time_mins
 
 
 def convert_ip_theatres_capacity(
@@ -93,12 +103,24 @@ def calculate_ip_theatres_capacity(
                 "assumption_value",
             ],
         )
+        functional_area_name = capacity_requirement.replace(
+            "theatres", "surgical_procedures"
+        )
+        average_theatre_time_mins = cast(
+            float,
+            assumptions_df.at[
+                capacity_requirement + "_average_time_mins",
+                "assumption_value",
+            ],
+        )
         for value in ["p10", "mean", "p90"]:
-            functional_area_name = capacity_requirement.replace(
-                "theatres", "surgical_procedures"
-            )
             # get minutes
-            unknown_theatres_duration = 0
+            unknown_theatres_duration = calculate_unknown_theatres_duration(
+                functional_areas_summarised[functional_area_name + "_unknown_time"][
+                    value
+                ],
+                average_theatre_time_mins,
+            )
             known_theatres_duration = functional_areas_summarised[functional_area_name][
                 value
             ]
