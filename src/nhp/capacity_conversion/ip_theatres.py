@@ -137,7 +137,6 @@ def calculate_ip_theatres_capacity(
             )
         results_dict[capacity_requirement] = results
     ip_theatres_capacity = pd.DataFrame.from_dict(results_dict, orient="index")
-    # ip_theatres_capacity.index = [i + "_beds" for i in ip_theatres_capacity.index]
     return ip_theatres_capacity
 
 
