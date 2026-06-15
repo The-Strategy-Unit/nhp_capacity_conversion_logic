@@ -44,7 +44,7 @@ def convert_ip_theatres_capacity(
     operational_days: float,
     utilisation_rate: float,
 ) -> float:
-    """Formula used for converting IP daycase functional area activity to capacity requirements
+    """Formula used for converting IP theatres functional area activity to capacity requirements
 
     Args:
         total_theatres_duration_mins (float): Number of minutes spent by patients in theatres
