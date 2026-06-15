@@ -71,6 +71,7 @@ def calculate_ip_theatres_capacity(
 
     Returns:
         pd.DataFrame: DataFrame of calculated IP theatres capacity requirements
+    """
     logger.info("Calculating IP theatres capacity")
     results_dict = {}
     for capacity_requirement in [
