@@ -1,40 +1,26 @@
+import argparse
+import sys
+from datetime import datetime
+from logging import INFO
+from typing import cast
+
+import pandas as pd
 from nhpy.utils import (
     configure_logging,
     get_logger,
 )
-import pandas as pd
+
 from nhp.capacity_conversion.utils import (
-    load_assumptions,
-    save_results_to_excel,
-    load_metadata_from_ats,
     create_aggregations_path,
-    validate_required_env_vars,
     load_aggregations,
+    load_assumptions,
+    load_metadata_from_ats,
+    save_results_to_excel,
     summarise_functional_areas,
+    validate_required_env_vars,
 )
-import argparse
-from typing import cast
-import sys
-from logging import INFO
-from datetime import datetime
 
 logger = get_logger()
-
-
-def map_unknown(groupings_column: pd.Series) -> pd.Series:
-    """Map "unknown" activity in A&E to different functional area
-
-    Returns:
-        pd.Series: Column with activity mapped
-    """
-
-    # TODO: Mapping 'unknown' to 'minor' is a temporary workaround. See issue #6
-    return groupings_column.replace(
-        to_replace={
-            "adult_unknown": "adult_minor_attendances",
-            "child_unknown": "child_minor_attendances",
-        },
-    )
 
 
 def convert_aae_capacity(
@@ -184,7 +170,6 @@ def main():
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
-    aae_aggregations.loc[:, "grouping"] = map_unknown(aae_aggregations["grouping"])
     functional_areas_summarised = summarise_functional_areas(aae_aggregations)
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"

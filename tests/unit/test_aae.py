@@ -1,34 +1,12 @@
 import pandas as pd
-from pandas.testing import assert_series_equal, assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.aae import (
-    map_unknown,
-    convert_aae_capacity,
-    map_aae_capacity_to_functional_area,
     calculate_aae_capacity,
+    convert_aae_capacity,
     main,
+    map_aae_capacity_to_functional_area,
 )
-
-
-def test_map_unknown():
-    # arrange
-    col = pd.Series(
-        ["adult_unknown", "adult_minor_attendances", "sdec", "child_unknown"]
-    )
-    # act
-    col_mapped = map_unknown(col)
-    # assert
-    assert_series_equal(
-        col_mapped,
-        pd.Series(
-            [
-                "adult_minor_attendances",
-                "adult_minor_attendances",
-                "sdec",
-                "child_minor_attendances",
-            ]
-        ),
-    )
 
 
 def test_convert_aae_capacity():
@@ -177,11 +155,6 @@ def test_main(mocker):
         }
     )
     mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)
-
-    mocker.patch(
-        "nhp.capacity_conversion.aae.map_unknown",
-        return_value=pd.Series({"grouping": ["a", "b", "d"] * 3}),
-    )
 
     mock_functional_summary = {"area": {"mean": 1}}
     mocker.patch(
