@@ -1,64 +1,41 @@
+from unittest.mock import call
+
 import pandas as pd
-from pandas.testing import assert_series_equal, assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.aae import (
-    map_unknown,
-    convert_aae_capacity,
-    map_aae_capacity_to_functional_area,
     calculate_aae_capacity,
+    convert_aae_capacity,
+    derive_aae_workload,
     main,
 )
 
 
-def test_map_unknown():
+def test_derive_aae_workload():
     # arrange
-    col = pd.Series(
-        ["adult_unknown", "adult_minor_attendances", "sdec", "child_unknown"]
-    )
+    attendances = 10
+    assumed_los_mins = 120
+    expected = 20
     # act
-    col_mapped = map_unknown(col)
-    # assert
-    assert_series_equal(
-        col_mapped,
-        pd.Series(
-            [
-                "adult_minor_attendances",
-                "adult_minor_attendances",
-                "sdec",
-                "child_minor_attendances",
-            ]
-        ),
-    )
-
-
-def test_convert_aae_capacity():
-    # arrange
-    attendances = 10000
-    assumed_los_mins = 240
-    operating_weeks_per_year = 52
-    operating_hours_per_week = 168
-    utilisation_rate = 0.5
-
-    expected = 40000 / 4368
-
-    # act
-    actual = convert_aae_capacity(
-        attendances,
-        assumed_los_mins,
-        operating_weeks_per_year,
-        operating_hours_per_week,
-        utilisation_rate,
-    )
+    actual = derive_aae_workload(attendances, assumed_los_mins)
     # assert
     assert actual == expected
 
 
-def test_map_aae_capacity_to_functional_area():
+def test_convert_aae_capacity():
     # arrange
-    capacity_requirement_string = "sdec_spaces"
-    expected = "sdec_attendances"
+    occupancy_hours = 100
+    annual_operational_hours = 20
+    utilisation = 0.5
+
+    expected = 10
+
     # act
-    actual = map_aae_capacity_to_functional_area(capacity_requirement_string)
+    actual = convert_aae_capacity(
+        occupancy_hours,
+        annual_operational_hours,
+        utilisation,
+    )
     # assert
     assert actual == expected
 
@@ -66,38 +43,38 @@ def test_map_aae_capacity_to_functional_area():
 def test_calculate_aae_capacity(mocker, caplog):
     # arrange
     caplog.set_level("INFO")
-
-    capacity_requirements = [
-        "adult_major_spaces",
-        "adult_minor_spaces",
-        "child_major_spaces",
-        "child_minor_spaces",
-        "sdec_spaces",
-        "resus_spaces",
-    ]
     mocker.patch(
-        "nhp.capacity_conversion.aae.map_aae_capacity_to_functional_area",
-        return_value="mock_functional_area",
+        "nhp.capacity_conversion.aae.ASSUMPTIONS_MAPPING",
+        {
+            "test_subgroup": {
+                "los": "LOS",
+                "hours": "HOURS",
+                "util": "UTIL",
+                "output": "output_spaces",
+            }
+        },
     )
-    mock_convert = mocker.patch(
-        "nhp.capacity_conversion.aae.convert_aae_capacity",
-        return_value=999,
-    )
+
     functional_areas_summarised = {
-        "mock_functional_area": {
+        "test_subgroup": {
             "p10": 100,
             "mean": 200,
             "p90": 300,
         }
     }
-    assumptions_data = {}
-    for req in capacity_requirements:
-        assumptions_data[f"{req}_assumed_los_mins"] = {"assumption_value": 240}
-        assumptions_data[f"{req}_operating_hours"] = {"assumption_value": 168}
-        assumptions_data[f"{req}_operating_weeks"] = {"assumption_value": 52}
-        assumptions_data[f"{req}_utilisation_rate"] = {"assumption_value": 0.5}
+    mock_workload = mocker.patch(
+        "nhp.capacity_conversion.aae.derive_aae_workload",
+        return_value="workload",
+    )
+    mock_convert = mocker.patch(
+        "nhp.capacity_conversion.aae.convert_aae_capacity",
+        return_value="capacity",
+    )
 
-    assumptions_df = pd.DataFrame.from_dict(assumptions_data, orient="index")
+    assumptions_df = pd.DataFrame(
+        {"assumption_value": [1, 2, 3]},
+        index=["LOS", "HOURS", "UTIL"],
+    )
 
     # act
     result = calculate_aae_capacity(
@@ -107,24 +84,31 @@ def test_calculate_aae_capacity(mocker, caplog):
 
     # assert
 
-    # convert_aae_capacity should be called 18 times (6 × 3)
-    assert mock_convert.call_count == 18
-
     # output structure
     assert isinstance(result, pd.DataFrame)
     assert list(result.columns) == ["p10", "mean", "p90"]
-    assert list(result.index) == capacity_requirements
+    assert list(result.index) == ["output_spaces"]
+    assert (result == "capacity").all().all()
 
-    # all values should be mocked return value
-    assert (result == 999).all().all()
-
-    # check arguments in calls to convert_aae_capacity
-    first_call = mock_convert.call_args_list[0]
-    args = first_call.args
-    assert args[1] == 240  # assumed_los
-    assert args[2] == 52  # operating_weeks
-    assert args[3] == 168  # operating_hours
-    assert args[4] == 0.5  # utilisation
+    # test calls to mocked functions
+    mock_workload.assert_has_calls(
+        [
+            call(100, 1),
+            call(200, 1),
+            call(300, 1),
+        ],
+        any_order=False,
+    )
+    mock_convert.assert_has_calls(
+        [
+            call(
+                "workload",
+                annual_operational_hours=2,
+                utilisation=3,
+            )
+        ]
+        * 3
+    )
 
 
 def test_main(mocker):
@@ -177,11 +161,6 @@ def test_main(mocker):
         }
     )
     mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)
-
-    mocker.patch(
-        "nhp.capacity_conversion.aae.map_unknown",
-        return_value=pd.Series({"grouping": ["a", "b", "d"] * 3}),
-    )
 
     mock_functional_summary = {"area": {"mean": 1}}
     mocker.patch(

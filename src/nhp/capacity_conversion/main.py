@@ -9,7 +9,7 @@ from nhpy.utils import (
     get_logger,
 )
 
-from nhp.capacity_conversion.aae import calculate_aae_capacity, map_unknown
+from nhp.capacity_conversion.aae import calculate_aae_capacity
 from nhp.capacity_conversion.ip_daycase import calculate_ip_daycase_capacity
 from nhp.capacity_conversion.ip_theatres import calculate_ip_theatres_capacity
 from nhp.capacity_conversion.ip_wards import (
@@ -88,7 +88,6 @@ def main():
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
-    aae_aggregations.loc[:, "grouping"] = map_unknown(aae_aggregations["grouping"])
     functional_areas_summarised = summarise_functional_areas(aae_aggregations)
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"

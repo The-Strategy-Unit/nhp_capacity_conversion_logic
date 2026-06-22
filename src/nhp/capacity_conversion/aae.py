@@ -1,83 +1,96 @@
+import argparse
+import sys
+from datetime import datetime
+from logging import INFO
+from typing import cast
+
+import pandas as pd
 from nhpy.utils import (
     configure_logging,
     get_logger,
 )
-import pandas as pd
+
 from nhp.capacity_conversion.utils import (
-    load_assumptions,
-    save_results_to_excel,
-    load_metadata_from_ats,
     create_aggregations_path,
-    validate_required_env_vars,
     load_aggregations,
+    load_assumptions,
+    load_metadata_from_ats,
+    save_results_to_excel,
     summarise_functional_areas,
+    validate_required_env_vars,
 )
-import argparse
-from typing import cast
-import sys
-from logging import INFO
-from datetime import datetime
 
 logger = get_logger()
 
+ASSUMPTIONS_MAPPING = {
+    "adult_major_attendances": {
+        "los": "AE_ADULT_MAJOR_LOS",
+        "util": "AE_ADULT_MAJOR_UTIL",
+        "hours": "AE_BEDS_ANNUAL_OPERATIONAL_HOURS",
+        "output": "ADULT_MAJOR_AE_BEDS",
+    },
+    "adult_minor_attendances": {
+        "los": "AE_ADULT_MINOR_LOS",
+        "util": "AE_ADULT_MINOR_UTIL",
+        "hours": "AE_BAYS_ANNUAL_OPERATIONAL_HOURS",
+        "output": "ADULT_MINOR_AE_BAYS",
+    },
+    "child_major_attendances": {
+        "los": "AE_CHILD_MAJOR_LOS",
+        "util": "AE_CHILD_MAJOR_UTIL",
+        "hours": "AE_BEDS_ANNUAL_OPERATIONAL_HOURS",
+        "output": "CHILD_MAJOR_AE_BEDS",
+    },
+    "child_minor_attendances": {
+        "los": "AE_CHILD_MINOR_LOS",
+        "util": "AE_CHILD_MINOR_UTIL",
+        "hours": "AE_BAYS_ANNUAL_OPERATIONAL_HOURS",
+        "output": "CHILD_MINOR_AE_BAYS",
+    },
+    "resus_attendances": {
+        "los": "AE_RESUS_LOS",
+        "util": "AE_RESUS_UTIL",
+        "hours": "AE_BEDS_ANNUAL_OPERATIONAL_HOURS",
+        "output": "RESUS_AE_BEDS",
+    },
+    "sdec_attendances": {
+        "los": "SDEC_SPACES_LOS",
+        "util": "SDEC_SPACES_UTIL",
+        "hours": "SDEC_SPACES_ANNUAL_OPERATIONAL_HOURS",
+        "output": "SDEC_SPACES",
+    },
+}
 
-def map_unknown(groupings_column: pd.Series) -> pd.Series:
-    """Map "unknown" activity in A&E to different functional area
 
-    Returns:
-        pd.Series: Column with activity mapped
-    """
-
-    # TODO: Mapping 'unknown' to 'minor' is a temporary workaround. See issue #6
-    return groupings_column.replace(
-        to_replace={
-            "adult_unknown": "adult_minor_attendances",
-            "child_unknown": "child_minor_attendances",
-        },
-    )
-
-
-def convert_aae_capacity(
-    attendances: float,
-    assumed_los_mins: float,
-    operating_weeks_per_year: float,
-    operating_hours_per_week: float,
-    utilisation_rate: float,
-) -> float:
+def derive_aae_workload(attendances: float, assumed_los_mins: float) -> float:
     """Formula used for converting all A&E functional area activity to capacity requirements
 
     Args:
         attendances (float): Number of attendances
         assumed_los_mins (float): Assumed length of stay in emergency department in minutes
-        operating_weeks_per_year (float): Number of operating weeks per year
-        operating_hours_per_week (float): Number of operating hours per week
-        utilisation_rate (float): Utilisation rate of the resource
+
+    Returns:
+        float: Calculated workload in occupancy hours
+    """
+    return attendances * assumed_los_mins / 60
+
+
+def convert_aae_capacity(
+    occupancy_hours: float,
+    annual_operational_hours: float,
+    utilisation: float,
+) -> float:
+    """Formula used for converting A&E workload to capacity requirements
+
+    Args:
+        occupancy_hours (float): Number of occupancy hours per year
+        annual_operational_hours (float): Number of operating hours per year
+        utilisation (float): Utilisation of the resource, expressed as a decimal
 
     Returns:
         float: Calculated capacity requirement
     """
-    return (attendances * assumed_los_mins / 60) / (
-        operating_weeks_per_year * operating_hours_per_week * utilisation_rate
-    )
-
-
-def map_aae_capacity_to_functional_area(capacity_requirement_string: str) -> str:
-    """Alters string so that we can look up the correct functional area to use for
-    each capacity requirement
-
-    Args:
-        capacity_requirement_string (str): Capacity requirement name
-
-    Returns:
-        str: Corresponding functional area name
-    """
-    words_to_replace = ["beds", "bays", "spaces"]
-
-    for word in words_to_replace:
-        capacity_requirement_string = capacity_requirement_string.replace(
-            word, "attendances"
-        )
-    return capacity_requirement_string
+    return occupancy_hours / (annual_operational_hours * utilisation)
 
 
 def calculate_aae_capacity(
@@ -94,50 +107,35 @@ def calculate_aae_capacity(
     """
     logger.info("Calculating A&E capacity")
     results_dict = {}
-    for capacity_requirement in [
-        "adult_major_spaces",
-        "adult_minor_spaces",
-        "child_major_spaces",
-        "child_minor_spaces",
-        "sdec_spaces",
-        "resus_spaces",
-    ]:
+    for subgroup in functional_areas_summarised.keys():
         results = {}
         assumed_los_mins = cast(
             float,
-            assumptions_df.at[
-                capacity_requirement + "_assumed_los_mins", "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["los"], "assumption_value"],
         )
-        operating_hours_per_week = cast(
+        annual_operational_hours = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_operating_hours", "assumption_value"
+                ASSUMPTIONS_MAPPING[subgroup]["hours"], "assumption_value"
             ],
         )
-        operating_weeks_per_year = cast(
+        utilisation = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_operating_weeks", "assumption_value"
-            ],
-        )
-        utilisation_rate = cast(
-            float,
-            assumptions_df.at[
-                capacity_requirement + "_utilisation_rate", "assumption_value"
+                ASSUMPTIONS_MAPPING[subgroup]["util"], "assumption_value"
             ],
         )
 
         for value in ["p10", "mean", "p90"]:
-            functional_area = map_aae_capacity_to_functional_area(capacity_requirement)
-            results[value] = convert_aae_capacity(
-                functional_areas_summarised[functional_area][value],
-                assumed_los_mins,
-                operating_weeks_per_year,
-                operating_hours_per_week,
-                utilisation_rate,
+            occupancy_hours = derive_aae_workload(
+                functional_areas_summarised[subgroup][value], assumed_los_mins
             )
-        results_dict[capacity_requirement] = results
+            results[value] = convert_aae_capacity(
+                occupancy_hours,
+                annual_operational_hours=annual_operational_hours,
+                utilisation=utilisation,
+            )
+        results_dict[ASSUMPTIONS_MAPPING[subgroup]["output"]] = results
     return pd.DataFrame.from_dict(results_dict, orient="index")
 
 
@@ -184,7 +182,6 @@ def main():
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
-    aae_aggregations.loc[:, "grouping"] = map_unknown(aae_aggregations["grouping"])
     functional_areas_summarised = summarise_functional_areas(aae_aggregations)
     data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
         functional_areas_summarised, orient="index"
