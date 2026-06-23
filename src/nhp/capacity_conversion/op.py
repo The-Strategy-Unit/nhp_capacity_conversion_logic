@@ -1,71 +1,99 @@
+import argparse
+import sys
+from datetime import datetime
+from logging import INFO
+from typing import cast
+
+import pandas as pd
 from nhpy.utils import (
     configure_logging,
     get_logger,
 )
-import pandas as pd
+
 from nhp.capacity_conversion.utils import (
-    load_assumptions,
-    summarise_functional_areas,
-    save_results_to_excel,
-    load_metadata_from_ats,
     create_aggregations_path,
-    validate_required_env_vars,
     load_aggregations,
+    load_assumptions,
+    load_metadata_from_ats,
+    save_results_to_excel,
+    summarise_functional_areas,
+    validate_required_env_vars,
 )
-import argparse
-from typing import cast
-import sys
-from logging import INFO
-from datetime import datetime
 
 logger = get_logger()
 
 
+ASSUMPTIONS_MAPPING = {
+    "op_procedures": {
+        "time": "OP_PROC_TIME",
+        "dna_rate": "OP_PROC_DNA_RATE",
+        "dna_time": "OP_PROC_DNA_TIME",
+        "util": "OP_PROC_UTIL",
+        "operational_hours": "OP_PROC_ANNUAL_OPERATIONAL_HOURS",
+        "output": "OUTPATIENT_PROC_ROOMS",
+    },
+    "op_first_attendances": {
+        "time": "OP_CONSULT_FIRST_TIME",
+        "dna_rate": "OP_CONSULT_FIRST_DNA_RATE",
+        "dna_time": "OP_CONSULT_FIRST_DNA_TIME",
+        "util": "OP_CONSULT_UTIL",
+        "operational_hours": "OP_CONSULT_ANNUAL_OPERATIONAL_HOURS",
+        "output": "FIRST_OUTPATIENT_CONSULT_ROOMS",
+    },
+    "op_follow_up_attendances": {
+        "time": "OP_CONSULT_FOLLOW_UP_TIME",
+        "dna_rate": "OP_CONSULT_FOLLOW_UP_DNA_RATE",
+        "dna_time": "OP_CONSULT_FOLLOW_UP_DNA_TIME",
+        "util": "OP_CONSULT_UTIL",
+        "operational_hours": "OP_CONSULT_ANNUAL_OPERATIONAL_HOURS",
+        "output": "FOLLOW_UP_OUTPATIENT_CONSULT_ROOMS",
+    },
+    "op_virtual_attendances": {
+        "time": "OP_VIRTUAL_CONSULT_TIME",
+        "dna_rate": "OP_VIRTUAL_CONSULT_DNA_RATE",
+        "dna_time": "OP_VIRTUAL_CONSULT_DNA_TIME",
+        "util": "OP_VIRTUAL_CONSULT_UTIL",
+        "operational_hours": "OP_VIRTUAL_CONSULT_ANNUAL_OPERATIONAL_HOURS",
+        "output": "OUTPATIENT_VIRTUAL_CONSULT_ROOMS",
+    },
+}
+
+
+def derive_op_workload(
+    time: float, dna_rate: float, dna_time: float, attendances: float
+) -> float:
+    """Formula used for converting all OP functional area activity to workload
+
+    Args:
+        time (float): Indicative appointment duration (mins)
+        dna_rate (float): Indicative DNA rate
+        dna_time (float): Indicative DNA time consumed (mins)
+        attendances (float): Number of attendances
+
+    Returns:
+        float: Calculated workload requirement
+    """
+    effective_time_mins = time + (dna_rate * dna_time)
+    workload_hours = (attendances * effective_time_mins) / 60
+    return workload_hours
+
+
 def convert_op_capacity(
-    attendances: float,
-    duration: float,
-    dna_rate: float,
-    dna_time: float,
+    workload_hours: float,
     operational_hours: float,
-    operational_weeks: float,
     utilisation_rate: float,
 ) -> float:
     """Formula used for converting all OP functional area activity to capacity requirements
 
     Args:
-        attendances (float): Number of attendances
-        duration (float): Indicative appointment duration (mins)
-        dna_rate (float): Indicative DNA rate
-        dna_time (float): Indicative DNA time consumed (mins)
-        operational_hours (float): Room operational hours per week
-        operational_weeks (float): Room operational weeks per year
+        workload_hours (float): Workload hours per year
+        operational_hours (float): Room operational hours per year
         utilisation_rate (float): Room utilisation rate
 
     Returns:
         float: Calculated capacity requirement
     """
-    return (((attendances * duration) + (dna_rate * attendances * dna_time)) / 60) / (
-        operational_hours * operational_weeks * utilisation_rate
-    )
-
-
-def map_op_capacity_to_functional_area(capacity_requirement_string: str) -> str:
-    """Alters string so that we can look up the correct functional area to use for
-    each capacity requirement
-
-    Args:
-        capacity_requirement_string (str): Capacity requirement name
-
-    Returns:
-        str: Corresponding functional area name
-    """
-    capacity_requirement_string = capacity_requirement_string.replace(
-        "op_", "outpatient_"
-    )
-    if "procedures" not in capacity_requirement_string:
-        capacity_requirement_string += "_attendances"
-
-    return capacity_requirement_string
+    return workload_hours / (operational_hours * utilisation_rate)
 
 
 def calculate_op_capacity(
@@ -82,68 +110,49 @@ def calculate_op_capacity(
     """
     logger.info("Calculating OP capacity")
     results_dict = {}
-    for capacity_requirement in [
-        "op_first",
-        "op_followup",
-        "op_virtual",
-        "op_procedures",
-    ]:
+    for subgroup in functional_areas_summarised.keys():
         results = {}
-        duration = cast(
+
+        time = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_duration_mins", "assumption_value"
+                ASSUMPTIONS_MAPPING[subgroup]["time"], "assumption_value"
             ],
         )
         dna_rate = cast(
             float,
-            assumptions_df.at[capacity_requirement + "_dna_rate", "assumption_value"],
+            assumptions_df.at[
+                ASSUMPTIONS_MAPPING[subgroup]["dna_rate"], "assumption_value"
+            ],
         )
         dna_time = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_dna_time_mins", "assumption_value"
-            ],
-        )
-        operational_hours = cast(
-            float,
-            assumptions_df.at[
-                capacity_requirement + "_operational_hours", "assumption_value"
-            ],
-        )
-        operational_weeks = cast(
-            float,
-            assumptions_df.at[
-                capacity_requirement + "_operational_weeks", "assumption_value"
+                ASSUMPTIONS_MAPPING[subgroup]["dna_time"], "assumption_value"
             ],
         )
         utilisation_rate = cast(
             float,
             assumptions_df.at[
-                capacity_requirement + "_utilisation_rate", "assumption_value"
+                ASSUMPTIONS_MAPPING[subgroup]["util"], "assumption_value"
             ],
         )
+        operational_hours = cast(
+            float,
+            assumptions_df.at[
+                ASSUMPTIONS_MAPPING[subgroup]["operational_hours"], "assumption_value"
+            ],
+        )
+        output = ASSUMPTIONS_MAPPING[subgroup]["output"]
         for value in ["p10", "mean", "p90"]:
-            functional_area = map_op_capacity_to_functional_area(capacity_requirement)
-            results[value] = convert_op_capacity(
-                functional_areas_summarised[functional_area][value],
-                duration,
-                dna_rate,
-                dna_time,
-                operational_hours,
-                operational_weeks,
-                utilisation_rate,
+            workload_hours = derive_op_workload(
+                time, dna_rate, dna_time, functional_areas_summarised[subgroup][value]
             )
-        results_dict[capacity_requirement] = results
-    op_capacity = pd.DataFrame.from_dict(results_dict, orient="index")
-    rename_dict = {
-        "op_virtual": "op_virtual_consultation_rooms",
-        "op_procedures": "op_procedure_rooms",
-    }
-    op_capacity.loc["op_consultation_rooms"] = (
-        op_capacity.loc["op_first"] + op_capacity.loc["op_followup"]
-    )
-    return op_capacity.rename(index=rename_dict)
+            results[value] = convert_op_capacity(
+                workload_hours, operational_hours, utilisation_rate
+            )
+        results_dict[output] = results
+    return pd.DataFrame.from_dict(results_dict, orient="index")
 
 
 def main():
