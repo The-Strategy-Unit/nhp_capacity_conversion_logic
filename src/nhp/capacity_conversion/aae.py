@@ -63,7 +63,7 @@ ASSUMPTIONS_MAPPING = {
 
 
 def derive_aae_workload(attendances: float, assumed_los_mins: float) -> float:
-    """Formula used for converting all A&E functional area activity to capacity requirements
+    """Formula used for converting all A&E functional area activity to workload
 
     Args:
         attendances (float): Number of attendances
