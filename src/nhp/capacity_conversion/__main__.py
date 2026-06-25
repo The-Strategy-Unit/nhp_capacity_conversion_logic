@@ -153,5 +153,5 @@ def main():
     save_results_to_excel(data_to_save)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+## %
+main()
