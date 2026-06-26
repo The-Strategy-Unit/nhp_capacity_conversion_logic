@@ -10,6 +10,7 @@ from nhpy.utils import (
     get_logger,
 )
 
+from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
     load_aggregations,
@@ -170,8 +171,8 @@ def main():
     )
     parser.add_argument(
         "--path_to_assumptions_file",
-        help="Path to assumptions file (default: 'data/reference/default_assumptions.csv')",
-        default="data/reference/default_assumptions.csv",
+        help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
+        default=ASSUMPTIONS_URL,
     )
     args = parser.parse_args()
     config = validate_required_env_vars()
