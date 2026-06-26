@@ -71,7 +71,7 @@ def test_calculate_op_capacity(mocker, caplog):
     }
     assumptions_df = pd.DataFrame(
         {
-            "assumption_value": [
+            "Value": [
                 "TIME",
                 "DNA_RATE",
                 "DNA_TIME",

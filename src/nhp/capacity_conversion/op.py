@@ -115,32 +115,24 @@ def calculate_op_capacity(
 
         time = cast(
             float,
-            assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["time"], "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["time"], "Value"],
         )
         dna_rate = cast(
             float,
-            assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["dna_rate"], "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["dna_rate"], "Value"],
         )
         dna_time = cast(
             float,
-            assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["dna_time"], "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["dna_time"], "Value"],
         )
         utilisation_rate = cast(
             float,
-            assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["util"], "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["util"], "Value"],
         )
         operational_hours = cast(
             float,
             assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["operational_hours"], "assumption_value"
+                ASSUMPTIONS_MAPPING[subgroup]["operational_hours"], "Value"
             ],
         )
         output = ASSUMPTIONS_MAPPING[subgroup]["output"]
