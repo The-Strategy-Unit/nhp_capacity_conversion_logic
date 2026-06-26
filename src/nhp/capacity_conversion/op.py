@@ -30,7 +30,7 @@ ASSUMPTIONS_MAPPING = {
         "dna_time": "OP_PROC_DNA_TIME",
         "util": "OP_PROC_UTIL",
         "operational_hours": "OP_PROC_ANNUAL_OPERATIONAL_HOURS",
-        "output": "OUTPATIENT_PROC_ROOMS",
+        "output": "OP_PROC_ROOMS",
     },
     "op_first_attendances": {
         "time": "OP_CONSULT_FIRST_TIME",
@@ -38,7 +38,7 @@ ASSUMPTIONS_MAPPING = {
         "dna_time": "OP_CONSULT_FIRST_DNA_TIME",
         "util": "OP_CONSULT_UTIL",
         "operational_hours": "OP_CONSULT_ANNUAL_OPERATIONAL_HOURS",
-        "output": "FIRST_OUTPATIENT_CONSULT_ROOMS",
+        "output": "FIRST_OP_CONSULT_ROOMS",
     },
     "op_follow_up_attendances": {
         "time": "OP_CONSULT_FOLLOW_UP_TIME",
@@ -46,7 +46,7 @@ ASSUMPTIONS_MAPPING = {
         "dna_time": "OP_CONSULT_FOLLOW_UP_DNA_TIME",
         "util": "OP_CONSULT_UTIL",
         "operational_hours": "OP_CONSULT_ANNUAL_OPERATIONAL_HOURS",
-        "output": "FOLLOW_UP_OUTPATIENT_CONSULT_ROOMS",
+        "output": "FOLLOW_UP_OP_CONSULT_ROOMS",
     },
     "op_virtual_attendances": {
         "time": "OP_VIRTUAL_CONSULT_TIME",
@@ -54,7 +54,7 @@ ASSUMPTIONS_MAPPING = {
         "dna_time": "OP_VIRTUAL_CONSULT_DNA_TIME",
         "util": "OP_VIRTUAL_CONSULT_UTIL",
         "operational_hours": "OP_VIRTUAL_CONSULT_ANNUAL_OPERATIONAL_HOURS",
-        "output": "OUTPATIENT_VIRTUAL_CONSULT_ROOMS",
+        "output": "OP_VIRTUAL_CONSULT_ROOMS",
     },
 }
 
