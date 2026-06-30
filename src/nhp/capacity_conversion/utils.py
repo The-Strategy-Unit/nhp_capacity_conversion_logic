@@ -1,4 +1,8 @@
+import argparse
 import os
+from datetime import datetime
+from logging import INFO
+from typing import Callable
 
 import pandas as pd
 from azure.core.exceptions import ResourceNotFoundError
@@ -6,9 +10,11 @@ from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 from nhpy.az import connect_to_container, load_parquet_file
-from nhpy.utils import get_logger
+from nhpy.utils import configure_logging, get_logger
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
+
+from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 
 logger = get_logger()
 
@@ -231,3 +237,98 @@ def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
             df.loc[(slice(None), grouping), :]["total"]
         )
     return functional_areas_summarised
+
+
+def process_activity_type(
+    name: str,
+    aggregations: pd.DataFrame,
+    calculate_fn: Callable[[dict, pd.DataFrame], pd.DataFrame],
+    assumptions: pd.DataFrame,
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+    preprocess: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    include_baseline: bool = True,
+) -> None:
+    """Summarise functional areas, optionally extract baseline, and calculate capacity."""
+    if preprocess is not None:
+        aggregations = preprocess(aggregations)
+
+    functional_areas_summarised = summarise_functional_areas(aggregations)
+    data_to_save[f"{name}_functional_areas"] = pd.DataFrame.from_dict(
+        functional_areas_summarised, orient="index"
+    )
+
+    if include_baseline:
+        data_to_save[f"{name}_baseline"] = get_baseline_activity(aggregations)
+
+    capacity_df = calculate_fn(functional_areas_summarised, assumptions)
+    data_to_save[f"{name}_capacity"] = capacity_df
+
+
+def run_single_activity_type(
+    activity_type: str,
+    calculate_fn: Callable[[dict, pd.DataFrame], pd.DataFrame],
+    preprocess: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    include_baseline: bool = False,
+) -> int:
+    """CLI entry point for a single activity type.
+
+    Handles argument parsing, metadata/assumptions loading, aggregation loading,
+    optional preprocessing, capacity calculation, and Excel saving.
+    """
+    configure_logging(INFO)
+    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    parser = argparse.ArgumentParser(
+        description=f"Generate {activity_type.upper()} capacity outputs given functional area aggregations of {activity_type.upper()} activity"
+    )
+    parser.add_argument(
+        "guid",
+        help="GUID of functional area aggregation to convert into capacity",
+    )
+    parser.add_argument(
+        "--capacity_model_version",
+        help="Capacity model version",
+        default="dev",
+    )
+    parser.add_argument(
+        "--path_to_assumptions_file",
+        help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
+        default=ASSUMPTIONS_URL,
+    )
+    args = parser.parse_args()
+
+    config = validate_required_env_vars()
+    data_to_save = {}
+
+    metadata = load_metadata_from_ats(
+        args.guid,
+        config["AZ_TABLE_ENDPOINT"],
+        config["TABLE_NAME"],
+        args.capacity_model_version,
+    )
+    metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
+    data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
+
+    assumptions = load_assumptions(args.path_to_assumptions_file)
+    data_to_save["assumptions"] = assumptions
+
+    aggregations_path = create_aggregations_path(metadata)
+    aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"],
+        config["AZ_STORAGE_RESULTS"],
+        aggregations_path,
+        activity_type,
+    )
+
+    process_activity_type(
+        activity_type,
+        aggregations,
+        calculate_fn,
+        assumptions,
+        data_to_save,
+        preprocess=preprocess,
+        include_baseline=include_baseline,
+    )
+
+    save_results_to_excel(data_to_save)
+    return 0
