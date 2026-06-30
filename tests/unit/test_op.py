@@ -1,48 +1,38 @@
+from unittest.mock import call
+
 import pandas as pd
-from pandas.testing import assert_series_equal, assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.op import (
-    convert_op_capacity,
-    map_op_capacity_to_functional_area,
     calculate_op_capacity,
+    convert_op_capacity,
+    derive_op_workload,
     main,
 )
 
 
-def test_convert_op_capacity():
+def test_derive_op_workload():
     # arrange
-    attendances = 100000
-    duration_mins = 38
-    dna_rate = 0.07
-    dna_time_mins = 20
-    operational_hours = 40
-    operational_weeks = 48
-    utilisation_rate = 0.85
-
-    expected = (3940000 / 60) / 1632
-
-    actual = convert_op_capacity(
-        attendances,
-        duration_mins,
-        dna_rate,
-        dna_time_mins,
-        operational_hours,
-        operational_weeks,
-        utilisation_rate,
-    )
+    time = 20
+    dna_rate = 0.1
+    dna_time = 20
+    attendances = 60
+    expected = 22
+    # act
+    actual = derive_op_workload(time, dna_rate, dna_time, attendances)
     # assert
     assert actual == expected
 
 
-def test_map_op_capacity_to_functional_area():
+def test_convert_op_capacity():
     # arrange
-    capacity_requirement_strings = ["op_procedures", "op_first"]
-    expected = ["outpatient_procedures", "outpatient_first_attendances"]
+    workload_hours = 100
+    operational_hours = 50
+    utilisation_rate = 0.1
+    expected = 20
+
     # act
-    actual = [
-        map_op_capacity_to_functional_area(var_name)
-        for var_name in capacity_requirement_strings
-    ]
+    actual = convert_op_capacity(workload_hours, operational_hours, utilisation_rate)
     # assert
     assert actual == expected
 
@@ -50,46 +40,48 @@ def test_map_op_capacity_to_functional_area():
 def test_calculate_op_capacity(mocker, caplog):
     # arrange
     caplog.set_level("INFO")
-
-    capacity_requirements = [
-        "op_first",
-        "op_followup",
-        "op_virtual",
-        "op_procedures",
-    ]
     mocker.patch(
-        "nhp.capacity_conversion.op.map_op_capacity_to_functional_area",
-        return_value="mock_functional_area",
+        "nhp.capacity_conversion.op.ASSUMPTIONS_MAPPING",
+        {
+            "test_subgroup": {
+                "time": "TIME",
+                "dna_rate": "DNA_RATE",
+                "dna_time": "DNA_TIME",
+                "util": "UTIL",
+                "operational_hours": "OPERATIONAL_HOURS",
+                "output": "OUTPUT",
+            }
+        },
+    )
+
+    mock_workload = mocker.patch(
+        "nhp.capacity_conversion.op.derive_op_workload",
+        return_value="workload",
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.op.convert_op_capacity",
-        return_value=999,
+        return_value="capacity",
     )
     functional_areas_summarised = {
-        "mock_functional_area": {
+        "test_subgroup": {
             "p10": 100,
             "mean": 200,
             "p90": 300,
         }
     }
-    assumptions_data = {}
-    for req in capacity_requirements:
-        assumptions_data[f"{req}_duration_mins"] = {"assumption_value": 1}
-        assumptions_data[f"{req}_dna_rate"] = {"assumption_value": 2}
-        assumptions_data[f"{req}_dna_time_mins"] = {"assumption_value": 3}
-        assumptions_data[f"{req}_operational_hours"] = {"assumption_value": 4}
-        assumptions_data[f"{req}_operational_weeks"] = {"assumption_value": 5}
-        assumptions_data[f"{req}_utilisation_rate"] = {"assumption_value": 6}
-
-    assumptions_df = pd.DataFrame.from_dict(assumptions_data, orient="index")
-
-    output_index = [
-        "op_first",
-        "op_followup",
-        "op_virtual_consultation_rooms",
-        "op_procedure_rooms",
-        "op_consultation_rooms",
-    ]
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": [
+                "TIME",
+                "DNA_RATE",
+                "DNA_TIME",
+                "UTIL",
+                "OPERATIONAL_HOURS",
+                "OUTPUT",
+            ]
+        },
+        index=["TIME", "DNA_RATE", "DNA_TIME", "UTIL", "OPERATIONAL_HOURS", "OUTPUT"],
+    )
 
     # act
     result = calculate_op_capacity(
@@ -99,27 +91,33 @@ def test_calculate_op_capacity(mocker, caplog):
 
     # assert
 
-    # convert_op_capacity should be called 12 times (4 × 3)
-    assert mock_convert.call_count == 12
+    assert mock_convert.call_count == 3
 
     # output structure
     assert isinstance(result, pd.DataFrame)
     assert list(result.columns) == ["p10", "mean", "p90"]
-    assert list(result.index) == output_index
+    assert list(result.index) == ["OUTPUT"]
+    assert (result == "capacity").all().all()
 
-    # all values should be mocked return value except op_consultation_rooms
-    assert (result.loc[output_index[:-1]] == 999).all().all()
-    assert (result.loc[output_index[-1]] == 999 * 2).all().all()
-
-    # check arguments in calls to convert_op_capacity
-    first_call = mock_convert.call_args_list[0]
-    args = first_call.args
-    assert args[1] == 1  # duration
-    assert args[2] == 2  # dna_rate
-    assert args[3] == 3  # dna_time
-    assert args[4] == 4  # operational_hours
-    assert args[5] == 5  # operational_weeks
-    assert args[6] == 6  # utilisation_rate
+    # test calls to mocked functions
+    mock_workload.assert_has_calls(
+        [
+            call("TIME", "DNA_RATE", "DNA_TIME", 100),
+            call("TIME", "DNA_RATE", "DNA_TIME", 200),
+            call("TIME", "DNA_RATE", "DNA_TIME", 300),
+        ],
+        any_order=False,
+    )
+    mock_convert.assert_has_calls(
+        [
+            call(
+                "workload",
+                "OPERATIONAL_HOURS",
+                "UTIL",
+            )
+        ]
+        * 3
+    )
 
 
 def test_main(mocker):

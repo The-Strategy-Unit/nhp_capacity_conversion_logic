@@ -72,22 +72,6 @@ def test_main(mocker):
         f"{module_path}.calculate_aae_capacity",
         return_value=mock_capacity_df,
     )
-    mocker.patch(
-        f"{module_path}.calculate_ip_daycase_capacity",
-        return_value=mock_capacity_df,
-    )
-    mocker.patch(
-        f"{module_path}.calculate_separate_bedday_pools",
-        return_value=mock_functional_summary,
-    )
-    mocker.patch(
-        f"{module_path}.calculate_ip_wards_capacity",
-        return_value=mock_capacity_df,
-    )
-    mocker.patch(
-        f"{module_path}.calculate_ip_theatres_capacity",
-        return_value=mock_capacity_df,
-    )
     mock_save = mocker.patch(f"{module_path}.save_results_to_excel")
 
     # act
@@ -103,17 +87,14 @@ def test_main(mocker):
     module.load_assumptions.assert_called_once_with("assumptions.csv")
     module.create_aggregations_path.assert_called_once_with(metadata_dict)
 
-    assert module.load_aggregations.call_count == 5
+    assert module.load_aggregations.call_count == 2
     expected_calls = [
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "op"),
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"),
-        call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "ip_daycase"),
-        call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "ip_wards"),
-        call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "ip_theatres"),
     ]
     module.load_aggregations.assert_has_calls(expected_calls)
 
-    assert module.summarise_functional_areas.call_count == 5
+    assert module.summarise_functional_areas.call_count == 2
     module.calculate_op_capacity.assert_called_once_with(
         mock_functional_summary,
         mock_assumptions,
@@ -121,21 +102,6 @@ def test_main(mocker):
     module.calculate_aae_capacity.assert_called_once_with(
         mock_functional_summary,
         mock_assumptions,
-    )
-    module.calculate_ip_daycase_capacity.assert_called_once_with(
-        mock_functional_summary,
-        mock_assumptions,
-    )
-    module.calculate_separate_bedday_pools.assert_called_once_with(
-        mock_functional_summary,
-        mock_assumptions,
-    )
-    module.calculate_ip_wards_capacity.assert_called_once_with(
-        mock_functional_summary,
-        mock_assumptions,
-    )
-    module.calculate_ip_theatres_capacity.assert_called_once_with(
-        mock_functional_summary, mock_assumptions
     )
     mock_save.assert_called_once()
     mock_data_to_save = mock_save.call_args_list[0].args[0]
@@ -148,16 +114,6 @@ def test_main(mocker):
         "aae_functional_areas",
         "aae_baseline",
         "aae_capacity",
-        "ip_daycase_functional_areas",
-        "ip_daycase_baseline",
-        "ip_daycase_capacity",
-        "ip_wards_functional_areas",
-        "ip_wards_baseline",
-        "calculated_bedday_pools",
-        "ip_wards_capacity",
-        "ip_theatres_functional_areas",
-        "ip_theatres_baseline",
-        "ip_theatres_capacity",
     ]
 
     assert_series_equal(

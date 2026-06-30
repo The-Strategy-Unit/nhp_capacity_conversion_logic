@@ -44,18 +44,19 @@ def test_calculate_prediction_intervals_and_mean():
     assert actual == expected
 
 
-def test_load_assumptions(mocker):
+def test_load_assumptions(tmp_path):
     # arrange
-    mock_read_csv = mocker.patch(
-        "pandas.read_csv", return_value=pd.DataFrame({"assumption_name": []})
+    csv_file = tmp_path / "assumptions.csv"
+    csv_file.write_text("Assumption ID,Value\nA1,10\nA2,20\n")
+    expected = pd.DataFrame(
+        {"Value": [10, 20]},
+        index=pd.Index(["A1", "A2"], name="Assumption ID"),
     )
-    expected = pd.DataFrame({"assumption_name": []}).set_index("assumption_name")
     # act
-    actual = load_assumptions("test_path")
+    result = load_assumptions(csv_file)
 
     # assert
-    assert_frame_equal(expected, actual)
-    mock_read_csv.assert_called_once_with("test_path")
+    assert_frame_equal(expected, result)
 
 
 def test_save_results_to_excel(mocker):

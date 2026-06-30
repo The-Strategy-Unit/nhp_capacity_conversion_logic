@@ -10,6 +10,7 @@ from nhpy.utils import (
     get_logger,
 )
 
+from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
     load_aggregations,
@@ -63,7 +64,7 @@ ASSUMPTIONS_MAPPING = {
 
 
 def derive_aae_workload(attendances: float, assumed_los_mins: float) -> float:
-    """Formula used for converting all A&E functional area activity to capacity requirements
+    """Formula used for converting all A&E functional area activity to workload
 
     Args:
         attendances (float): Number of attendances
@@ -111,19 +112,15 @@ def calculate_aae_capacity(
         results = {}
         assumed_los_mins = cast(
             float,
-            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["los"], "assumption_value"],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["los"], "Value"],
         )
         annual_operational_hours = cast(
             float,
-            assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["hours"], "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["hours"], "Value"],
         )
         utilisation = cast(
             float,
-            assumptions_df.at[
-                ASSUMPTIONS_MAPPING[subgroup]["util"], "assumption_value"
-            ],
+            assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["util"], "Value"],
         )
 
         for value in ["p10", "mean", "p90"]:
@@ -162,8 +159,8 @@ def main():
     )
     parser.add_argument(
         "--path_to_assumptions_file",
-        help="Path to assumptions file (default: 'data/reference/default_assumptions.csv')",
-        default="data/reference/default_assumptions.csv",
+        help=f"Path to assumptions file (default: {ASSUMPTIONS_URL})",
+        default=ASSUMPTIONS_URL,
     )
     args = parser.parse_args()
     config = validate_required_env_vars()

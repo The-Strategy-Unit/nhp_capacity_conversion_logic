@@ -72,7 +72,7 @@ def test_calculate_aae_capacity(mocker, caplog):
     )
 
     assumptions_df = pd.DataFrame(
-        {"assumption_value": [1, 2, 3]},
+        {"Value": [1, 2, 3]},
         index=["LOS", "HOURS", "UTIL"],
     )
 

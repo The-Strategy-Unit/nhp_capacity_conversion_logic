@@ -10,12 +10,7 @@ from nhpy.utils import (
 )
 
 from nhp.capacity_conversion.aae import calculate_aae_capacity
-from nhp.capacity_conversion.ip_daycase import calculate_ip_daycase_capacity
-from nhp.capacity_conversion.ip_theatres import calculate_ip_theatres_capacity
-from nhp.capacity_conversion.ip_wards import (
-    calculate_ip_wards_capacity,
-    calculate_separate_bedday_pools,
-)
+from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
@@ -54,8 +49,8 @@ def main():
     )
     parser.add_argument(
         "--path_to_assumptions_file",
-        help="Path to assumptions file (default: 'data/reference/default_assumptions.csv')",
-        default="data/reference/default_assumptions.csv",
+        help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
+        default=ASSUMPTIONS_URL,
     )
     args = parser.parse_args()
     config = validate_required_env_vars()
@@ -95,61 +90,6 @@ def main():
     data_to_save["aae_baseline"] = get_baseline_activity(aae_aggregations)
     aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
     data_to_save["aae_capacity"] = aae_capacity_df
-
-    # ip_daycase
-    ip_daycase_aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"],
-        config["AZ_STORAGE_RESULTS"],
-        aggregations_path,
-        "ip_daycase",
-    )
-    functional_areas_summarised = summarise_functional_areas(ip_daycase_aggregations)
-    data_to_save["ip_daycase_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
-    )
-    data_to_save["ip_daycase_baseline"] = get_baseline_activity(ip_daycase_aggregations)
-    ip_daycase_capacity_df = calculate_ip_daycase_capacity(
-        functional_areas_summarised, assumptions
-    )
-    data_to_save["ip_daycase_capacity"] = ip_daycase_capacity_df
-
-    # ip_wards
-    ip_wards_aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"],
-        config["AZ_STORAGE_RESULTS"],
-        aggregations_path,
-        "ip_wards",
-    )
-    functional_areas_summarised = summarise_functional_areas(ip_wards_aggregations)
-    data_to_save["ip_wards_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
-    )
-    data_to_save["ip_wards_baseline"] = get_baseline_activity(ip_wards_aggregations)
-    bedday_pools = calculate_separate_bedday_pools(
-        functional_areas_summarised, assumptions
-    )
-    data_to_save["calculated_bedday_pools"] = bedday_pools
-    ip_wards_capacity_df = calculate_ip_wards_capacity(bedday_pools, assumptions)
-    data_to_save["ip_wards_capacity"] = ip_wards_capacity_df
-
-    # ip theatres
-    ip_theatres_aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"],
-        config["AZ_STORAGE_RESULTS"],
-        aggregations_path,
-        "ip_theatres",
-    )
-    functional_areas_summarised = summarise_functional_areas(ip_theatres_aggregations)
-    data_to_save["ip_theatres_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
-    )
-    data_to_save["ip_theatres_baseline"] = get_baseline_activity(
-        ip_theatres_aggregations
-    )
-    ip_theatres_capacity_df = calculate_ip_theatres_capacity(
-        functional_areas_summarised, assumptions
-    )
-    data_to_save["ip_theatres_capacity"] = ip_theatres_capacity_df
     save_results_to_excel(data_to_save)
 
 
