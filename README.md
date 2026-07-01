@@ -19,7 +19,9 @@ Prerequisites for running this model are on [the team wiki](https://github.com/T
 This package is built using [`uv`](https://docs.astral.sh/uv/). If you have `uv` installed, run the capacity conversion pipeline using:   
 
 ```console
-uv run -m nhp.capacity_conversion.aae GUID
+uv run -m nhp.capacity_conversion GUID # Run all settings
+uv run -m nhp.capacity_conversion.op GUID # Run Outpatient setting
+uv run -m nhp.capacity_conversion.aae GUID # Run Accident and Emergency setting 
 ```.
 
 Running the pipeline will create a `results/GUID/RUNTIME` folder, with a `capacity_conversion_results.xlsx` file within it.
