@@ -9,7 +9,6 @@ from nhp.capacity_conversion.__main__ import main
 def test_main(mocker):
     # arrange
     main_path = "nhp.capacity_conversion.__main__"
-    utils_path = "nhp.capacity_conversion.utils"
 
     mock_now = mocker.Mock()
     mock_now.strftime.return_value = "20250101_120000"
@@ -56,8 +55,6 @@ def test_main(mocker):
     )
     mocker.patch(f"{main_path}.load_aggregations", return_value=mock_aggregations)
 
-    mock_process = mocker.patch(f"{main_path}.process_activity_type")
-
     mock_save = mocker.patch(f"{main_path}.save_results_to_excel")
 
     # act
@@ -81,10 +78,13 @@ def test_main(mocker):
     main_mod.load_aggregations.assert_has_calls(expected_calls)
 
     assert main_mod.process_activity_type.call_count == 2
-    main_mod.process_activity_type.assert_has_calls([
-        call("op", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
-        call("aae", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
-    ], any_order=False)
+    main_mod.process_activity_type.assert_has_calls(
+        [
+            call("op", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
+            call("aae", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
+        ],
+        any_order=False,
+    )
     mock_save.assert_called_once()
     mock_data_to_save = mock_save.call_args_list[0].args[0]
     assert_series_equal(
