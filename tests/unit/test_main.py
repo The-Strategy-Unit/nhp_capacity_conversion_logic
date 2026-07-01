@@ -3,16 +3,16 @@ from unittest.mock import call
 import pandas as pd
 from pandas.testing import assert_frame_equal, assert_series_equal
 
-from nhp.capacity_conversion.main import main
+from nhp.capacity_conversion.__main__ import main
 
 
 def test_main(mocker):
     # arrange
-    module_path = "nhp.capacity_conversion.main"
+    main_path = "nhp.capacity_conversion.__main__"
 
     mock_now = mocker.Mock()
     mock_now.strftime.return_value = "20250101_120000"
-    mocker.patch(f"{module_path}.datetime").now.return_value = mock_now
+    mocker.patch(f"{main_path}.datetime").now.return_value = mock_now
 
     mock_parser = mocker.Mock()
     mock_args = mocker.Mock()
@@ -21,16 +21,14 @@ def test_main(mocker):
     mock_args.capacity_model_version = "dev"
 
     mock_parser.parse_args.return_value = mock_args
-    mocker.patch(f"{module_path}.argparse.ArgumentParser", return_value=mock_parser)
+    mocker.patch(f"{main_path}.argparse.ArgumentParser", return_value=mock_parser)
     env_vars_dict = {
         "AZ_STORAGE_EP": "AZ_STORAGE_EP",
         "AZ_STORAGE_RESULTS": "AZ_STORAGE_RESULTS",
         "TABLE_NAME": "TABLE_NAME",
         "AZ_TABLE_ENDPOINT": "AZ_TABLE_ENDPOINT",
     }
-    mocker.patch(
-        f"{module_path}.validate_required_env_vars", return_value=env_vars_dict
-    )
+    mocker.patch(f"{main_path}.validate_required_env_vars", return_value=env_vars_dict)
     metadata_dict = {
         "PartitionKey": "PartitionKey",
         "RowKey": "RowKey",
@@ -38,15 +36,15 @@ def test_main(mocker):
         "capacity_model_version": "dev",
     }
     mocker.patch(
-        f"{module_path}.load_metadata_from_ats",
+        f"{main_path}.load_metadata_from_ats",
         return_value=metadata_dict,
     )
     mocker.patch(
-        f"{module_path}.create_aggregations_path", return_value="aggregations_path"
+        f"{main_path}.create_aggregations_path", return_value="aggregations_path"
     )
 
     mock_assumptions = pd.DataFrame()
-    mocker.patch(f"{module_path}.load_assumptions", return_value=mock_assumptions)
+    mocker.patch(f"{main_path}.load_assumptions", return_value=mock_assumptions)
 
     mock_aggregations = pd.DataFrame(
         {
@@ -55,24 +53,10 @@ def test_main(mocker):
             "total": [3] * 3 + [4] * 3 + [5] * 3,
         }
     )
-    mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)
+    mocker.patch(f"{main_path}.load_aggregations", return_value=mock_aggregations)
+    mocker.patch(f"{main_path}.process_activity_type")
 
-    mock_functional_summary = {"area": {"mean": 1}}
-    mocker.patch(
-        f"{module_path}.summarise_functional_areas",
-        return_value=mock_functional_summary,
-    )
-
-    mock_capacity_df = pd.DataFrame({"mean": [1]})
-    mocker.patch(
-        f"{module_path}.calculate_op_capacity",
-        return_value=mock_capacity_df,
-    )
-    mocker.patch(
-        f"{module_path}.calculate_aae_capacity",
-        return_value=mock_capacity_df,
-    )
-    mock_save = mocker.patch(f"{module_path}.save_results_to_excel")
+    mock_save = mocker.patch(f"{main_path}.save_results_to_excel")
 
     # act
 
@@ -80,42 +64,30 @@ def test_main(mocker):
 
     # assert
 
-    module = __import__(module_path, fromlist=["dummy"])
-    module.load_metadata_from_ats.assert_called_once_with(
+    main_mod = __import__(main_path, fromlist=["dummy"])
+    main_mod.load_metadata_from_ats.assert_called_once_with(
         "GUID123", "AZ_TABLE_ENDPOINT", "TABLE_NAME", "dev"
     )
-    module.load_assumptions.assert_called_once_with("assumptions.csv")
-    module.create_aggregations_path.assert_called_once_with(metadata_dict)
+    main_mod.load_assumptions.assert_called_once_with("assumptions.csv")
+    main_mod.create_aggregations_path.assert_called_once_with(metadata_dict)
 
-    assert module.load_aggregations.call_count == 2
+    assert main_mod.load_aggregations.call_count == 2
     expected_calls = [
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "op"),
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"),
     ]
-    module.load_aggregations.assert_has_calls(expected_calls)
+    main_mod.load_aggregations.assert_has_calls(expected_calls)
 
-    assert module.summarise_functional_areas.call_count == 2
-    module.calculate_op_capacity.assert_called_once_with(
-        mock_functional_summary,
-        mock_assumptions,
-    )
-    module.calculate_aae_capacity.assert_called_once_with(
-        mock_functional_summary,
-        mock_assumptions,
+    assert main_mod.process_activity_type.call_count == 2
+    main_mod.process_activity_type.assert_has_calls(
+        [
+            call("op", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
+            call("aae", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
+        ],
+        any_order=False,
     )
     mock_save.assert_called_once()
     mock_data_to_save = mock_save.call_args_list[0].args[0]
-    assert list(mock_data_to_save.keys()) == [
-        "metadata",
-        "assumptions",
-        "op_functional_areas",
-        "op_baseline",
-        "op_capacity",
-        "aae_functional_areas",
-        "aae_baseline",
-        "aae_capacity",
-    ]
-
     assert_series_equal(
         mock_data_to_save["metadata"],
         pd.Series(

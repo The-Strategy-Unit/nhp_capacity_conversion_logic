@@ -14,12 +14,11 @@ from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
-    get_baseline_activity,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
+    process_activity_type,
     save_results_to_excel,
-    summarise_functional_areas,
     validate_required_env_vars,
 )
 
@@ -35,6 +34,7 @@ def main():
     """
     configure_logging(INFO)
     capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     parser = argparse.ArgumentParser(
         description="Generate capacity outputs for all available activity types"
     )
@@ -53,8 +53,10 @@ def main():
         default=ASSUMPTIONS_URL,
     )
     args = parser.parse_args()
+
     config = validate_required_env_vars()
     data_to_save = {}
+
     metadata = load_metadata_from_ats(
         args.guid,
         config["AZ_TABLE_ENDPOINT"],
@@ -63,34 +65,28 @@ def main():
     )
     metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
     data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
+
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
+
     aggregations_path = create_aggregations_path(metadata)
 
-    # OP
     op_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "op"
     )
-    functional_areas_summarised = summarise_functional_areas(op_aggregations)
-    data_to_save["op_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
+    process_activity_type(
+        "op", op_aggregations, calculate_op_capacity, assumptions, data_to_save
     )
-    data_to_save["op_baseline"] = get_baseline_activity(op_aggregations)
-    op_capacity_df = calculate_op_capacity(functional_areas_summarised, assumptions)
-    data_to_save["op_capacity"] = op_capacity_df
 
-    # AAE
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
-    functional_areas_summarised = summarise_functional_areas(aae_aggregations)
-    data_to_save["aae_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
+    process_activity_type(
+        "aae", aae_aggregations, calculate_aae_capacity, assumptions, data_to_save
     )
-    data_to_save["aae_baseline"] = get_baseline_activity(aae_aggregations)
-    aae_capacity_df = calculate_aae_capacity(functional_areas_summarised, assumptions)
-    data_to_save["aae_capacity"] = aae_capacity_df
+
     save_results_to_excel(data_to_save)
+    return 0
 
 
 if __name__ == "__main__":

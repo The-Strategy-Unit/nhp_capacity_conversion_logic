@@ -114,10 +114,11 @@ def test_calculate_aae_capacity(mocker, caplog):
 def test_main(mocker):
     # arrange
     module_path = "nhp.capacity_conversion.aae"
+    utils_path = "nhp.capacity_conversion.utils"
 
     mock_now = mocker.Mock()
     mock_now.strftime.return_value = "20250101_120000"
-    mocker.patch(f"{module_path}.datetime").now.return_value = mock_now
+    mocker.patch(f"{utils_path}.datetime").now.return_value = mock_now
 
     mock_parser = mocker.Mock()
     mock_args = mocker.Mock()
@@ -126,16 +127,14 @@ def test_main(mocker):
     mock_args.capacity_model_version = "dev"
 
     mock_parser.parse_args.return_value = mock_args
-    mocker.patch(f"{module_path}.argparse.ArgumentParser", return_value=mock_parser)
+    mocker.patch(f"{utils_path}.argparse.ArgumentParser", return_value=mock_parser)
     env_vars_dict = {
         "AZ_STORAGE_EP": "AZ_STORAGE_EP",
         "AZ_STORAGE_RESULTS": "AZ_STORAGE_RESULTS",
         "TABLE_NAME": "TABLE_NAME",
         "AZ_TABLE_ENDPOINT": "AZ_TABLE_ENDPOINT",
     }
-    mocker.patch(
-        f"{module_path}.validate_required_env_vars", return_value=env_vars_dict
-    )
+    mocker.patch(f"{utils_path}.validate_required_env_vars", return_value=env_vars_dict)
     metadata_dict = {
         "PartitionKey": "PartitionKey",
         "RowKey": "RowKey",
@@ -143,15 +142,15 @@ def test_main(mocker):
         "capacity_model_version": "dev",
     }
     mocker.patch(
-        f"{module_path}.load_metadata_from_ats",
+        f"{utils_path}.load_metadata_from_ats",
         return_value=metadata_dict,
     )
     mocker.patch(
-        f"{module_path}.create_aggregations_path", return_value="aggregations_path"
+        f"{utils_path}.create_aggregations_path", return_value="aggregations_path"
     )
 
     mock_assumptions = pd.DataFrame()
-    mocker.patch(f"{module_path}.load_assumptions", return_value=mock_assumptions)
+    mocker.patch(f"{utils_path}.load_assumptions", return_value=mock_assumptions)
 
     mock_aggregations = pd.DataFrame(
         {
@@ -160,11 +159,11 @@ def test_main(mocker):
             "total": [3] * 3 + [4] * 3 + [5] * 3,
         }
     )
-    mocker.patch(f"{module_path}.load_aggregations", return_value=mock_aggregations)
+    mocker.patch(f"{utils_path}.load_aggregations", return_value=mock_aggregations)
 
     mock_functional_summary = {"area": {"mean": 1}}
     mocker.patch(
-        f"{module_path}.summarise_functional_areas",
+        f"{utils_path}.summarise_functional_areas",
         return_value=mock_functional_summary,
     )
 
@@ -174,7 +173,7 @@ def test_main(mocker):
         return_value=mock_capacity_df,
     )
 
-    mock_save = mocker.patch(f"{module_path}.save_results_to_excel")
+    mock_save = mocker.patch(f"{utils_path}.save_results_to_excel")
 
     # act
 
@@ -182,16 +181,22 @@ def test_main(mocker):
 
     # assert
 
-    module = __import__(module_path, fromlist=["dummy"])
-    module.load_metadata_from_ats.assert_called_once_with(
+    utils = __import__(utils_path, fromlist=["dummy"])
+    utils.load_metadata_from_ats.assert_called_once_with(
         "GUID123", "AZ_TABLE_ENDPOINT", "TABLE_NAME", "dev"
     )
-    module.load_assumptions.assert_called_once_with("assumptions.csv")
-    module.create_aggregations_path.assert_called_once_with(metadata_dict)
-    module.load_aggregations.assert_called_once_with(
+    utils.load_assumptions.assert_called_once_with("assumptions.csv")
+    utils.create_aggregations_path.assert_called_once_with(metadata_dict)
+    utils.load_aggregations.assert_called_once_with(
         "AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"
     )
-    module.summarise_functional_areas.assert_called_once_with(mock_aggregations)
+    utils.summarise_functional_areas.assert_has_calls(
+        [
+            mocker.call(mock_aggregations),
+        ],
+        any_order=True,
+    )
+    module = __import__(module_path, fromlist=["dummy"])
     module.calculate_aae_capacity.assert_called_once_with(
         mock_functional_summary,
         mock_assumptions,

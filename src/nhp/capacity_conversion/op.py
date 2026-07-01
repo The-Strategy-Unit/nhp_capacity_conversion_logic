@@ -1,25 +1,10 @@
-import argparse
 import sys
-from datetime import datetime
-from logging import INFO
 from typing import cast
 
 import pandas as pd
-from nhpy.utils import (
-    configure_logging,
-    get_logger,
-)
+from nhpy.utils import get_logger
 
-from nhp.capacity_conversion.config import ASSUMPTIONS_URL
-from nhp.capacity_conversion.utils import (
-    create_aggregations_path,
-    load_aggregations,
-    load_assumptions,
-    load_metadata_from_ats,
-    save_results_to_excel,
-    summarise_functional_areas,
-    validate_required_env_vars,
-)
+from nhp.capacity_conversion.utils import run_single_activity_type
 
 logger = get_logger()
 
@@ -155,49 +140,7 @@ def main():
     Returns:
         int: Exit code (0 for success, 2 for errors)
     """
-    configure_logging(INFO)
-    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
-    parser = argparse.ArgumentParser(
-        description="Generate OP capacity outputs given functional area aggregations of OP activity"
-    )
-    parser.add_argument(
-        "guid",
-        help="GUID of functional area aggregation to convert into capacity",
-    )
-    parser.add_argument(
-        "--capacity_model_version",
-        help="Capacity model version",
-        default="dev",
-    )
-    parser.add_argument(
-        "--path_to_assumptions_file",
-        help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
-        default=ASSUMPTIONS_URL,
-    )
-    args = parser.parse_args()
-    config = validate_required_env_vars()
-    data_to_save = {}
-    metadata = load_metadata_from_ats(
-        args.guid,
-        config["AZ_TABLE_ENDPOINT"],
-        config["TABLE_NAME"],
-        args.capacity_model_version,
-    )
-    metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
-    data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
-    assumptions = load_assumptions(args.path_to_assumptions_file)
-    data_to_save["assumptions"] = assumptions
-    aggregations_path = create_aggregations_path(metadata)
-    op_aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "op"
-    )
-    functional_areas_summarised = summarise_functional_areas(op_aggregations)
-    data_to_save["op_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
-    )
-    op_capacity_df = calculate_op_capacity(functional_areas_summarised, assumptions)
-    data_to_save["op_capacity"] = op_capacity_df
-    save_results_to_excel(data_to_save)
+    return run_single_activity_type("op", calculate_op_capacity)
 
 
 if __name__ == "__main__":
