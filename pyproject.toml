@@ -52,5 +52,5 @@ skip_empty = false
 show_missing = true
 
 [tool.pytest.ini_options]
-addopts = "--ignore=tests"
+addopts = "--ignore=tests -vv"
 testpaths = ["tests/unit"]
