@@ -286,11 +286,13 @@ def test_summarise_functional_areas(mocker):
 
 
 def test_process_activity_type_with_preprocess():
-    aggregations = pd.DataFrame({
-        "grouping": ["a", "b"] * 3,
-        "model_run": [0] * 2 + [1] * 2 + [2] * 2,
-        "total": [1, 2, 3, 4, 5, 6],
-    })
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b"] * 3,
+            "model_run": [0] * 2 + [1] * 2 + [2] * 2,
+            "total": [1, 2, 3, 4, 5, 6],
+        }
+    )
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -310,11 +312,13 @@ def test_process_activity_type_with_preprocess():
 
 
 def test_process_activity_type_with_baseline():
-    aggregations = pd.DataFrame({
-        "grouping": ["a", "b"] * 3,
-        "model_run": [0] * 2 + [1] * 2 + [2] * 2,
-        "total": [1, 2, 3, 4, 5, 6],
-    })
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b"] * 3,
+            "model_run": [0] * 2 + [1] * 2 + [2] * 2,
+            "total": [1, 2, 3, 4, 5, 6],
+        }
+    )
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
