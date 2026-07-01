@@ -190,9 +190,12 @@ def test_main(mocker):
     utils.load_aggregations.assert_called_once_with(
         "AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"
     )
-    utils.summarise_functional_areas.assert_has_calls([
-        mocker.call(mock_aggregations),
-    ], any_order=True)
+    utils.summarise_functional_areas.assert_has_calls(
+        [
+            mocker.call(mock_aggregations),
+        ],
+        any_order=True,
+    )
     module = __import__(module_path, fromlist=["dummy"])
     module.calculate_aae_capacity.assert_called_once_with(
         mock_functional_summary,
