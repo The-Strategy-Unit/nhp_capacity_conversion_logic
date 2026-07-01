@@ -10,6 +10,7 @@ from nhp.capacity_conversion.utils import (
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
+    process_activity_type,
     save_results_to_excel,
     summarise_functional_areas,
     validate_required_env_vars,
@@ -282,3 +283,48 @@ def test_summarise_functional_areas(mocker):
 
     # assert
     assert actual == expected
+
+
+def test_process_activity_type_with_preprocess():
+    aggregations = pd.DataFrame({
+        "grouping": ["a", "b"] * 3,
+        "model_run": [0] * 2 + [1] * 2 + [2] * 2,
+        "total": [1, 2, 3, 4, 5, 6],
+    })
+    assumptions = pd.DataFrame({"Value": []})
+    data_to_save = {}
+
+    def my_preprocess(df):
+        return df
+
+    process_activity_type(
+        "test_type",
+        aggregations,
+        lambda sa, au: pd.DataFrame(),
+        assumptions,
+        data_to_save,
+        preprocess=my_preprocess,
+    )
+
+    assert data_to_save["test_type_functional_areas"] is not None
+
+
+def test_process_activity_type_with_baseline():
+    aggregations = pd.DataFrame({
+        "grouping": ["a", "b"] * 3,
+        "model_run": [0] * 2 + [1] * 2 + [2] * 2,
+        "total": [1, 2, 3, 4, 5, 6],
+    })
+    assumptions = pd.DataFrame({"Value": []})
+    data_to_save = {}
+
+    process_activity_type(
+        "test_type",
+        aggregations,
+        lambda sa, au: pd.DataFrame(),
+        assumptions,
+        data_to_save,
+        include_baseline=True,
+    )
+
+    assert data_to_save["test_type_baseline"] is not None
