@@ -5,7 +5,7 @@ import pandas as pd
 from nhpy.utils import get_logger
 
 from nhp.capacity_conversion.ip_formulas import (
-    convert_time_util_capacity,
+    calculate_time_util_capacity,
     derive_treatment_hours,
 )
 from nhp.capacity_conversion.utils import run_single_activity_type
@@ -43,6 +43,8 @@ def calculate_daycase_capacity(
     results_dict = {}
     # for subgroup in functional_areas_summarised.keys():
     for subgroup in ["daycase_haem_onc_spells"]:
+        # TODO: change conversion archetype used depending on the subgroup
+        # TODO will also need to change the values though....
         results = {}
 
         treatment_time = cast(
@@ -65,7 +67,7 @@ def calculate_daycase_capacity(
                 treatment_time,
                 functional_areas_summarised[subgroup][value],
             )
-            results[value] = convert_time_util_capacity(
+            results[value] = calculate_time_util_capacity(
                 treatment_hours, annual_operational_hours, utilisation
             )
         results_dict[output] = results
