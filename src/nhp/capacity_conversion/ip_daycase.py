@@ -26,10 +26,11 @@ class DaycaseConfig:
 
 def calculate_daycase_frm_time_util(
     subgroup: str,
-    assumptions: dict,
-    functional_areas_summarised: dict,
+    assumptions: dict[str, str],
+    functional_areas_summarised: dict[str, dict[str, float]],
     assumptions_df: pd.DataFrame,
 ) -> dict:
+
     results = {}
 
     time = cast(float, assumptions_df.at[assumptions["treatment_time"], "Value"])
@@ -61,8 +62,8 @@ def calculate_daycase_frm_time_util(
 
 def calculate_daycase_frm_recovery_occupancy(
     subgroup: str,
-    assumptions: dict,
-    functional_areas_summarised: dict,
+    assumptions: dict[str, str],
+    functional_areas_summarised: dict[str, dict[str, float]],
     assumptions_df: pd.DataFrame,
 ) -> dict:
     results = {}
@@ -91,8 +92,8 @@ def calculate_daycase_frm_recovery_occupancy(
 
 def calculate_daycase_frm_session_capacity(
     subgroup: str,
-    assumptions: dict,
-    functional_areas_summarised: dict,
+    assumptions: dict[str, str],
+    functional_areas_summarised: dict[str, dict[str, float]],
     assumptions_df: pd.DataFrame,
 ) -> dict:
     results = {}
