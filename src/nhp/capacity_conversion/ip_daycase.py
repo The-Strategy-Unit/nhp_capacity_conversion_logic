@@ -17,14 +17,6 @@ from nhp.capacity_conversion.utils import run_single_activity_type
 
 logger = get_logger()
 
-ASSUMPTIONS_MAPPING = {
-    # "daycase_adult_medical_spells": {},
-    # "daycase_adult_surgical_spells": {},
-    # "daycase_child_medical_spells": {},
-    # "daycase_child_surgical_spells": {},
-    # "daycase_renal_spells": {},
-}
-
 
 @dataclass(frozen=True)
 class DaycaseConfig:
@@ -154,6 +146,50 @@ DAYCASE_CONFIG = {
             assumptions={
                 "annual_session_capacity": "BEDS_DAYCASE_RENAL_ANNUAL_SESSION_CAPACITY_PER_BED",
                 "output_frm_session_capacity": "DAYCASE_RENAL_BEDS",
+            },
+        )
+    ],
+    "daycase_adult_medical_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_recovery_occupancy,
+            assumptions={
+                "recovery_time": "DAYCASE_RECOVERY_ADULT_MEDICAL_LOS",
+                "recovery_occupancy": "DAYCASE_RECOVERY_ADULT_MEDICAL_OCC",
+                "recovery_annual_operational_hours": "DAYCASE_RECOVERY_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_recovery_occupancy": "ADULT_MEDICAL_DAYCASE_RECOVERY_BEDS",
+            },
+        )
+    ],
+    "daycase_adult_surgical_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_recovery_occupancy,
+            assumptions={
+                "recovery_time": "DAYCASE_RECOVERY_ADULT_SURGICAL_LOS",
+                "recovery_occupancy": "DAYCASE_RECOVERY_ADULT_SURGICAL_OCC",
+                "recovery_annual_operational_hours": "DAYCASE_RECOVERY_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_recovery_occupancy": "ADULT_SURGICAL_DAYCASE_RECOVERY_BEDS",
+            },
+        )
+    ],
+    "daycase_child_medical_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_recovery_occupancy,
+            assumptions={
+                "recovery_time": "DAYCASE_RECOVERY_PAEDIATRIC_MEDICAL_LOS",
+                "recovery_occupancy": "DAYCASE_RECOVERY_PAEDIATRIC_MEDICAL_OCC",
+                "recovery_annual_operational_hours": "DAYCASE_RECOVERY_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_recovery_occupancy": "PAEDIATRIC_MEDICAL_DAYCASE_RECOVERY_BEDS",
+            },
+        )
+    ],
+    "daycase_child_surgical_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_recovery_occupancy,
+            assumptions={
+                "recovery_time": "DAYCASE_RECOVERY_PAEDIATRIC_SURGICAL_LOS",
+                "recovery_occupancy": "DAYCASE_RECOVERY_PAEDIATRIC_SURGICAL_OCC",
+                "recovery_annual_operational_hours": "DAYCASE_RECOVERY_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_recovery_occupancy": "PAEDIATRIC_SURGICAL_DAYCASE_RECOVERY_BEDS",
             },
         )
     ],
