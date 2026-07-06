@@ -30,7 +30,7 @@ def calculate_time_util_capacity(
     return treatment_hours / (annual_operational_hours * utilisation)
 
 
-def derive_recovery_occupancy_hours(spells: float, recovery_time: float):
+def derive_recovery_occupancy_hours(spells: float, recovery_time: float) -> float:
     """Formula used for calculating occupancy hours from number of spells and
     estimated recovery time. Aligns with FRM_RECOVERY_OCCUPANCY in conversion
     archetypes catalogue.
