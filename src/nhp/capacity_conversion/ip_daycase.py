@@ -7,6 +7,7 @@ import pandas as pd
 from nhpy.utils import get_logger
 
 from nhp.capacity_conversion.ip_formulas import (
+    calculate_beds_from_session_capacity,
     calculate_recovery_capacity,
     calculate_time_util_capacity,
     derive_recovery_occupancy_hours,
@@ -51,9 +52,7 @@ def calculate_daycase_frm_time_util(
             "Value",
         ],
     )
-
     output = assumptions["output_frm_time_util"]
-
     for value in ("p10", "mean", "p90"):
         treatment_hours = derive_treatment_hours(
             time,
@@ -88,13 +87,31 @@ def calculate_daycase_frm_recovery_occupancy(
         assumptions_df.at[assumptions["recovery_annual_operational_hours"], "Value"],
     )
     output = assumptions["output_frm_recovery_occupancy"]
-    for value in ["p10", "mean", "p90"]:
+    for value in ("p10", "mean", "p90"):
         occupancy_hours = derive_recovery_occupancy_hours(
-            time,
-            functional_areas_summarised[subgroup][value],
+            functional_areas_summarised[subgroup][value], time
         )
         results[value] = calculate_recovery_capacity(
             occupancy_hours, annual_operational_hours, occupancy
+        )
+    return {output: results}
+
+
+def calculate_daycase_frm_session_capacity(
+    subgroup: str,
+    assumptions: dict,
+    functional_areas_summarised: dict,
+    assumptions_df: pd.DataFrame,
+) -> dict:
+    results = {}
+    annual_session_capacity = cast(
+        float,
+        assumptions_df.at[assumptions["annual_session_capacity"], "Value"],
+    )
+    output = assumptions["output_frm_session_capacity"]
+    for value in ("p10", "mean", "p90"):
+        results[value] = calculate_beds_from_session_capacity(
+            functional_areas_summarised[subgroup][value], annual_session_capacity
         )
     return {output: results}
 
@@ -130,6 +147,15 @@ DAYCASE_CONFIG = {
                 "output_frm_recovery_occupancy": "DAYCASE_ENDOSCOPY_RECOVERY_BEDS",
             },
         ),
+    ],
+    "daycase_renal_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_session_capacity,
+            assumptions={
+                "annual_session_capacity": "BEDS_DAYCASE_RENAL_ANNUAL_SESSION_CAPACITY_PER_BED",
+                "output_frm_session_capacity": "DAYCASE_RENAL_BEDS",
+            },
+        )
     ],
 }
 

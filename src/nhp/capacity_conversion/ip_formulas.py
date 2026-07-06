@@ -60,3 +60,20 @@ def calculate_recovery_capacity(
         float: Calculated capacity requirements
     """
     return occupancy_hours / (annual_operational_hours * occupancy_rate)
+
+
+def calculate_beds_from_session_capacity(
+    treatment_sessions: float, annual_session_capacity: float
+) -> float:
+    """Formula used for calculating capacity required in terms of treatment sessions.
+    Aligns with FRM_SESSION_CAPACITY in conversion archetypes catalogue.
+
+
+    Args:
+        treatment_sessions (float): Number of renal daycase spells / treatment sessions
+        annual_session_capacity (float): Annual session capacity per bed
+
+    Returns:
+        float: Calculated capacity requirements
+    """
+    return treatment_sessions / annual_session_capacity
