@@ -29,7 +29,18 @@ def calculate_daycase_frm_time_util(
     assumptions: dict[str, str],
     functional_areas_summarised: dict[str, dict[str, float]],
     assumptions_df: pd.DataFrame,
-) -> dict:
+) -> dict[str, dict]:
+    """Calculates capacity requirements for subgroups using the FRM_TIME_UTIL conversion archetype
+
+    Args:
+        subgroup (str): Name of functional area subgroup
+        assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
+        functional_areas_summarised (dict[str, dict[str, float]]): Dict with p10, p90 and mean for each of the functional areas
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        dict: Calculated capacity requirements for the specific subgroup
+    """
 
     results = {}
 
@@ -65,7 +76,18 @@ def calculate_daycase_frm_recovery_occupancy(
     assumptions: dict[str, str],
     functional_areas_summarised: dict[str, dict[str, float]],
     assumptions_df: pd.DataFrame,
-) -> dict:
+) -> dict[str, dict]:
+    """Calculates capacity requirements for subgroups using the FRM_RECOVERY_OCCUPANCY conversion archetype
+
+    Args:
+        subgroup (str): Name of functional area subgroup
+        assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
+        functional_areas_summarised (dict[str, dict[str, float]]): Dict with p10, p90 and mean for each of the functional areas
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        dict: Calculated capacity requirements for the specific subgroup
+    """
     results = {}
     time = cast(
         float,
@@ -95,7 +117,18 @@ def calculate_daycase_frm_session_capacity(
     assumptions: dict[str, str],
     functional_areas_summarised: dict[str, dict[str, float]],
     assumptions_df: pd.DataFrame,
-) -> dict:
+) -> dict[str, dict]:
+    """Calculates capacity requirements for subgroups using the FRM_SESSION_CAPACITY conversion archetype
+
+    Args:
+        subgroup (str): Name of functional area subgroup
+        assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
+        functional_areas_summarised (dict[str, dict[str, float]]): Dict with p10, p90 and mean for each of the functional areas
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        dict: Calculated capacity requirements for the specific subgroup
+    """
     results = {}
     annual_session_capacity = cast(
         float,
