@@ -1,4 +1,6 @@
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import cast
 
 import pandas as pd
@@ -15,22 +17,6 @@ from nhp.capacity_conversion.utils import run_single_activity_type
 logger = get_logger()
 
 ASSUMPTIONS_MAPPING = {
-    "daycase_haem_onc_spells": {
-        "treatment_time": "HAEM_ONC_TREATMENT_TIME",
-        "treatment_utilisation": "HAEM_ONC_TREATMENT_UTIL",
-        "treatment_annual_operational_hours": "HAEM_ONC_ANNUAL_OPERATIONAL_HOURS",
-        "output_frm_time_util": "HAEM_ONC_TRT_SPACES",
-    },
-    "daycase_endoscopy_spells": {
-        "recovery_time": "DAYCASE_ENDOSCOPY_RECOVERY_LOS",
-        "recovery_occupancy": "DAYCASE_ENDOSCOPY_RECOVERY_OCC",
-        "recovery_annual_operational_hours": "DAYCASE_ENDOSCOPY_RECOVERY_ANNUAL_OPERATIONAL_HOURS",
-        "treatment_time": "ENDOSCOPY_PROC_TIME",
-        "treatment_utilisation": "ENDOSCOPY_PROC_UTIL",
-        "treatment_annual_operational_hours": "ENDOSCOPY_PROC_ANNUAL_OPERATIONAL_HOURS",
-        "output_frm_recovery_occupancy": "DAYCASE_ENDOSCOPY_RECOVERY_BEDS",
-        "output_frm_time_util": "ENDOSCOPY_PROC_ROOMS",
-    },
     # "daycase_adult_medical_spells": {},
     # "daycase_adult_surgical_spells": {},
     # "daycase_child_medical_spells": {},
@@ -39,74 +25,112 @@ ASSUMPTIONS_MAPPING = {
 }
 
 
+@dataclass(frozen=True)
+class DaycaseConfig:
+    formula: Callable
+    assumptions: dict[str, str]
+
+
 def calculate_daycase_frm_time_util(
-    subgroup: str, functional_areas_summarised: dict, assumptions_df: pd.DataFrame
+    subgroup: str,
+    assumptions: dict,
+    functional_areas_summarised: dict,
+    assumptions_df: pd.DataFrame,
 ) -> dict:
     results = {}
-    time = cast(
-        float,
-        assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["treatment_time"], "Value"],
-    )
+
+    time = cast(float, assumptions_df.at[assumptions["treatment_time"], "Value"])
     utilisation = cast(
         float,
-        assumptions_df.at[
-            ASSUMPTIONS_MAPPING[subgroup]["treatment_utilisation"], "Value"
-        ],
+        assumptions_df.at[assumptions["treatment_utilisation"], "Value"],
     )
     annual_operational_hours = cast(
         float,
         assumptions_df.at[
-            ASSUMPTIONS_MAPPING[subgroup]["treatment_annual_operational_hours"], "Value"
+            assumptions["treatment_annual_operational_hours"],
+            "Value",
         ],
     )
-    output = ASSUMPTIONS_MAPPING[subgroup]["output_frm_time_util"]
-    for value in ["p10", "mean", "p90"]:
+
+    output = assumptions["output_frm_time_util"]
+
+    for value in ("p10", "mean", "p90"):
         treatment_hours = derive_treatment_hours(
             time,
             functional_areas_summarised[subgroup][value],
         )
         results[value] = calculate_time_util_capacity(
-            treatment_hours, annual_operational_hours, utilisation
+            treatment_hours,
+            annual_operational_hours,
+            utilisation,
         )
+
     return {output: results}
 
 
 def calculate_daycase_frm_recovery_occupancy(
-    subgroup: str, functional_areas_summarised: dict, assumptions_df: pd.DataFrame
+    subgroup: str,
+    assumptions: dict,
+    functional_areas_summarised: dict,
+    assumptions_df: pd.DataFrame,
 ) -> dict:
     results = {}
     time = cast(
         float,
-        assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["recovery_time"], "Value"],
+        assumptions_df.at[assumptions["recovery_time"], "Value"],
     )
     occupancy = cast(
         float,
-        assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["recovery_occupancy"], "Value"],
+        assumptions_df.at[assumptions["recovery_occupancy"], "Value"],
     )
     annual_operational_hours = cast(
         float,
-        assumptions_df.at[
-            ASSUMPTIONS_MAPPING[subgroup]["recovery_annual_operational_hours"], "Value"
-        ],
+        assumptions_df.at[assumptions["recovery_annual_operational_hours"], "Value"],
     )
-    output = ASSUMPTIONS_MAPPING[subgroup]["output_frm_recovery_occupancy"]
+    output = assumptions["output_frm_recovery_occupancy"]
     for value in ["p10", "mean", "p90"]:
-        treatment_hours = derive_recovery_occupancy_hours(
+        occupancy_hours = derive_recovery_occupancy_hours(
             time,
             functional_areas_summarised[subgroup][value],
         )
         results[value] = calculate_recovery_capacity(
-            treatment_hours, annual_operational_hours, occupancy
+            occupancy_hours, annual_operational_hours, occupancy
         )
     return {output: results}
 
 
-FORMULA_MAPPING = {
-    calculate_daycase_frm_time_util: [
-        "daycase_haem_onc_spells",
-        "daycase_endoscopy_spells",
+DAYCASE_CONFIG = {
+    "daycase_haem_onc_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_time_util,
+            assumptions={
+                "treatment_time": "HAEM_ONC_TREATMENT_TIME",
+                "treatment_utilisation": "HAEM_ONC_TREATMENT_UTIL",
+                "treatment_annual_operational_hours": "HAEM_ONC_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_time_util": "HAEM_ONC_TRT_SPACES",
+            },
+        )
     ],
-    calculate_daycase_frm_recovery_occupancy: ["daycase_endoscopy_spells"],
+    "daycase_endoscopy_spells": [
+        DaycaseConfig(
+            formula=calculate_daycase_frm_time_util,
+            assumptions={
+                "treatment_time": "ENDOSCOPY_PROC_TIME",
+                "treatment_utilisation": "ENDOSCOPY_PROC_UTIL",
+                "treatment_annual_operational_hours": "ENDOSCOPY_PROC_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_time_util": "ENDOSCOPY_PROC_ROOMS",
+            },
+        ),
+        DaycaseConfig(
+            formula=calculate_daycase_frm_recovery_occupancy,
+            assumptions={
+                "recovery_time": "DAYCASE_ENDOSCOPY_RECOVERY_LOS",
+                "recovery_occupancy": "DAYCASE_ENDOSCOPY_RECOVERY_OCC",
+                "recovery_annual_operational_hours": "DAYCASE_ENDOSCOPY_RECOVERY_ANNUAL_OPERATIONAL_HOURS",
+                "output_frm_recovery_occupancy": "DAYCASE_ENDOSCOPY_RECOVERY_BEDS",
+            },
+        ),
+    ],
 }
 
 
@@ -125,13 +149,16 @@ def calculate_daycase_capacity(
     logger.info("Calculating IP daycase capacity")
     results_dict = {}
     # for subgroup in functional_areas_summarised.keys():
-    for formula in FORMULA_MAPPING.keys():
-        for subgroup in FORMULA_MAPPING[formula]:
-            subgroup_results = formula(
-                subgroup, functional_areas_summarised, assumptions_df
+    for subgroup, calculations in DAYCASE_CONFIG.items():
+        for calculation in calculations:
+            results_dict.update(
+                calculation.formula(
+                    subgroup=subgroup,
+                    assumptions=calculation.assumptions,
+                    functional_areas_summarised=functional_areas_summarised,
+                    assumptions_df=assumptions_df,
+                )
             )
-            results_dict.update(subgroup_results)
-
     return pd.DataFrame.from_dict(results_dict, orient="index")
 
 
