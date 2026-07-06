@@ -231,7 +231,9 @@ DAYCASE_CONFIG = {
 
 
 def calculate_daycase_capacity(
-    functional_areas_summarised: dict, assumptions_df: pd.DataFrame
+    functional_areas_summarised: dict,
+    assumptions_df: pd.DataFrame,
+    config=DAYCASE_CONFIG,
 ) -> pd.DataFrame:
     """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
 
@@ -245,7 +247,7 @@ def calculate_daycase_capacity(
     logger.info("Calculating IP daycase capacity")
     results_dict = {}
     # for subgroup in functional_areas_summarised.keys():
-    for subgroup, calculations in DAYCASE_CONFIG.items():
+    for subgroup, calculations in config.items():
         for calculation in calculations:
             results_dict.update(
                 calculation.formula(

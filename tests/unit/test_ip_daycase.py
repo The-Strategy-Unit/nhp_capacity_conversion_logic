@@ -3,7 +3,10 @@ from unittest.mock import call
 import pandas as pd
 
 from nhp.capacity_conversion.ip_daycase import (
+    DaycaseConfig,
+    calculate_daycase_capacity,
     calculate_daycase_frm_recovery_occupancy,
+    calculate_daycase_frm_session_capacity,
     calculate_daycase_frm_time_util,
 )
 
@@ -146,3 +149,97 @@ def test_calculate_daycase_frm_recovery_occupancy(mocker):
         ]
         * 3
     )
+
+
+def test_calculate_daycase_frm_session_capacity(mocker):
+    subgroup = "test_subgroup"
+    assumptions = {
+        "annual_session_capacity": "annual_session_capacity",
+        "output_frm_session_capacity": "output_frm_session_capacity",
+    }
+    functional_areas_summarised = {
+        "test_subgroup": {
+            "p10": 100,
+            "mean": 200,
+            "p90": 300,
+        }
+    }
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": [
+                "annual_session_capacity",
+                "output_frm_session_capacity",
+            ]
+        },
+        index=[
+            "annual_session_capacity",
+            "output_frm_session_capacity",
+        ],
+    )
+
+    mock_convert = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.calculate_beds_from_session_capacity",
+        return_value="capacity",
+    )
+    expected = {
+        "output_frm_session_capacity": {
+            "p10": "capacity",
+            "mean": "capacity",
+            "p90": "capacity",
+        }
+    }
+    actual = calculate_daycase_frm_session_capacity(
+        subgroup, assumptions, functional_areas_summarised, assumptions_df
+    )
+    assert actual == expected
+    mock_convert.assert_has_calls(
+        [
+            call(100, "annual_session_capacity"),
+            call(200, "annual_session_capacity"),
+            call(300, "annual_session_capacity"),
+        ],
+        any_order=False,
+    )
+
+
+def test_calculate_daycase_capacity():
+    def mock_formula(
+        subgroup,
+        assumptions,
+        functional_areas_summarised,
+        assumptions_df,
+    ):
+        return {
+            "TEST_OUTPUT": {
+                "p10": 1,
+                "mean": 2,
+                "p90": 3,
+            }
+        }
+
+    fake_config = {
+        "test_spells": [
+            DaycaseConfig(
+                formula=mock_formula,
+                assumptions={"assumption": "assumption"},
+            )
+        ]
+    }
+
+    functional_areas = {
+        "test_spells": {
+            "p10": 1,
+            "mean": 2,
+            "p90": 3,
+        }
+    }
+
+    assumptions_df = pd.DataFrame({"Value": {"some": 10}})
+
+    result = calculate_daycase_capacity(
+        functional_areas,
+        assumptions_df,
+        config=fake_config,
+    )
+
+    assert not result.empty
