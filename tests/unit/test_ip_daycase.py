@@ -8,6 +8,7 @@ from nhp.capacity_conversion.ip_daycase import (
     calculate_daycase_frm_recovery_occupancy,
     calculate_daycase_frm_session_capacity,
     calculate_daycase_frm_time_util,
+    main,
 )
 
 
@@ -243,3 +244,11 @@ def test_calculate_daycase_capacity():
     )
 
     assert not result.empty
+
+
+def test_main(mocker):
+    mock_run_single = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.run_single_activity_type"
+    )
+    main()
+    mock_run_single.assert_called_with("ip_daycase", calculate_daycase_capacity)
