@@ -59,7 +59,10 @@ def test_calculate_daycase_frm_time_util(mocker):
         }
     }
     actual = calculate_daycase_frm_time_util(
-        subgroup, assumptions, functional_areas_summarised, assumptions_df
+        subgroup,
+        assumptions,
+        functional_areas_summarised,  # ty: ignore[invalid-argument-type]
+        assumptions_df,
     )
     assert actual == expected
     mock_workload.assert_has_calls(

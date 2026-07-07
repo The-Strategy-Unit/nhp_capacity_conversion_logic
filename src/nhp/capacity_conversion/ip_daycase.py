@@ -74,7 +74,7 @@ def calculate_daycase_frm_time_util(
 def calculate_daycase_frm_recovery_occupancy(
     subgroup: str,
     assumptions: dict[str, str],
-    functional_areas_summarised: dict[str, dict[str, float]],
+    functional_areas_summarised: dict[str, dict],
     assumptions_df: pd.DataFrame,
 ) -> dict[str, dict]:
     """Calculates capacity requirements for subgroups using the FRM_RECOVERY_OCCUPANCY conversion archetype
@@ -115,7 +115,7 @@ def calculate_daycase_frm_recovery_occupancy(
 def calculate_daycase_frm_session_capacity(
     subgroup: str,
     assumptions: dict[str, str],
-    functional_areas_summarised: dict[str, dict[str, float]],
+    functional_areas_summarised: dict[str, dict],
     assumptions_df: pd.DataFrame,
 ) -> dict[str, dict]:
     """Calculates capacity requirements for subgroups using the FRM_SESSION_CAPACITY conversion archetype
