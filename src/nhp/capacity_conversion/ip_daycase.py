@@ -178,7 +178,7 @@ DAYCASE_CONFIG = {
         DaycaseConfig(
             formula=calculate_daycase_frm_session_capacity,
             assumptions={
-                "annual_session_capacity": "BEDS_DAYCASE_RENAL_ANNUAL_SESSION_CAPACITY_PER_BED",
+                "annual_session_capacity": "DAYCASE_RENAL_ANNUAL_SESSION_CAPACITY_PER_BED",
                 "output_frm_session_capacity": "DAYCASE_RENAL_BEDS",
             },
         )
