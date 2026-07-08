@@ -242,7 +242,7 @@ def calculate_daycase_capacity(
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
-        pd.DataFrame: DataFrame of calculated OP capacity requirements
+pd.DataFrame: DataFrame of calculated Daycase capacity requirements
     """
     logger.info("Calculating IP daycase capacity")
     results_dict = {}
