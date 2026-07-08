@@ -237,12 +237,12 @@ def calculate_daycase_capacity(
 ) -> pd.DataFrame:
     """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
 
-    Args:
-        functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
-        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+        Args:
+            functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+            assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
-    Returns:
-pd.DataFrame: DataFrame of calculated Daycase capacity requirements
+        Returns:
+    pd.DataFrame: DataFrame of calculated Daycase capacity requirements
     """
     logger.info("Calculating IP daycase capacity")
     results_dict = {}
