@@ -1,0 +1,257 @@
+from unittest.mock import call
+
+import pandas as pd
+
+from nhp.capacity_conversion.ip_daycase import (
+    DaycaseConfig,
+    calculate_daycase_capacity,
+    calculate_daycase_frm_recovery_occupancy,
+    calculate_daycase_frm_session_capacity,
+    calculate_daycase_frm_time_util,
+    main,
+)
+
+
+def test_calculate_daycase_frm_time_util(mocker):
+    subgroup = "test_subgroup"
+    assumptions = {
+        "treatment_time": "treatment_time",
+        "treatment_utilisation": "treatment_utilisation",
+        "treatment_annual_operational_hours": "treatment_annual_operational_hours",
+        "output_frm_time_util": "output_frm_time_util",
+    }
+    functional_areas_summarised = {
+        "test_subgroup": {
+            "p10": 100,
+            "mean": 200,
+            "p90": 300,
+        }
+    }
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": [
+                "treatment_time",
+                "treatment_utilisation",
+                "treatment_annual_operational_hours",
+                "output_frm_time_util",
+            ]
+        },
+        index=[
+            "treatment_time",
+            "treatment_utilisation",
+            "treatment_annual_operational_hours",
+            "output_frm_time_util",
+        ],
+    )
+    mock_workload = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.derive_treatment_hours",
+        return_value="treatment_hours",
+    )
+    mock_convert = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.calculate_time_util_capacity",
+        return_value="capacity",
+    )
+    expected = {
+        "output_frm_time_util": {
+            "p10": "capacity",
+            "mean": "capacity",
+            "p90": "capacity",
+        }
+    }
+    actual = calculate_daycase_frm_time_util(
+        subgroup,
+        assumptions,
+        functional_areas_summarised,  # ty: ignore[invalid-argument-type]
+        assumptions_df,
+    )
+    assert actual == expected
+    mock_workload.assert_has_calls(
+        [
+            call("treatment_time", 100),
+            call("treatment_time", 200),
+            call("treatment_time", 300),
+        ],
+        any_order=False,
+    )
+    mock_convert.assert_has_calls(
+        [
+            call(
+                "treatment_hours",
+                "treatment_annual_operational_hours",
+                "treatment_utilisation",
+            )
+        ]
+        * 3
+    )
+
+
+def test_calculate_daycase_frm_recovery_occupancy(mocker):
+    subgroup = "test_subgroup"
+    assumptions = {
+        "recovery_time": "recovery_time",
+        "recovery_occupancy": "recovery_occupancy",
+        "recovery_annual_operational_hours": "recovery_annual_operational_hours",
+        "output_frm_recovery_occupancy": "output_frm_recovery_occupancy",
+    }
+    functional_areas_summarised = {
+        "test_subgroup": {
+            "p10": 100,
+            "mean": 200,
+            "p90": 300,
+        }
+    }
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": [
+                "recovery_time",
+                "recovery_occupancy",
+                "recovery_annual_operational_hours",
+                "output_frm_recovery_occupancy",
+            ]
+        },
+        index=[
+            "recovery_time",
+            "recovery_occupancy",
+            "recovery_annual_operational_hours",
+            "output_frm_recovery_occupancy",
+        ],
+    )
+    mock_workload = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.derive_recovery_occupancy_hours",
+        return_value="occupancy_hours",
+    )
+    mock_convert = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.calculate_recovery_capacity",
+        return_value="capacity",
+    )
+    expected = {
+        "output_frm_recovery_occupancy": {
+            "p10": "capacity",
+            "mean": "capacity",
+            "p90": "capacity",
+        }
+    }
+    actual = calculate_daycase_frm_recovery_occupancy(
+        subgroup, assumptions, functional_areas_summarised, assumptions_df
+    )
+    assert actual == expected
+    mock_workload.assert_has_calls(
+        [
+            call(100, "recovery_time"),
+            call(200, "recovery_time"),
+            call(300, "recovery_time"),
+        ],
+        any_order=False,
+    )
+    mock_convert.assert_has_calls(
+        [
+            call(
+                "occupancy_hours",
+                "recovery_annual_operational_hours",
+                "recovery_occupancy",
+            )
+        ]
+        * 3
+    )
+
+
+def test_calculate_daycase_frm_session_capacity(mocker):
+    subgroup = "test_subgroup"
+    assumptions = {
+        "annual_session_capacity": "annual_session_capacity",
+        "output_frm_session_capacity": "output_frm_session_capacity",
+    }
+    functional_areas_summarised = {
+        "test_subgroup": {
+            "p10": 100,
+            "mean": 200,
+            "p90": 300,
+        }
+    }
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": [
+                "annual_session_capacity",
+                "output_frm_session_capacity",
+            ]
+        },
+        index=[
+            "annual_session_capacity",
+            "output_frm_session_capacity",
+        ],
+    )
+
+    mock_convert = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.calculate_beds_from_session_capacity",
+        return_value="capacity",
+    )
+    expected = {
+        "output_frm_session_capacity": {
+            "p10": "capacity",
+            "mean": "capacity",
+            "p90": "capacity",
+        }
+    }
+    actual = calculate_daycase_frm_session_capacity(
+        subgroup, assumptions, functional_areas_summarised, assumptions_df
+    )
+    assert actual == expected
+    mock_convert.assert_has_calls(
+        [
+            call(100, "annual_session_capacity"),
+            call(200, "annual_session_capacity"),
+            call(300, "annual_session_capacity"),
+        ],
+        any_order=False,
+    )
+
+
+def test_calculate_daycase_capacity():
+    def mock_formula(
+        subgroup,
+        assumptions,
+        functional_areas_summarised,
+        assumptions_df,
+    ):
+        return {
+            "TEST_OUTPUT": {
+                "p10": 1,
+                "mean": 2,
+                "p90": 3,
+            }
+        }
+
+    fake_config = {
+        "test_spells": [
+            DaycaseConfig(
+                formula=mock_formula,
+                assumptions={"assumption": "assumption"},
+            )
+        ]
+    }
+
+    functional_areas = {
+        "test_spells": {
+            "p10": 1,
+            "mean": 2,
+            "p90": 3,
+        }
+    }
+
+    assumptions_df = pd.DataFrame({"Value": {"some": 10}})
+
+    result = calculate_daycase_capacity(
+        functional_areas,
+        assumptions_df,
+        config=fake_config,
+    )
+
+    assert not result.empty
+
+
+def test_main(mocker):
+    mock_run_single = mocker.patch(
+        "nhp.capacity_conversion.ip_daycase.run_single_activity_type"
+    )
+    main()
+    mock_run_single.assert_called_with("ip_daycase", calculate_daycase_capacity)

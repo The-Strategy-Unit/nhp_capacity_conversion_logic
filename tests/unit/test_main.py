@@ -71,18 +71,20 @@ def test_main(mocker):
     main_mod.load_assumptions.assert_called_once_with("assumptions.csv")
     main_mod.create_aggregations_path.assert_called_once_with(metadata_dict)
 
-    assert main_mod.load_aggregations.call_count == 2
+    assert main_mod.load_aggregations.call_count == 3
     expected_calls = [
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "op"),
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"),
+        call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "ip_daycase"),
     ]
     main_mod.load_aggregations.assert_has_calls(expected_calls)
 
-    assert main_mod.process_activity_type.call_count == 2
+    assert main_mod.process_activity_type.call_count == 3
     main_mod.process_activity_type.assert_has_calls(
         [
             call("op", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
             call("aae", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
+            call("ip_daycase", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
         ],
         any_order=False,
     )
