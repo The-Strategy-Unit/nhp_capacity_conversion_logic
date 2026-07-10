@@ -65,6 +65,25 @@ def calculate_prediction_intervals_and_mean(
     return results_dict
 
 
+def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
+    value_cols = [c for c in df.columns if c != "model_run"]
+
+    if len(value_cols) != 1:
+        raise ValueError("Expected exactly one value column.")
+
+    value_col = value_cols[0]
+
+    group_col_names = [name for name in df.index.names if name != "model_run"]
+
+    return pd.DataFrame(
+        df.groupby(level=group_col_names)[value_col].agg(
+            p10=lambda s: s.quantile(0.10),
+            mean="mean",
+            p90=lambda s: s.quantile(0.90),
+        )
+    )
+
+
 def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     """Loads assumptions for use in model. Defaults to assumptions published online at
     https://the-strategy-unit.github.io/open-plan-docs/reference/functional-area-catalogue/
@@ -97,6 +116,42 @@ def save_results_to_excel(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> 
     default_sheet = wb.active
     wb.remove(default_sheet)
     for sheet_name, df in data_to_save.items():
+        ws = wb.create_sheet(title=sheet_name)
+        for r_idx, row in enumerate(
+            dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
+            start=1,
+        ):
+            for c_idx, value in enumerate(row, start=1):
+                ws.cell(row=r_idx, column=c_idx, value=value)
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 2
+    wb.save(filepath)
+    logger.info(f"💾 Results saved to {filepath}")
+
+
+def process_and_save_results_to_excel(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> None:
+    """Saves results of capacity conversion pipeline to Excel
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included. At minimum should include "metadata" key and dataframe.
+    """
+    directory = os.path.join(
+        "results",
+        str(data_to_save["metadata"].loc["guid"]),
+        str(data_to_save["metadata"].loc["capacity_conversion_runtime"]),
+    )
+    os.makedirs(directory, exist_ok=True)
+    filepath = os.path.join(directory, "capacity_conversion_results.xlsx")
+    wb = Workbook()
+    default_sheet = wb.active
+    wb.remove(default_sheet)
+    for sheet_name, df in data_to_save.items():
+        if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
+            df = summarise_model_runs(df)
         ws = wb.create_sheet(title=sheet_name)
         for r_idx, row in enumerate(
             dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
@@ -242,7 +297,7 @@ def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
 def process_activity_type(
     name: str,
     aggregations: pd.DataFrame,
-    calculate_fn: Callable[[dict, pd.DataFrame], pd.DataFrame],
+    calculate_fn: Callable,
     assumptions: pd.DataFrame,
     data_to_save: dict[str, pd.DataFrame | pd.Series],
     preprocess: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
@@ -251,23 +306,22 @@ def process_activity_type(
     """Summarise functional areas, optionally extract baseline, and calculate capacity."""
     if preprocess is not None:
         aggregations = preprocess(aggregations)
-
-    functional_areas_summarised = summarise_functional_areas(aggregations)
-    data_to_save[f"{name}_functional_areas"] = pd.DataFrame.from_dict(
-        functional_areas_summarised, orient="index"
+    functional_areas = (
+        aggregations[aggregations.index != 0]
+        .reset_index()
+        .set_index(["grouping", "model_run"])
     )
-
+    data_to_save[f"{name}_fun_area_groupings"] = functional_areas
     if include_baseline:
         data_to_save[f"{name}_baseline"] = get_baseline_activity(aggregations)
-
-    capacity_df = calculate_fn(functional_areas_summarised, assumptions)
+    capacity_df = calculate_fn(functional_areas, assumptions)
     data_to_save[f"{name}_capacity"] = capacity_df
 
 
 def run_single_activity_type(
     activity_type: str,
-    calculate_fn: Callable[[dict, pd.DataFrame], pd.DataFrame],
-    preprocess: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    calculate_fn: Callable,
+    preprocess: Callable | None = None,
     include_baseline: bool = False,
 ) -> int:
     """CLI entry point for a single activity type.
@@ -330,5 +384,5 @@ def run_single_activity_type(
         include_baseline=include_baseline,
     )
 
-    save_results_to_excel(data_to_save)
+    process_and_save_results_to_excel(data_to_save)
     return 0
