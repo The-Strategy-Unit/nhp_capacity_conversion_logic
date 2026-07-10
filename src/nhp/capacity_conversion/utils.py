@@ -66,6 +66,17 @@ def calculate_prediction_intervals_and_mean(
 
 
 def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate p10, p90 and mean across all model runs
+
+    Args:
+        df (pd.DataFrame): MultiIndex DataFrame with one index called "model_run"
+
+    Raises:
+        ValueError: If more than one value column in DataFrame
+
+    Returns:
+        pd.DataFrame: Summarised DataFrame
+    """
     value_cols = [c for c in df.columns if c != "model_run"]
 
     if len(value_cols) != 1:
@@ -96,38 +107,6 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     """
     logger.info(f"Loading assumptions from {path_to_csv}...")
     return pd.read_csv(path_to_csv).set_index("Assumption ID")[["Value"]].sort_index()
-
-
-def save_results_to_excel(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> None:
-    """Saves results of capacity conversion pipeline to Excel
-
-    Args:
-        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
-        worksheets and the values are the dataframes to be included. At minimum should include "metadata" key and dataframe.
-    """
-    directory = os.path.join(
-        "results",
-        str(data_to_save["metadata"].loc["guid"]),
-        str(data_to_save["metadata"].loc["capacity_conversion_runtime"]),
-    )
-    os.makedirs(directory, exist_ok=True)
-    filepath = os.path.join(directory, "capacity_conversion_results.xlsx")
-    wb = Workbook()
-    default_sheet = wb.active
-    wb.remove(default_sheet)
-    for sheet_name, df in data_to_save.items():
-        ws = wb.create_sheet(title=sheet_name)
-        for r_idx, row in enumerate(
-            dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
-            start=1,
-        ):
-            for c_idx, value in enumerate(row, start=1):
-                ws.cell(row=r_idx, column=c_idx, value=value)
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or "")) for cell in col)
-            ws.column_dimensions[col[0].column_letter].width = max_len + 2
-    wb.save(filepath)
-    logger.info(f"💾 Results saved to {filepath}")
 
 
 def process_and_save_results_to_excel(
@@ -269,29 +248,6 @@ def load_aggregations(
         results_connection, f"{aggregations_path}/{aggregation_type}.parquet"
     )
     return aggregations
-
-
-def summarise_functional_areas(aggregations: pd.DataFrame) -> dict[str, dict]:
-    """Process functional areas data ready for conversion to capacity
-
-    Args:
-        aggregations (pd.DataFrame): Dataframe with functional areas and activity
-
-    Returns:
-        dict[str, dict]: Dictionary with p10, p90 and mean for each functional area
-    """
-    aggregations = (
-        aggregations.reset_index()
-        .groupby(["model_run", "grouping"])
-        .sum(numeric_only=True)
-    )
-    df = aggregations.drop([0], axis=0)  # model_run 0 is baseline
-    functional_areas_summarised = {}
-    for grouping in df.index.unique(level="grouping"):
-        functional_areas_summarised[grouping] = calculate_prediction_intervals_and_mean(
-            df.loc[(slice(None), grouping), :]["total"]
-        )
-    return functional_areas_summarised
 
 
 def process_activity_type(

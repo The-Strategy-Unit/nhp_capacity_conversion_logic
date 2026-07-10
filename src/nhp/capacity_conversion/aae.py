@@ -111,10 +111,10 @@ def convert_aae_capacity(
 def calculate_aae_capacity(
     functional_areas: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
-    """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
+    """Converts functional areas into capacity requirements using supplied assumptions
 
     Args:
-        TODO: fill
+        functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
