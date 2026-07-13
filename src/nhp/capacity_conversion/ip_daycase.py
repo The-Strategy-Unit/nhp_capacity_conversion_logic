@@ -27,22 +27,20 @@ class DaycaseConfig:
 def calculate_daycase_frm_time_util(
     subgroup: str,
     assumptions: dict[str, str],
-    functional_areas_summarised: dict[str, dict[str, float]],
+    functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
-) -> dict[str, dict]:
+) -> pd.DataFrame:
     """Calculates capacity requirements for subgroups using the FRM_TIME_UTIL conversion archetype
 
     Args:
         subgroup (str): Name of functional area subgroup
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
-        functional_areas_summarised (dict[str, dict[str, float]]): Dict with p10, p90 and mean for each of the functional areas
+        functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
-        dict: Calculated capacity requirements for the specific subgroup
+        pd.DataFrame: Calculated capacity requirements for the specific subgroup
     """
-
-    results = {}
 
     time = cast(float, assumptions_df.at[assumptions["treatment_time"], "Value"])
     utilisation = cast(
@@ -57,38 +55,40 @@ def calculate_daycase_frm_time_util(
         ],
     )
     output = assumptions["output_frm_time_util"]
-    for value in ("p10", "mean", "p90"):
-        treatment_hours = derive_treatment_hours(
-            time,
-            functional_areas_summarised[subgroup][value],
-        )
-        results[value] = calculate_time_util_capacity(
+    treatment_hours = derive_treatment_hours(
+        time,
+        functional_area_subgroup,
+    )
+    results = pd.DataFrame(
+        calculate_time_util_capacity(
             treatment_hours,
             annual_operational_hours,
             utilisation,
         )
-
-    return {output: results}
+    )
+    results.loc[:, "output"] = output
+    results = results.reset_index().set_index(["output", "model_run"])
+    return results
 
 
 def calculate_daycase_frm_recovery_occupancy(
     subgroup: str,
     assumptions: dict[str, str],
-    functional_areas_summarised: dict[str, dict],
+    functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
-) -> dict[str, dict]:
+) -> pd.DataFrame:
     """Calculates capacity requirements for subgroups using the FRM_RECOVERY_OCCUPANCY conversion archetype
 
     Args:
         subgroup (str): Name of functional area subgroup
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
-        functional_areas_summarised (dict[str, dict[str, float]]): Dict with p10, p90 and mean for each of the functional areas
+        functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
-        dict: Calculated capacity requirements for the specific subgroup
+        pd.DataFrame: Calculated capacity requirements for the specific subgroup
     """
-    results = {}
+
     time = cast(
         float,
         assumptions_df.at[assumptions["recovery_time"], "Value"],
@@ -102,32 +102,33 @@ def calculate_daycase_frm_recovery_occupancy(
         assumptions_df.at[assumptions["recovery_annual_operational_hours"], "Value"],
     )
     output = assumptions["output_frm_recovery_occupancy"]
-    for value in ("p10", "mean", "p90"):
-        occupancy_hours = derive_recovery_occupancy_hours(
-            functional_areas_summarised[subgroup][value], time
-        )
-        results[value] = calculate_recovery_capacity(
+    occupancy_hours = derive_recovery_occupancy_hours(functional_area_subgroup, time)
+    results = pd.DataFrame(
+        calculate_recovery_capacity(
             occupancy_hours, annual_operational_hours, occupancy
         )
-    return {output: results}
+    )
+    results.loc[:, "output"] = output
+    results = results.reset_index().set_index(["output", "model_run"])
+    return results
 
 
 def calculate_daycase_frm_session_capacity(
     subgroup: str,
     assumptions: dict[str, str],
-    functional_areas_summarised: dict[str, dict],
+    functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
-) -> dict[str, dict]:
+) -> pd.DataFrame:
     """Calculates capacity requirements for subgroups using the FRM_SESSION_CAPACITY conversion archetype
 
     Args:
         subgroup (str): Name of functional area subgroup
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
-        functional_areas_summarised (dict[str, dict[str, float]]): Dict with p10, p90 and mean for each of the functional areas
+        functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
-        dict: Calculated capacity requirements for the specific subgroup
+        pd.DataFrame: Calculated capacity requirements for the specific subgroup
     """
     results = {}
     annual_session_capacity = cast(
@@ -135,11 +136,14 @@ def calculate_daycase_frm_session_capacity(
         assumptions_df.at[assumptions["annual_session_capacity"], "Value"],
     )
     output = assumptions["output_frm_session_capacity"]
-    for value in ("p10", "mean", "p90"):
-        results[value] = calculate_beds_from_session_capacity(
-            functional_areas_summarised[subgroup][value], annual_session_capacity
+    results = pd.DataFrame(
+        calculate_beds_from_session_capacity(
+            functional_area_subgroup, annual_session_capacity
         )
-    return {output: results}
+    )
+    results.loc[:, "output"] = output
+    results = results.reset_index().set_index(["output", "model_run"])
+    return results
 
 
 DAYCASE_CONFIG = {
@@ -231,33 +235,35 @@ DAYCASE_CONFIG = {
 
 
 def calculate_daycase_capacity(
-    functional_areas_summarised: dict,
+    functional_areas: pd.DataFrame,
     assumptions_df: pd.DataFrame,
     config=DAYCASE_CONFIG,
 ) -> pd.DataFrame:
-    """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
+    """Converts functional areas into capacity requirements using supplied assumptions
 
         Args:
-            functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+            functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run
             assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
         Returns:
     pd.DataFrame: DataFrame of calculated Daycase capacity requirements
     """
     logger.info("Calculating IP daycase capacity")
-    results_dict = {}
-    # for subgroup in functional_areas_summarised.keys():
+    results_list = []
     for subgroup, calculations in config.items():
+        functional_area_subgroup = functional_areas.xs(key=subgroup, level="grouping")[
+            "total"
+        ]
         for calculation in calculations:
-            results_dict.update(
+            results_list.append(
                 calculation.formula(
                     subgroup=subgroup,
                     assumptions=calculation.assumptions,
-                    functional_areas_summarised=functional_areas_summarised,
+                    functional_area_subgroup=functional_area_subgroup,
                     assumptions_df=assumptions_df,
                 )
             )
-    return pd.DataFrame.from_dict(results_dict, orient="index")
+    return pd.concat(results_list)
 
 
 def main():

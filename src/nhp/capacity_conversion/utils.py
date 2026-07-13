@@ -262,6 +262,7 @@ def process_activity_type(
     """Summarise functional areas, optionally extract baseline, and calculate capacity."""
     if preprocess is not None:
         aggregations = preprocess(aggregations)
+    # We exclude baseline (model run 0) from conversion to capacity
     functional_areas = (
         aggregations[aggregations.index != 0]
         .reset_index()
