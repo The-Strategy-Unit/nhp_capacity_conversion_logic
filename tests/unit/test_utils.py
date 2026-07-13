@@ -11,10 +11,25 @@ from nhp.capacity_conversion.utils import (
     load_assumptions,
     load_metadata_from_ats,
     process_activity_type,
-    save_results_to_excel,
-    summarise_functional_areas,
+    process_and_save_results_to_excel,
+    summarise_model_runs,
     validate_required_env_vars,
 )
+
+
+def test_summarise_model_runs():
+    df = pd.DataFrame(
+        {
+            "model_run": list(range(0, 11)),
+            "group": ["group"] * 11,
+            "value": list(range(0, 11)),
+        }
+    ).set_index(["model_run", "group"])
+    expected = pd.DataFrame(
+        {"group": ["group"], "p10": [1.0], "mean": [5.0], "p90": [9.0]}
+    ).set_index("group")
+    actual = summarise_model_runs(df)
+    assert_frame_equal(actual, expected)
 
 
 def test_get_baseline_activity():
@@ -98,7 +113,7 @@ def test_save_results_to_excel(mocker):
     }
 
     # act
-    save_results_to_excel(data_to_save)
+    process_and_save_results_to_excel(data_to_save)
 
     # assert
     mock_makedirs.assert_called_once_with("results/123/456", exist_ok=True)
