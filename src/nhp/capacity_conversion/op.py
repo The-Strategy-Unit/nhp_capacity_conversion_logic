@@ -125,7 +125,7 @@ def calculate_op_capacity(
     logger.info("Calculating OP capacity")
     results_list = []
     for subgroup in functional_areas.index.get_level_values("grouping").unique():
-        fa_df = functional_areas.loc[subgroup, :]
+        fa_df = functional_areas.xs(subgroup, level="grouping")
 
         time = cast(
             float,
