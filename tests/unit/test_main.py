@@ -56,7 +56,7 @@ def test_main(mocker):
     mocker.patch(f"{main_path}.load_aggregations", return_value=mock_aggregations)
     mocker.patch(f"{main_path}.process_activity_type")
 
-    mock_save = mocker.patch(f"{main_path}.save_results_to_excel")
+    mock_save = mocker.patch(f"{main_path}.process_and_save_results_to_excel")
 
     # act
 
