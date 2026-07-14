@@ -85,6 +85,8 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
     value_col = value_cols[0]
 
     group_col_names = [name for name in df.index.names if name != "model_run"]
+    if len(group_col_names) != 1:
+        raise ValueError("Expected exactly one index column.")
 
     return pd.DataFrame(
         df.groupby(level=group_col_names)[value_col].agg(
@@ -332,11 +334,11 @@ def run_single_activity_type(
     )
 
     process_activity_type(
-        activity_type,
-        aggregations,
-        calculate_fn,
-        assumptions,
-        data_to_save,
+        name=activity_type,
+        aggregations=aggregations,
+        calculate_fn=calculate_fn,
+        assumptions=assumptions,
+        data_to_save=data_to_save,
         preprocess=preprocess,
         include_baseline=include_baseline,
     )
