@@ -1,4 +1,5 @@
 import pandas as pd
+from pandas.testing import assert_series_equal
 
 from nhp.capacity_conversion.op import (
     calculate_op_capacity,
@@ -55,15 +56,21 @@ def test_calculate_op_capacity(mocker, caplog):
         "nhp.capacity_conversion.op.derive_op_workload",
         return_value="workload",
     )
+    returned_capacity = pd.DataFrame(
+        {"total": [0]},
+        index=pd.Index([1], name="model_run"),
+    )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.op.convert_op_capacity",
-        return_value=pd.DataFrame({"model_run": [1], "total": [0]}).set_index(
-            "model_run"
-        ),
+        return_value=returned_capacity,
     )
     functional_areas = pd.DataFrame(
-        {"model_run": [1], "grouping": ["test_subgroup"], "total": [0]}
-    ).set_index(["grouping", "model_run"])
+        {"total": [0]},
+        index=pd.MultiIndex.from_tuples(
+            [("test_subgroup", 1)],
+            names=["grouping", "model_run"],
+        ),
+    )
     assumptions_df = pd.DataFrame(
         {
             "Value": [
@@ -84,13 +91,28 @@ def test_calculate_op_capacity(mocker, caplog):
         assumptions_df,
     )
 
+    assert "Calculating OP capacity" in caplog.text
     # assert calls
-    mock_workload.assert_called_once()
+    args, kwargs = mock_workload.call_args
+
+    assert args[:3] == ("TIME", "DNA_RATE", "DNA_TIME")
+    assert_series_equal(
+        args[3],
+        functional_areas.xs("test_subgroup", level="grouping")["total"],
+    )
+    assert kwargs == {}
     mock_convert.assert_called_once_with("workload", "OPERATIONAL_HOURS", "UTIL")
 
     # output structure
-    assert isinstance(result, pd.DataFrame)
-    assert result.index == [("OUTPUT", 1)]
+    expected = pd.DataFrame(
+        {"total": [0]},
+        index=pd.MultiIndex.from_tuples(
+            [("OUTPUT", 1)],
+            names=["output", "model_run"],
+        ),
+    )
+
+    pd.testing.assert_frame_equal(result, expected)
 
 
 def test_main(mocker):
