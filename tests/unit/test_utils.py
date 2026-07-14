@@ -357,6 +357,30 @@ def test_process_activity_type_with_baseline():
     assert data_to_save["test_type_baseline"] is not None
 
 
+def test_process_activity_type_without_baseline():
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b"] * 3,
+            "model_run": [0] * 2 + [1] * 2 + [2] * 2,
+            "total": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    assumptions = pd.DataFrame({"Value": []})
+    data_to_save = {}
+
+    process_activity_type(
+        "test_type",
+        aggregations,
+        lambda sa, au: pd.DataFrame(),
+        assumptions,
+        data_to_save,
+        include_baseline=False,
+    )
+
+    assert "test_type_baseline" not in data_to_save
+    assert "test_type_capacity" in data_to_save
+
+
 def test_run_single_activity_type(mocker):
     # Arrange
     activity_type = "activity_type"
