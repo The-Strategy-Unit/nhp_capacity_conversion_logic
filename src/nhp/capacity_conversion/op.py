@@ -58,7 +58,7 @@ def derive_op_workload(
 
 
 def derive_op_workload(
-    time: float | pd.Series, dna_rate: float, dna_time: float, attendances: float
+    time: float, dna_rate: float, dna_time: float, attendances: float | pd.Series
 ) -> float | pd.Series:
     """Formula used for converting all OP functional area activity to workload
 
