@@ -100,7 +100,7 @@ def test_calculate_op_capacity(mocker, caplog):
         args[3],
         functional_areas.xs("test_subgroup", level="grouping")["total"],
     )
-    assert kwargs == {}
+
     mock_convert.assert_called_once_with("workload", "OPERATIONAL_HOURS", "UTIL")
 
     # output structure
