@@ -1,5 +1,5 @@
 import sys
-from typing import cast
+from typing import cast, overload
 
 import pandas as pd
 from nhpy.utils import get_logger
@@ -45,9 +45,21 @@ ASSUMPTIONS_MAPPING = {
 }
 
 
+@overload
 def derive_op_workload(
     time: float, dna_rate: float, dna_time: float, attendances: float
-) -> float:
+) -> float: ...
+
+
+@overload
+def derive_op_workload(
+    time: float, dna_rate: float, dna_time: float, attendances: pd.Series
+) -> pd.Series: ...
+
+
+def derive_op_workload(
+    time: float, dna_rate: float, dna_time: float, attendances: float | pd.Series
+) -> float | pd.Series:
     """Formula used for converting all OP functional area activity to workload
 
     Args:
@@ -64,11 +76,27 @@ def derive_op_workload(
     return workload_hours
 
 
+@overload
 def convert_op_capacity(
     workload_hours: float,
     operational_hours: float,
     utilisation_rate: float,
-) -> float:
+) -> float: ...
+
+
+@overload
+def convert_op_capacity(
+    workload_hours: pd.Series,
+    operational_hours: float,
+    utilisation_rate: float,
+) -> pd.Series: ...
+
+
+def convert_op_capacity(
+    workload_hours: float | pd.Series,
+    operational_hours: float,
+    utilisation_rate: float,
+) -> float | pd.Series:
     """Formula used for converting all OP functional area activity to capacity requirements
 
     Args:
@@ -83,21 +111,21 @@ def convert_op_capacity(
 
 
 def calculate_op_capacity(
-    functional_areas_summarised: dict, assumptions_df: pd.DataFrame
+    functional_areas: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
-    """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
+    """Converts functional areas into capacity requirements using supplied assumptions
 
     Args:
-        functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+        functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
         pd.DataFrame: DataFrame of calculated OP capacity requirements
     """
     logger.info("Calculating OP capacity")
-    results_dict = {}
-    for subgroup in functional_areas_summarised.keys():
-        results = {}
+    results_list = []
+    for subgroup in functional_areas.index.get_level_values("grouping").unique():
+        fa_df = functional_areas.xs(subgroup, level="grouping")
 
         time = cast(
             float,
@@ -122,15 +150,14 @@ def calculate_op_capacity(
             ],
         )
         output = ASSUMPTIONS_MAPPING[subgroup]["output"]
-        for value in ["p10", "mean", "p90"]:
-            workload_hours = derive_op_workload(
-                time, dna_rate, dna_time, functional_areas_summarised[subgroup][value]
-            )
-            results[value] = convert_op_capacity(
-                workload_hours, operational_hours, utilisation_rate
-            )
-        results_dict[output] = results
-    return pd.DataFrame.from_dict(results_dict, orient="index")
+        workload_hours = derive_op_workload(time, dna_rate, dna_time, fa_df["total"])
+        results = convert_op_capacity(
+            workload_hours, operational_hours, utilisation_rate
+        )
+        results_df = pd.DataFrame(results)
+        results_df.loc[:, "output"] = output
+        results_list.append(results_df.reset_index().set_index(["output", "model_run"]))
+    return pd.concat(results_list)
 
 
 def main():

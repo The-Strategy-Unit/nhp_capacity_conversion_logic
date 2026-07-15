@@ -11,10 +11,52 @@ from nhp.capacity_conversion.utils import (
     load_assumptions,
     load_metadata_from_ats,
     process_activity_type,
-    save_results_to_excel,
-    summarise_functional_areas,
+    process_and_save_results_to_excel,
+    run_single_activity_type,
+    summarise_model_runs,
     validate_required_env_vars,
 )
+
+
+def test_summarise_model_runs():
+    df = pd.DataFrame(
+        {
+            "model_run": list(range(0, 11)),
+            "group": ["group"] * 11,
+            "value": list(range(0, 11)),
+        }
+    ).set_index(["model_run", "group"])
+    expected = pd.DataFrame(
+        {"group": ["group"], "p10": [1.0], "mean": [5.0], "p90": [9.0]}
+    ).set_index("group")
+    actual = summarise_model_runs(df)
+    assert_frame_equal(actual, expected)
+
+
+def test_summarise_model_runs_with_multiple_cols():
+    df = pd.DataFrame(
+        {
+            "model_run": list(range(0, 11)),
+            "group": ["group"] * 11,
+            "value": list(range(0, 11)),
+            "value_2": list(range(0, 11)),
+        }
+    ).set_index(["model_run", "group"])
+    with pytest.raises(ValueError, match="Expected exactly one value column."):
+        summarise_model_runs(df)
+
+
+def test_summarise_model_runs_with_multiple_indexes():
+    df = pd.DataFrame(
+        {
+            "model_run": list(range(0, 11)),
+            "group": ["group"] * 11,
+            "value": list(range(0, 11)),
+            "index_2": list(range(0, 11)),
+        }
+    ).set_index(["model_run", "group", "index_2"])
+    with pytest.raises(ValueError, match="Expected exactly one index column."):
+        summarise_model_runs(df)
 
 
 def test_get_baseline_activity():
@@ -60,7 +102,7 @@ def test_load_assumptions(tmp_path):
     assert_frame_equal(expected, result)
 
 
-def test_save_results_to_excel(mocker):
+def test_process_and_save_results_to_excel(mocker):
     # arrange
 
     mock_makedirs = mocker.patch("nhp.capacity_conversion.utils.os.makedirs")
@@ -85,23 +127,31 @@ def test_save_results_to_excel(mocker):
         ],
     )
     mock_logger = mocker.patch("nhp.capacity_conversion.utils.logger")
+    mock_summarise = mocker.patch("nhp.capacity_conversion.utils.summarise_model_runs")
     metadata = pd.Series(
         {
             "guid": "123",
             "capacity_conversion_runtime": "456",
         }
     )
-    df = pd.DataFrame({"col1": ["val1"], "col2": ["val2"]})
+    df = pd.DataFrame(
+        {
+            "model_run": list(range(0, 11)),
+            "group": ["group"] * 11,
+            "value": list(range(0, 11)),
+        }
+    ).set_index(["model_run", "group"])
     data_to_save = {
         "metadata": metadata,
         "results": df,
     }
 
     # act
-    save_results_to_excel(data_to_save)
+    process_and_save_results_to_excel(data_to_save)
 
     # assert
     mock_makedirs.assert_called_once_with("results/123/456", exist_ok=True)
+    mock_summarise.assert_called_once()
     mock_wb.remove.assert_called_once_with(mock_wb.active)
     assert mock_wb.create_sheet.call_count == len(data_to_save)
     mock_wb.save.assert_called_once_with(
@@ -258,33 +308,6 @@ def test_load_aggregations(mocker, caplog):
     assert "Loading type data from path..." in caplog.text
 
 
-def test_summarise_functional_areas(mocker):
-    # arrange
-    aggregations = pd.DataFrame(
-        {
-            "grouping": ["a", "b", "c"] * 3,
-            "model_run": [0] * 3 + [1] * 3 + [2] * 3,
-            "total": [3] * 3 + [4] * 3 + [5] * 3,
-        }
-    ).set_index("model_run")
-    mocker.patch(
-        "nhp.capacity_conversion.utils.calculate_prediction_intervals_and_mean",
-        return_value={"mean": 4.5, "p10": 4.1, "p90": 4.9},
-    )
-
-    expected = {
-        "a": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
-        "b": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
-        "c": {"mean": 4.5, "p10": 4.1, "p90": 4.9},
-    }
-
-    # act
-    actual = summarise_functional_areas(aggregations)
-
-    # assert
-    assert actual == expected
-
-
 def test_process_activity_type_with_preprocess():
     aggregations = pd.DataFrame(
         {
@@ -308,7 +331,7 @@ def test_process_activity_type_with_preprocess():
         preprocess=my_preprocess,
     )
 
-    assert data_to_save["test_type_functional_areas"] is not None
+    assert data_to_save["test_type_fun_area_groupings"] is not None
 
 
 def test_process_activity_type_with_baseline():
@@ -332,3 +355,129 @@ def test_process_activity_type_with_baseline():
     )
 
     assert data_to_save["test_type_baseline"] is not None
+
+
+def test_process_activity_type_without_baseline():
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b"] * 3,
+            "model_run": [0] * 2 + [1] * 2 + [2] * 2,
+            "total": [1, 2, 3, 4, 5, 6],
+        }
+    )
+    assumptions = pd.DataFrame({"Value": []})
+    data_to_save = {}
+
+    process_activity_type(
+        "test_type",
+        aggregations,
+        lambda sa, au: pd.DataFrame(),
+        assumptions,
+        data_to_save,
+        include_baseline=False,
+    )
+
+    assert "test_type_baseline" not in data_to_save
+    assert "test_type_capacity" in data_to_save
+
+
+def test_run_single_activity_type(mocker):
+    # Arrange
+    activity_type = "activity_type"
+    calculate_fn = mocker.Mock()
+    preprocess = mocker.Mock()
+
+    mock_args = mocker.Mock(
+        guid="test-guid",
+        capacity_model_version="v1",
+        path_to_assumptions_file="assumptions.csv",
+    )
+
+    mock_parser = mocker.Mock()
+    mock_parser.parse_args.return_value = mock_args
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.argparse.ArgumentParser",
+        return_value=mock_parser,
+    )
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.validate_required_env_vars",
+        return_value={
+            "AZ_TABLE_ENDPOINT": "table-endpoint",
+            "TABLE_NAME": "table-name",
+            "AZ_STORAGE_EP": "storage-endpoint",
+            "AZ_STORAGE_RESULTS": "storage-results",
+        },
+    )
+
+    metadata = {
+        "PartitionKey": "pk",
+        "RowKey": "rk",
+        "foo": "bar",
+    }
+    load_metadata = mocker.patch(
+        "nhp.capacity_conversion.utils.load_metadata_from_ats",
+        return_value=metadata,
+    )
+
+    assumptions = pd.DataFrame({"a": [1]})
+    mocker.patch(
+        "nhp.capacity_conversion.utils.load_assumptions",
+        return_value=assumptions,
+    )
+
+    mocker.patch(
+        "nhp.capacity_conversion.utils.create_aggregations_path",
+        return_value="agg/path",
+    )
+
+    aggregations = pd.DataFrame({"b": [2]})
+    mocker.patch(
+        "nhp.capacity_conversion.utils.load_aggregations",
+        return_value=aggregations,
+    )
+
+    process_activity = mocker.patch(
+        "nhp.capacity_conversion.utils.process_activity_type"
+    )
+    save_results = mocker.patch(
+        "nhp.capacity_conversion.utils.process_and_save_results_to_excel"
+    )
+    mocker.patch("nhp.capacity_conversion.utils.configure_logging")
+
+    # Act
+    result = run_single_activity_type(
+        activity_type=activity_type,
+        calculate_fn=calculate_fn,
+        preprocess=preprocess,
+        include_baseline=True,
+    )
+
+    # Assert
+    assert result == 0
+
+    load_metadata.assert_called_once_with(
+        "test-guid",
+        "table-endpoint",
+        "table-name",
+        "v1",
+    )
+
+    process_activity.assert_called_once()
+
+    _, kwargs = process_activity.call_args
+
+    assert kwargs["name"] == activity_type
+    assert kwargs["aggregations"] is aggregations
+    assert kwargs["calculate_fn"] is calculate_fn
+    assert kwargs["assumptions"] is assumptions
+    assert kwargs["preprocess"] is preprocess
+    assert kwargs["include_baseline"] is True
+
+    # Metadata should have been augmented with the runtime
+    data_to_save = kwargs["data_to_save"]
+    assert "metadata" in data_to_save
+    assert "capacity_conversion_runtime" in data_to_save["metadata"].index
+
+    save_results.assert_called_once_with(data_to_save)

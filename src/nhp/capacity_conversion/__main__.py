@@ -19,7 +19,7 @@ from nhp.capacity_conversion.utils import (
     load_assumptions,
     load_metadata_from_ats,
     process_activity_type,
-    save_results_to_excel,
+    process_and_save_results_to_excel,
     validate_required_env_vars,
 )
 
@@ -100,7 +100,7 @@ def main():
         data_to_save,
     )
 
-    save_results_to_excel(data_to_save)
+    process_and_save_results_to_excel(data_to_save)
     return 0
 
 

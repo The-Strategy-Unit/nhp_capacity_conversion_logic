@@ -1,5 +1,5 @@
 import sys
-from typing import cast
+from typing import cast, overload
 
 import pandas as pd
 from nhpy.utils import get_logger
@@ -49,7 +49,19 @@ ASSUMPTIONS_MAPPING = {
 }
 
 
-def derive_aae_workload(attendances: float, assumed_los_mins: float) -> float:
+@overload
+def derive_aae_workload(attendances: float, assumed_los_mins: float) -> float: ...
+
+
+@overload
+def derive_aae_workload(
+    attendances: pd.Series, assumed_los_mins: float
+) -> pd.Series: ...
+
+
+def derive_aae_workload(
+    attendances: float | pd.Series, assumed_los_mins: float
+) -> float | pd.Series:
     """Formula used for converting all A&E functional area activity to workload
 
     Args:
@@ -57,16 +69,32 @@ def derive_aae_workload(attendances: float, assumed_los_mins: float) -> float:
         assumed_los_mins (float): Assumed length of stay in emergency department in minutes
 
     Returns:
-        float: Calculated workload in occupancy hours
+        float | pd.Series: Calculated workload in occupancy hours
     """
     return attendances * assumed_los_mins / 60
 
 
+@overload
 def convert_aae_capacity(
     occupancy_hours: float,
     annual_operational_hours: float,
     utilisation: float,
-) -> float:
+) -> float: ...
+
+
+@overload
+def convert_aae_capacity(
+    occupancy_hours: pd.Series,
+    annual_operational_hours: float,
+    utilisation: float,
+) -> pd.Series: ...
+
+
+def convert_aae_capacity(
+    occupancy_hours: float | pd.Series,
+    annual_operational_hours: float,
+    utilisation: float,
+) -> float | pd.Series:
     """Formula used for converting A&E workload to capacity requirements
 
     Args:
@@ -75,27 +103,27 @@ def convert_aae_capacity(
         utilisation (float): Utilisation of the resource, expressed as a decimal
 
     Returns:
-        float: Calculated capacity requirement
+        float | pd.Series: Calculated capacity requirement
     """
     return occupancy_hours / (annual_operational_hours * utilisation)
 
 
 def calculate_aae_capacity(
-    functional_areas_summarised: dict, assumptions_df: pd.DataFrame
+    functional_areas: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
-    """Converts p10, p90 and mean for functional areas into capacity requirements using supplied assumptions
+    """Converts functional areas into capacity requirements using supplied assumptions
 
     Args:
-        functional_areas_summarised (dict): Dict with p10, p90 and mean for each of the functional areas
+        functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
     Returns:
         pd.DataFrame: DataFrame of calculated A&E capacity requirements
     """
     logger.info("Calculating A&E capacity")
-    results_dict = {}
-    for subgroup in functional_areas_summarised.keys():
-        results = {}
+    results_list = []
+    for subgroup in functional_areas.index.get_level_values("grouping").unique():
+        fa_df = functional_areas.loc[subgroup, :]
         assumed_los_mins = cast(
             float,
             assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["los"], "Value"],
@@ -109,17 +137,16 @@ def calculate_aae_capacity(
             assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["util"], "Value"],
         )
 
-        for value in ["p10", "mean", "p90"]:
-            occupancy_hours = derive_aae_workload(
-                functional_areas_summarised[subgroup][value], assumed_los_mins
-            )
-            results[value] = convert_aae_capacity(
-                occupancy_hours,
-                annual_operational_hours=annual_operational_hours,
-                utilisation=utilisation,
-            )
-        results_dict[ASSUMPTIONS_MAPPING[subgroup]["output"]] = results
-    return pd.DataFrame.from_dict(results_dict, orient="index")
+        occupancy_hours = derive_aae_workload(fa_df["total"], assumed_los_mins)
+        results = convert_aae_capacity(
+            occupancy_hours,
+            annual_operational_hours=annual_operational_hours,
+            utilisation=utilisation,
+        )
+        results_df = pd.DataFrame(results)
+        results_df.loc[:, "output"] = ASSUMPTIONS_MAPPING[subgroup]["output"]
+        results_list.append(results_df.reset_index().set_index(["output", "model_run"]))
+    return pd.concat(results_list)
 
 
 def main():
