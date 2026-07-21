@@ -77,19 +77,25 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Summarised DataFrame
     """
-    value_cols = [c for c in df.columns if c != "model_run"]
-
-    if len(value_cols) != 1:
-        raise ValueError("Expected exactly one value column.")
-
-    value_col = value_cols[0]
-
     group_col_names = [name for name in df.index.names if name != "model_run"]
     if len(group_col_names) != 1:
         raise ValueError("Expected exactly one index column.")
-
+    value_cols = [c for c in df.columns if c != "model_run"]
+    if len(value_cols) > 1:
+        df_list = []
+        for col in value_cols:
+            summary_df = pd.DataFrame(
+                df.groupby(level=group_col_names)[col].agg(
+                    p10=lambda s: s.quantile(0.10),
+                    mean="mean",
+                    p90=lambda s: s.quantile(0.90),
+                )
+            )
+            summary_df["measure"] = col
+            df_list.append(summary_df.reset_index())
+        return pd.concat(df_list).set_index(["grouping", "measure"]).sort_index()
     return pd.DataFrame(
-        df.groupby(level=group_col_names)[value_col].agg(
+        df.groupby(level=group_col_names)[value_cols[0]].agg(
             p10=lambda s: s.quantile(0.10),
             mean="mean",
             p90=lambda s: s.quantile(0.90),
