@@ -28,6 +28,31 @@ def derive_birthroom_beddays(
 
 
 @overload
+def derive_zero_day_beddays(zero_day_spells: float, zero_day_los: float) -> float: ...
+
+
+@overload
+def derive_zero_day_beddays(
+    zero_day_spells: pd.Series, zero_day_los: float
+) -> pd.Series: ...
+
+
+def derive_zero_day_beddays(
+    zero_day_spells: float | pd.Series, zero_day_los: float
+) -> float | pd.Series:
+    """Derive zero day beddays given zero day LOS assumption
+
+    Args:
+        zero_day_spells (float | pd.Series): Number of zero day spells
+        zero_day_los (float): Zero day LOS in minutes
+
+    Returns:
+        float | pd.Series: Calculated beddays for zero day spells
+    """
+    return zero_day_spells * (zero_day_los / 1440)
+
+
+@overload
 def calculate_beds(
     beddays: float, operational_days: float, occupancy: float
 ) -> float: ...

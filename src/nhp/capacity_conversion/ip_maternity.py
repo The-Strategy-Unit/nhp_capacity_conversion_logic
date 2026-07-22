@@ -13,6 +13,7 @@ from nhp.capacity_conversion.ip_formulas import (
     derive_birthroom_beddays,
     derive_recovery_occupancy_hours,
     derive_treatment_hours,
+    derive_zero_day_beddays,
 )
 from nhp.capacity_conversion.utils import run_single_activity_type
 
@@ -25,6 +26,144 @@ class MaternityConfig:
     col_to_use: str
     formula: Callable
     assumptions: dict[str, str]
+
+
+def derive_birth_related_ward_beddays(
+    grouping: str,
+    functional_areas_processed: pd.DataFrame,
+    assumptions_df: pd.DataFrame,
+    assumptions: dict[str, str],
+) -> pd.Series:
+    """Calculate birth related maternity ward beddays
+
+    Args:
+        grouping (str): Name of functional area grouping
+        functional_areas_processed (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
+        Functional areas should first be processed with preprocess_ip_maternity_data
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+        assumptions (dict[str, str]): Assumptions dictionary for the specific grouping
+
+    Returns:
+        pd.Series: Calculated birth related ward beddays
+    """
+    zero_day_los = cast(
+        float,
+        assumptions_df.at[assumptions["zero_day_los"], "Value"],
+    )
+    zero_day_beddays = derive_zero_day_beddays(
+        functional_areas_processed.xs(key=grouping + "_zerolos", level="grouping")[
+            "spells"
+        ],
+        zero_day_los,
+    )
+    if grouping != "maternity_elective_csection":
+        birthroom_los = cast(
+            float,
+            assumptions_df.at[assumptions["birthroom_los"], "Value"],
+        )
+        birth_room_beddays = derive_birthroom_beddays(
+            birthroom_los,
+            functional_areas_processed.xs(key=grouping, level="grouping")["spells"],
+        )
+    else:
+        # elective csections do not spend any time in the birth room
+        birth_room_beddays = 0
+    birth_spell_overnight_beddays = functional_areas_processed.xs(
+        key=grouping + "_nonzerolos", level="grouping"
+    )["beddays"]
+    return birth_spell_overnight_beddays + zero_day_beddays - birth_room_beddays
+
+
+def derive_total_maternity_ward_beddays(
+    functional_areas_processed: pd.DataFrame,
+    assumptions_df: pd.DataFrame,
+    assumptions_dict: dict[str, dict[str, str]],
+) -> pd.Series:
+    """Calculate total maternity ward beddays
+
+    Args:
+        functional_areas_processed (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
+        Functional areas should first be processed with preprocess_ip_maternity_data
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+        assumptions_dict (dict[str, dict[str, str]]): Maternity wards assumptions dictionary
+
+    Returns:
+        pd.Series: Calculated total maternity ward beddays
+    """
+    birth_related_ward_beddays = pd.Series()
+    for grouping in [
+        "maternity_normal_delivery",
+        "maternity_assisted_delivery",
+        "maternity_elective_csection",
+        "maternity_nonelective_csection",
+    ]:
+        birth_related_ward_beddays = birth_related_ward_beddays.add(
+            derive_birth_related_ward_beddays(
+                grouping,
+                functional_areas_processed,
+                assumptions_df,
+                assumptions_dict[grouping],
+            ),
+            fill_value=0,
+        )
+    no_birth_ward_beddays = functional_areas_processed.xs(
+        key="maternity_overnight_no_birth", level="grouping"
+    )["beddays"]
+    return birth_related_ward_beddays + no_birth_ward_beddays
+
+
+def calculate_maternity_ward_beds(
+    functional_areas_processed: pd.DataFrame,
+    assumptions_df: pd.DataFrame,
+    assumptions_dict: dict[str, dict[str, str]],
+):
+    """Calculate maternity ward beds
+
+    Args:
+        functional_areas_processed (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
+        Functional areas should first be processed with preprocess_ip_maternity_data
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+        assumptions_dict (dict[str, dict[str, str]]): Maternity wards assumptions dictionary
+
+    Returns:
+        pd.Series: Calculated total maternity ward beddays
+    """
+    total_ward_beddays = derive_total_maternity_ward_beddays(
+        functional_areas_processed, assumptions_df, assumptions_dict
+    )
+    maternity_ward_occupancy = cast(
+        float,
+        assumptions_df.at["MATERNITY_WARD_OCC", "Value"],
+    )
+    maternity_ward_operational_days = cast(
+        float,
+        assumptions_df.at["MATERNITY_WARD_ANNUAL_OPERATIONAL_DAYS", "Value"],
+    )
+    maternity_ward_beds = calculate_beds(
+        total_ward_beddays, maternity_ward_operational_days, maternity_ward_occupancy
+    ).to_frame(name="total")
+    maternity_ward_beds.loc[:, "output"] = "MATERNITY_WARD_BEDS"
+    results = maternity_ward_beds.reset_index().set_index(["output", "model_run"])
+    return results
+
+
+ward_assumptions_dict = {
+    "maternity_normal_delivery": {
+        "zero_day_los": "MATERNITY_WARD_NORMAL_DELIVERY_ZERO_DAY_LOS",
+        "birthroom_los": "MATERNITY_NORMAL_DELIVERY_BIRTH_ROOM_LOS",
+    },
+    "maternity_assisted_delivery": {
+        "zero_day_los": "MATERNITY_WARD_ASSISTED_DELIVERY_ZERO_DAY_LOS",
+        "birthroom_los": "MATERNITY_ASSISTED_DELIVERY_BIRTH_ROOM_LOS",
+    },
+    "maternity_elective_csection": {
+        "zero_day_los": "MATERNITY_WARD_ELECTIVE_C_SECTION_ZERO_DAY_LOS",
+    },
+    "maternity_nonelective_csection": {
+        "zero_day_los": "MATERNITY_WARD_NON_ELECTIVE_C_SECTION_ZERO_DAY_LOS",
+        "birthroom_los": "MATERNITY_NON_ELECTIVE_C_SECTION_BIRTH_ROOM_LOS",
+    },
+}
 
 
 def process_theatres_obstetric_proc_data(
@@ -282,7 +421,7 @@ MATERNITY_CONFIG = {
         },
     ),
     "NON_ELECTIVE_C_SECTION_MATERNITY_BIRTH_ROOMS": MaternityConfig(
-        subgroup="maternity_assisted_delivery",
+        subgroup="maternity_nonelective_csection",
         col_to_use="spells",
         formula=calculate_maternity_birth_rooms,
         assumptions={
@@ -322,8 +461,13 @@ def calculate_maternity_capacity(
                 assumptions=subgroup_config.assumptions,
                 functional_area_subgroup=functional_area_subgroup,
                 assumptions_df=assumptions_df,
-            )
+            ).rename(columns={subgroup_config.col_to_use: "total"})
         )
+    results_list.append(
+        calculate_maternity_ward_beds(
+            functional_areas_processed, assumptions_df, ward_assumptions_dict
+        )
+    )
     return pd.concat(results_list)
 
 
