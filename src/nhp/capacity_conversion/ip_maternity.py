@@ -7,8 +7,10 @@ import pandas as pd
 from nhpy.utils import get_logger
 
 from nhp.capacity_conversion.ip_formulas import (
+    calculate_beds,
     calculate_recovery_capacity,
     calculate_time_util_capacity,
+    derive_birthroom_beddays,
     derive_recovery_occupancy_hours,
     derive_treatment_hours,
 )
@@ -56,6 +58,41 @@ def process_theatres_obstetric_proc_data(
     return result
 
 
+def process_maternity_birth_data(
+    functional_areas: pd.DataFrame,
+) -> pd.DataFrame:
+    """Combine activity for zero los and nonzero los normal, assisted, and nonelective csection
+    functional area groupings for calculation of birth rooms.
+
+    Args:
+        functional_areas (pd.DataFrame): Functional areas from Azure for IP maternity
+
+    Returns:
+        pd.DataFrame: IP maternity functional areas with new groupings
+    """
+    df_list = []
+    groups_list = [
+        ["maternity_normal_delivery_zerolos", "maternity_normal_delivery_nonzerolos"],
+        [
+            "maternity_assisted_delivery_zerolos",
+            "maternity_assisted_delivery_nonzerolos",
+        ],
+        [
+            "maternity_nonelective_csection_zerolos",
+            "maternity_nonelective_csection_nonzerolos",
+        ],
+    ]
+    for groups in groups_list:
+        df_list.append(
+            functional_areas[functional_areas["grouping"].isin(groups)]
+            .groupby(level=0)
+            .sum()
+            .assign(grouping="_".join(groups[0].split("_")[:-1]))
+        )
+    result = pd.concat([functional_areas] + df_list).sort_index()
+    return result
+
+
 def preprocess_ip_maternity_data(functional_areas: pd.DataFrame) -> pd.DataFrame:
     """Preprocesses IP maternity data for conversion to capacity.
 
@@ -65,8 +102,52 @@ def preprocess_ip_maternity_data(functional_areas: pd.DataFrame) -> pd.DataFrame
     Returns:
         pd.DataFrame: Preprocessed IP maternity data for conversion to capacity
     """
-    functional_areas_processed = process_theatres_obstetric_proc_data(functional_areas)
-    return functional_areas_processed
+    functional_areas = process_theatres_obstetric_proc_data(functional_areas)
+    functional_areas = process_maternity_birth_data(functional_areas)
+    return functional_areas
+
+
+def calculate_maternity_birth_rooms(
+    subgroup: str,
+    assumptions: dict[str, str],
+    functional_area_subgroup: pd.Series,
+    assumptions_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Calculates capacity requirements for obstetric theatres using the FRM_TIME_UTIL conversion archetype
+
+    Args:
+        subgroup (str): Name of functional area subgroup
+        assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
+        functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
+        assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
+
+    Returns:
+        pd.DataFrame: Calculated capacity requirements for the specific subgroup
+    """
+
+    los = cast(float, assumptions_df.at[assumptions["birthroom_los"], "Value"])
+    occupancy = cast(
+        float,
+        assumptions_df.at[assumptions["birthroom_occupancy"], "Value"],
+    )
+    operational_days = cast(
+        float,
+        assumptions_df.at[
+            assumptions["birthroom_operational_days"],
+            "Value",
+        ],
+    )
+    output = assumptions["output"]
+    birthroom_beddays = derive_birthroom_beddays(
+        los,
+        functional_area_subgroup,
+    )
+    results = pd.DataFrame(
+        calculate_beds(birthroom_beddays, operational_days, occupancy)
+    )
+    results.loc[:, "output"] = output
+    results = results.reset_index().set_index(["output", "model_run"])
+    return results
 
 
 def calculate_theatres_obstetric_proc(
@@ -87,15 +168,15 @@ def calculate_theatres_obstetric_proc(
         pd.DataFrame: Calculated capacity requirements for the specific subgroup
     """
 
-    time = cast(float, assumptions_df.at[assumptions["treatment_time"], "Value"])
+    time = cast(float, assumptions_df.at[assumptions["procedure_time"], "Value"])
     utilisation = cast(
         float,
-        assumptions_df.at[assumptions["treatment_utilisation"], "Value"],
+        assumptions_df.at[assumptions["theatre_utilisation"], "Value"],
     )
     annual_operational_hours = cast(
         float,
         assumptions_df.at[
-            assumptions["treatment_annual_operational_hours"],
+            assumptions["theatre_annual_operational_hours"],
             "Value",
         ],
     )
@@ -173,23 +254,57 @@ MATERNITY_CONFIG = {
         col_to_use="spells",
         formula=calculate_theatres_obstetric_proc,
         assumptions={
-            "treatment_time": "OBSTETRIC_THEATRE_PROC_TIME",
-            "treatment_utilisation": "OBSTETRIC_THEATRE_UTIL",
-            "treatment_annual_operational_hours": "OBSTETRIC_THEATRE_ANNUAL_OPERATIONAL_HOURS",
+            "procedure_time": "OBSTETRIC_THEATRE_PROC_TIME",
+            "theatre_utilisation": "OBSTETRIC_THEATRE_UTIL",
+            "theatre_annual_operational_hours": "OBSTETRIC_THEATRE_ANNUAL_OPERATIONAL_HOURS",
+        },
+    ),
+    "NORMAL_DELIVERY_MATERNITY_BIRTH_ROOMS": MaternityConfig(
+        subgroup="maternity_normal_delivery",
+        col_to_use="spells",
+        formula=calculate_maternity_birth_rooms,
+        assumptions={
+            "birthroom_los": "MATERNITY_NORMAL_DELIVERY_BIRTH_ROOM_LOS",
+            "birthroom_occupancy": "MATERNITY_BIRTH_ROOM_OCC",
+            "birthroom_operational_days": "MATERNITY_BIRTH_ROOM_ANNUAL_OPERATIONAL_DAYS",
+            "output": "NORMAL_DELIVERY_MATERNITY_BIRTH_ROOMS",
+        },
+    ),
+    "ASSISTED_DELIVERY_MATERNITY_BIRTH_ROOMS": MaternityConfig(
+        subgroup="maternity_assisted_delivery",
+        col_to_use="spells",
+        formula=calculate_maternity_birth_rooms,
+        assumptions={
+            "birthroom_los": "MATERNITY_ASSISTED_DELIVERY_BIRTH_ROOM_LOS",
+            "birthroom_occupancy": "MATERNITY_BIRTH_ROOM_OCC",
+            "birthroom_operational_days": "MATERNITY_BIRTH_ROOM_ANNUAL_OPERATIONAL_DAYS",
+            "output": "ASSISTED_DELIVERY_MATERNITY_BIRTH_ROOMS",
+        },
+    ),
+    "NON_ELECTIVE_C_SECTION_MATERNITY_BIRTH_ROOMS": MaternityConfig(
+        subgroup="maternity_assisted_delivery",
+        col_to_use="spells",
+        formula=calculate_maternity_birth_rooms,
+        assumptions={
+            "birthroom_los": "MATERNITY_NON_ELECTIVE_C_SECTION_BIRTH_ROOM_LOS",
+            "birthroom_occupancy": "MATERNITY_BIRTH_ROOM_OCC",
+            "birthroom_operational_days": "MATERNITY_BIRTH_ROOM_ANNUAL_OPERATIONAL_DAYS",
+            "output": "NON_ELECTIVE_C_SECTION_MATERNITY_BIRTH_ROOMS",
         },
     ),
 }
 
 
 def calculate_maternity_capacity(
-    functional_areas: pd.DataFrame,
+    functional_areas_processed: pd.DataFrame,
     assumptions_df: pd.DataFrame,
     config=MATERNITY_CONFIG,
 ) -> pd.DataFrame:
     """Converts functional areas into capacity requirements using supplied assumptions
 
         Args:
-            functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run
+            functional_areas_processed (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
+            Functional areas should first be processed with preprocess_ip_maternity_data
             assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
 
         Returns:
@@ -198,7 +313,7 @@ def calculate_maternity_capacity(
     logger.info("Calculating IP maternity capacity")
     results_list = []
     for output, subgroup_config in config.items():
-        functional_area_subgroup = functional_areas.xs(
+        functional_area_subgroup = functional_areas_processed.xs(
             key=subgroup_config.subgroup, level="grouping"
         )[subgroup_config.col_to_use]
         results_list.append(
