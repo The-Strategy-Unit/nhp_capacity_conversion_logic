@@ -24,7 +24,7 @@ logger = get_logger()
 SUPPRESSION_THRESHOLD = 7  # suppress counts 1–7; round all others to nearest 5
 
 
-def get_baseline_activity(aggregations: pd.DataFrame) -> pd.Series:
+def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
     """Extract baseline (model run 0) total activity per functional area.
 
     Applies NHS England HES suppression rules:
@@ -36,9 +36,14 @@ def get_baseline_activity(aggregations: pd.DataFrame) -> pd.Series:
             grouping and total columns
 
     Returns:
-        pd.Series: Baseline activity per grouping, suppressed and rounded
+        pd.DataFrame: Baseline activity per grouping, suppressed and rounded
     """
-    baseline = aggregations[aggregations.index == 0].groupby("grouping")["total"].sum()
+    value_columns = aggregations.select_dtypes("number").columns.tolist()
+    baseline = (
+        aggregations.loc[aggregations.index == 0]
+        .groupby("grouping")[value_columns]
+        .sum()
+    )
 
     def _suppress_and_round(x: float) -> float | None:
         if 1 <= x <= SUPPRESSION_THRESHOLD:
