@@ -10,10 +10,9 @@ from nhp.capacity_conversion.ip_formulas import (
     calculate_beds,
     calculate_recovery_capacity,
     calculate_time_util_capacity,
-    derive_birthroom_beddays,
+    derive_beddays_from_spells,
     derive_recovery_occupancy_hours,
     derive_treatment_hours,
-    derive_zero_day_beddays,
 )
 from nhp.capacity_conversion.utils import run_single_activity_type
 
@@ -50,7 +49,7 @@ def derive_birth_related_ward_beddays(
         float,
         assumptions_df.at[assumptions["zero_day_los"], "Value"],
     )
-    zero_day_beddays = derive_zero_day_beddays(
+    zero_day_beddays = derive_beddays_from_spells(
         functional_areas_processed.xs(key=grouping + "_zerolos", level="grouping")[
             "spells"
         ],
@@ -61,9 +60,9 @@ def derive_birth_related_ward_beddays(
             float,
             assumptions_df.at[assumptions["birthroom_los"], "Value"],
         )
-        birth_room_beddays = derive_birthroom_beddays(
-            birthroom_los,
+        birth_room_beddays = derive_beddays_from_spells(
             functional_areas_processed.xs(key=grouping, level="grouping")["spells"],
+            birthroom_los,
         )
     else:
         # elective csections do not spend any time in the birth room
@@ -277,10 +276,7 @@ def calculate_maternity_birth_rooms(
         ],
     )
     output = assumptions["output"]
-    birthroom_beddays = derive_birthroom_beddays(
-        los,
-        functional_area_subgroup,
-    )
+    birthroom_beddays = derive_beddays_from_spells(functional_area_subgroup, los)
     results = pd.DataFrame(
         calculate_beds(birthroom_beddays, operational_days, occupancy)
     )

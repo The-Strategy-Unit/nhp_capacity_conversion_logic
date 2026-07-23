@@ -4,52 +4,26 @@ import pandas as pd
 
 
 @overload
-def derive_birthroom_beddays(time: float, spells: float) -> float: ...
+def derive_beddays_from_spells(spells: float, los: float) -> float: ...
 
 
 @overload
-def derive_birthroom_beddays(time: float, spells: pd.Series) -> pd.Series: ...
+def derive_beddays_from_spells(spells: pd.Series, los: float) -> pd.Series: ...
 
 
-def derive_birthroom_beddays(
-    los: float, spells: float | pd.Series
+def derive_beddays_from_spells(
+    spells: float | pd.Series, los: float
 ) -> float | pd.Series:
-    """Formula used for converting birth event spells to birth room bed days.
-    Aligns with FRM_BED_OCCUPANCY in conversion archetypes catalogue.
+    """Derive beddays given LOS assumption and number of spells
 
     Args:
-        los (float): Length of stay (mins)
         spells (float | pd.Series): Number of spells
+        los (float): LOS in minutes
 
     Returns:
-        float | pd.Series: Calculated workload requirement
+        float | pd.Series: Calculated beddays for spells
     """
     return spells * (los / 1440)
-
-
-@overload
-def derive_zero_day_beddays(zero_day_spells: float, zero_day_los: float) -> float: ...
-
-
-@overload
-def derive_zero_day_beddays(
-    zero_day_spells: pd.Series, zero_day_los: float
-) -> pd.Series: ...
-
-
-def derive_zero_day_beddays(
-    zero_day_spells: float | pd.Series, zero_day_los: float
-) -> float | pd.Series:
-    """Derive zero day beddays given zero day LOS assumption
-
-    Args:
-        zero_day_spells (float | pd.Series): Number of zero day spells
-        zero_day_los (float): Zero day LOS in minutes
-
-    Returns:
-        float | pd.Series: Calculated beddays for zero day spells
-    """
-    return zero_day_spells * (zero_day_los / 1440)
 
 
 @overload
