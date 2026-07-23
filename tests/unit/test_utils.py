@@ -37,13 +37,17 @@ def test_summarise_model_runs_with_multiple_cols():
     df = pd.DataFrame(
         {
             "model_run": list(range(0, 11)),
-            "group": ["group"] * 11,
+            "grouping": ["group"] * 11,
             "value": list(range(0, 11)),
             "value_2": list(range(0, 11)),
         }
-    ).set_index(["model_run", "group"])
-    with pytest.raises(ValueError, match="Expected exactly one value column."):
-        summarise_model_runs(df)
+    ).set_index(["model_run", "grouping"])
+    actual = summarise_model_runs(df)
+    assert actual.index.names == ["grouping", "measure"]
+    assert list(actual.index.get_level_values("measure").unique()) == [
+        "value",
+        "value_2",
+    ]
 
 
 def test_summarise_model_runs_with_multiple_indexes():
@@ -70,9 +74,9 @@ def test_get_baseline_activity():
 
     result = get_baseline_activity(aggregations)
 
-    assert pd.isna(result["a"])  # 3 is suppressed (1–7)
-    assert result["b"] == 10  # 10 rounds to 10
-    assert result["c"] == 100  # 100 rounds to 100
+    assert pd.isna(result.loc["a", "total"])  # 3 is suppressed (1–7)
+    assert result.loc["b", "total"] == 10  # 10 rounds to 10
+    assert result.loc["c", "total"] == 100  # 100 rounds to 100
 
 
 def test_calculate_prediction_intervals_and_mean():
