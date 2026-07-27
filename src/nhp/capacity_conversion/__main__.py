@@ -1,6 +1,6 @@
 import argparse
+import datetime
 import sys
-from datetime import datetime
 from logging import INFO
 
 import pandas as pd
@@ -38,7 +38,9 @@ def main():
         int: Exit code (0 for success, 2 for errors)
     """
     configure_logging(INFO)
-    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
+    capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
+        "%Y%m%d_%H%M%S"
+    )
 
     parser = argparse.ArgumentParser(
         description="Generate capacity outputs for all available activity types"

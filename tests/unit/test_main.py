@@ -12,7 +12,7 @@ def test_main(mocker):
 
     mock_now = mocker.Mock()
     mock_now.strftime.return_value = "20250101_120000"
-    mocker.patch(f"{main_path}.datetime").now.return_value = mock_now
+    mocker.patch(f"{main_path}.datetime.datetime").now.return_value = mock_now
 
     mock_parser = mocker.Mock()
     mock_args = mocker.Mock()

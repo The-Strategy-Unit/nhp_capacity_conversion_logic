@@ -442,7 +442,7 @@ def calculate_maternity_capacity(
     """
     logger.info("Calculating IP maternity capacity")
     results_list = []
-    for output, subgroup_config in config.items():
+    for subgroup_config in config.values():
         functional_area_subgroup = functional_areas_processed.xs(
             key=subgroup_config.subgroup, level="grouping"
         )[subgroup_config.col_to_use]

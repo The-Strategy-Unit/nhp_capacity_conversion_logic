@@ -1,11 +1,10 @@
 import argparse
+import datetime
 import os
 from collections.abc import Callable
-from datetime import datetime
 from logging import INFO
 
 import pandas as pd
-from azure.core.exceptions import ResourceNotFoundError
 from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
@@ -180,16 +179,11 @@ def load_metadata_from_ats(
     table_client = TableClient(
         endpoint=storage_endpoint, table_name=table_name, credential=credential
     )
-    try:
-        entity = table_client.get_entity(
-            partition_key=capacity_model_version, row_key=guid
-        )
-        metadata = dict(entity)
-        metadata["guid"] = guid
-        metadata["capacity_model_version"] = capacity_model_version
-        return metadata
-    except ResourceNotFoundError:
-        raise
+    entity = table_client.get_entity(partition_key=capacity_model_version, row_key=guid)
+    metadata = dict(entity)
+    metadata["guid"] = guid
+    metadata["capacity_model_version"] = capacity_model_version
+    return metadata
 
 
 def create_aggregations_path(metadata: dict) -> str:
@@ -300,7 +294,9 @@ def run_single_activity_type(
     optional preprocessing, capacity calculation, and Excel saving.
     """
     configure_logging(INFO)
-    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
+    capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
+        "%Y%m%d_%H%M%S"
+    )
 
     parser = argparse.ArgumentParser(
         description=f"Generate {activity_type.upper()} capacity outputs given functional area aggregations of {activity_type.upper()} activity"
