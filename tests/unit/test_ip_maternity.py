@@ -1,11 +1,14 @@
 import pandas as pd
-from pandas.testing import assert_series_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.ip_maternity import (
     calculate_maternity_capacity,
+    calculate_maternity_ward_beds,
     derive_birth_related_ward_beddays,
+    derive_total_maternity_ward_beddays,
     main,
     preprocess_ip_maternity_data,
+    ward_assumptions_dict,
 )
 
 
@@ -105,6 +108,67 @@ def test_derive_birth_related_ward_beddays_elective_csection(mocker):
     # Only the zero-day calculation should be performed
     mock_derive.assert_called_once()
     assert_series_equal(actual, expected)
+
+
+def test_derive_total_maternity_ward_beddays(mocker):
+    functional_areas_processed = pd.DataFrame(
+        {
+            "model_run": [1],
+            "grouping": ["maternity_overnight_no_birth"],
+            "beddays": [1],
+        }
+    ).set_index(["model_run", "grouping"])
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_birth_related_ward_beddays",
+        return_value=pd.Series([1], index=pd.Index([1], name="model_run")),
+    )
+    expected = pd.Series([5.0], index=pd.Index([1], name="model_run"))
+    actual = derive_total_maternity_ward_beddays(
+        functional_areas_processed,
+        assumptions_df=pd.DataFrame(),
+        assumptions_dict={
+            grouping: {"assumption": "assumption_name"}
+            for grouping in [
+                "maternity_normal_delivery",
+                "maternity_assisted_delivery",
+                "maternity_elective_csection",
+                "maternity_nonelective_csection",
+            ]
+        },
+    )
+    assert mock_derive.call_count == 4
+    assert_series_equal(actual, expected)
+
+
+def test_calculate_maternity_ward_beds(mocker):
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_total_maternity_ward_beddays",
+        return_value="total_maternity_ward_beddays",
+    )
+    mock_calculate = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.calculate_beds",
+        return_value=pd.Series([1.0], index=pd.Index([1], name="model_run")),
+    )
+    functional_areas_processed = pd.DataFrame()
+    assumptions_df = pd.DataFrame(
+        {"Value": ["MATERNITY_WARD_OCC", "MATERNITY_WARD_ANNUAL_OPERATIONAL_DAYS"]},
+        index=["MATERNITY_WARD_OCC", "MATERNITY_WARD_ANNUAL_OPERATIONAL_DAYS"],
+    )
+    expected = pd.DataFrame(
+        {"output": ["MATERNITY_WARD_BEDS"], "model_run": [1], "total": [1.0]}
+    ).set_index(["output", "model_run"])
+    actual = calculate_maternity_ward_beds(
+        functional_areas_processed, assumptions_df, ward_assumptions_dict
+    )
+    mock_derive.assert_called_once_with(
+        functional_areas_processed, assumptions_df, ward_assumptions_dict
+    )
+    mock_calculate.assert_called_once_with(
+        "total_maternity_ward_beddays",
+        "MATERNITY_WARD_ANNUAL_OPERATIONAL_DAYS",
+        "MATERNITY_WARD_OCC",
+    )
+    assert_frame_equal(actual, expected)
 
 
 def test_main(mocker):

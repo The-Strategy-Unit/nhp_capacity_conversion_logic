@@ -5,6 +5,7 @@ from typing import cast
 
 import pandas as pd
 from nhpy.utils import get_logger
+from numpy import float64
 
 from nhp.capacity_conversion.ip_formulas import (
     calculate_beds,
@@ -89,7 +90,7 @@ def derive_total_maternity_ward_beddays(
     Returns:
         pd.Series: Calculated total maternity ward beddays
     """
-    birth_related_ward_beddays = pd.Series()
+    birth_related_ward_beddays = pd.Series(dtype=float64)
     for grouping in [
         "maternity_normal_delivery",
         "maternity_assisted_delivery",
