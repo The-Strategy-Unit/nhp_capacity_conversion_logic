@@ -1,8 +1,8 @@
 import argparse
 import os
+from collections.abc import Callable
 from datetime import datetime
 from logging import INFO
-from typing import Callable
 
 import pandas as pd
 from azure.core.exceptions import ResourceNotFoundError
@@ -231,7 +231,7 @@ def validate_required_env_vars() -> dict:
             values[var] = value
 
     if missing:
-        raise EnvironmentError(
+        raise OSError(
             f"Missing required environment variables in .env: {', '.join(missing)}"
         )
 

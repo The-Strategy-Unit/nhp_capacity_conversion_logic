@@ -21,9 +21,9 @@ from nhp.capacity_conversion.utils import (
 def test_summarise_model_runs():
     df = pd.DataFrame(
         {
-            "model_run": list(range(0, 11)),
+            "model_run": list(range(11)),
             "group": ["group"] * 11,
-            "value": list(range(0, 11)),
+            "value": list(range(11)),
         }
     ).set_index(["model_run", "group"])
     expected = pd.DataFrame(
@@ -36,10 +36,10 @@ def test_summarise_model_runs():
 def test_summarise_model_runs_with_multiple_cols():
     df = pd.DataFrame(
         {
-            "model_run": list(range(0, 11)),
+            "model_run": list(range(11)),
             "grouping": ["group"] * 11,
-            "value": list(range(0, 11)),
-            "value_2": list(range(0, 11)),
+            "value": list(range(11)),
+            "value_2": list(range(11)),
         }
     ).set_index(["model_run", "grouping"])
     actual = summarise_model_runs(df)
@@ -53,10 +53,10 @@ def test_summarise_model_runs_with_multiple_cols():
 def test_summarise_model_runs_with_multiple_indexes():
     df = pd.DataFrame(
         {
-            "model_run": list(range(0, 11)),
+            "model_run": list(range(11)),
             "group": ["group"] * 11,
-            "value": list(range(0, 11)),
-            "index_2": list(range(0, 11)),
+            "value": list(range(11)),
+            "index_2": list(range(11)),
         }
     ).set_index(["model_run", "group", "index_2"])
     with pytest.raises(ValueError, match="Expected exactly one index column."):
@@ -140,9 +140,9 @@ def test_process_and_save_results_to_excel(mocker):
     )
     df = pd.DataFrame(
         {
-            "model_run": list(range(0, 11)),
+            "model_run": list(range(11)),
             "group": ["group"] * 11,
-            "value": list(range(0, 11)),
+            "value": list(range(11)),
         }
     ).set_index(["model_run", "group"])
     data_to_save = {
