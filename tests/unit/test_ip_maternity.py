@@ -8,6 +8,8 @@ from nhp.capacity_conversion.ip_maternity import (
     derive_total_maternity_ward_beddays,
     main,
     preprocess_ip_maternity_data,
+    process_maternity_birth_data,
+    process_theatres_obstetric_proc_data,
     ward_assumptions_dict,
 )
 
@@ -169,6 +171,95 @@ def test_calculate_maternity_ward_beds(mocker):
         "MATERNITY_WARD_OCC",
     )
     assert_frame_equal(actual, expected)
+
+
+def test_process_theatres_obstetric_proc_data():
+    functional_areas = pd.DataFrame(
+        {
+            "grouping": [
+                "maternity_elective_csection_nonzerolos",
+                "maternity_nonelective_csection_nonzerolos",
+                "maternity_elective_csection_zerolos",
+                "maternity_nonelective_csection_zerolos",
+                "maternity_group",
+            ],
+            "beddays": [1] * 5,
+            "spells": [1] * 5,
+        },
+        index=pd.Index([1] * 5, name="model_run"),
+    )
+    expected = pd.DataFrame(
+        {
+            "grouping": [
+                "maternity_elective_csection_nonzerolos",
+                "maternity_nonelective_csection_nonzerolos",
+                "maternity_elective_csection_zerolos",
+                "maternity_nonelective_csection_zerolos",
+                "maternity_group",
+                "obstetric_theatre_procedures",
+            ],
+            "beddays": [1] * 5 + [4],
+            "spells": [1] * 5 + [4],
+        },
+        index=pd.Index([1] * 6, name="model_run"),
+    )
+    actual = process_theatres_obstetric_proc_data(functional_areas)
+    assert_frame_equal(actual, expected)
+
+
+def test_process_maternity_birth_data():
+    functional_areas = pd.DataFrame(
+        {
+            "grouping": [
+                "maternity_group",
+                "maternity_normal_delivery_zerolos",
+                "maternity_normal_delivery_nonzerolos",
+                "maternity_assisted_delivery_zerolos",
+                "maternity_assisted_delivery_nonzerolos",
+                "maternity_nonelective_csection_zerolos",
+                "maternity_nonelective_csection_nonzerolos",
+            ],
+            "beddays": [0, 1, 1, 2, 2, 3, 3],
+            "spells": [0, 1, 1, 2, 2, 3, 3],
+        },
+        index=pd.Index([1] * 7, name="model_run"),
+    )
+    expected = pd.DataFrame(
+        {
+            "grouping": [
+                "maternity_group",
+                "maternity_normal_delivery_zerolos",
+                "maternity_normal_delivery_nonzerolos",
+                "maternity_assisted_delivery_zerolos",
+                "maternity_assisted_delivery_nonzerolos",
+                "maternity_nonelective_csection_zerolos",
+                "maternity_nonelective_csection_nonzerolos",
+                "maternity_normal_delivery",
+                "maternity_assisted_delivery",
+                "maternity_nonelective_csection",
+            ],
+            "beddays": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
+            "spells": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
+        },
+        index=pd.Index([1] * 10, name="model_run"),
+    )
+    actual = process_maternity_birth_data(functional_areas)
+    assert_frame_equal(actual, expected)
+
+
+def test_preprocess_ip_maternity_data(mocker):
+    mock_process_theaters = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.process_theatres_obstetric_proc_data",
+        return_value="processed_fun_areas",
+    )
+    mock_process_birth = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.process_maternity_birth_data",
+        return_value="processed_fun_areas",
+    )
+    fun_areas = pd.DataFrame()
+    preprocess_ip_maternity_data(fun_areas)
+    mock_process_theaters.assert_called_once_with(fun_areas)
+    mock_process_birth.assert_called_once_with("processed_fun_areas")
 
 
 def test_main(mocker):
