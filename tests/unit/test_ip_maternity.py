@@ -2,8 +2,12 @@ import pandas as pd
 from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.ip_maternity import (
+    MaternityConfig,
+    calculate_maternity_assessment_beds,
+    calculate_maternity_birth_rooms,
     calculate_maternity_capacity,
     calculate_maternity_ward_beds,
+    calculate_theatres_obstetric_proc,
     derive_birth_related_ward_beddays,
     derive_total_maternity_ward_beddays,
     main,
@@ -260,6 +264,135 @@ def test_preprocess_ip_maternity_data(mocker):
     preprocess_ip_maternity_data(fun_areas)
     mock_process_theaters.assert_called_once_with(fun_areas)
     mock_process_birth.assert_called_once_with("processed_fun_areas")
+
+
+def test_calculate_maternity_birth_rooms(mocker):
+    assumptions = {
+        "birthroom_los": "birthroom_los",
+        "birthroom_occupancy": "birthroom_occupancy",
+        "birthroom_operational_days": "birthroom_operational_days",
+        "output": "output",
+    }
+    assumptions_df = pd.DataFrame.from_dict(
+        assumptions, orient="index", columns=["Value"]
+    )
+    functional_area_subgroup = pd.Series()
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        return_value="birthroom_beddays",
+    )
+    mock_calculate = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.calculate_beds",
+        return_value=pd.Series([1.0], index=pd.Index([1], name="model_run")),
+    )
+    actual = calculate_maternity_birth_rooms(
+        assumptions, functional_area_subgroup, assumptions_df
+    )
+    assert actual.loc[("output", 1), 0] == 1.0
+    mock_derive.assert_called_once_with(functional_area_subgroup, "birthroom_los")
+    mock_calculate.assert_called_once_with(
+        "birthroom_beddays", "birthroom_operational_days", "birthroom_occupancy"
+    )
+
+
+def test_calculate_theatres_obstetric_proc(mocker):
+    assumptions = {
+        "procedure_time": "procedure_time",
+        "theatre_utilisation": "theatre_utilisation",
+        "theatre_annual_operational_hours": "theatre_annual_operational_hours",
+    }
+    assumptions_df = pd.DataFrame.from_dict(
+        assumptions, orient="index", columns=["Value"]
+    )
+    functional_area_subgroup = pd.Series()
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_treatment_hours",
+        return_value="treatment_hours",
+    )
+    mock_calculate = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.calculate_time_util_capacity",
+        return_value=pd.Series([1.0], index=pd.Index([1], name="model_run")),
+    )
+    actual = calculate_theatres_obstetric_proc(
+        assumptions, functional_area_subgroup, assumptions_df
+    )
+    assert actual.loc[("OBSTETRIC_PROC_THEATRES", 1), 0] == 1.0
+    mock_derive.assert_called_once_with("procedure_time", functional_area_subgroup)
+    mock_calculate.assert_called_once_with(
+        "treatment_hours", "theatre_annual_operational_hours", "theatre_utilisation"
+    )
+
+
+def test_calculate_maternity_assessment_beds(mocker):
+    assumptions = {
+        "recovery_time": "recovery_time",
+        "recovery_occupancy": "recovery_occupancy",
+        "recovery_annual_operational_hours": "recovery_annual_operational_hours",
+    }
+    assumptions_df = pd.DataFrame.from_dict(
+        assumptions, orient="index", columns=["Value"]
+    )
+    functional_area_subgroup = pd.Series()
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_recovery_occupancy_hours",
+        return_value="occupancy_hours",
+    )
+    mock_calculate = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.calculate_recovery_capacity",
+        return_value=pd.Series([1.0], index=pd.Index([1], name="model_run")),
+    )
+    actual = calculate_maternity_assessment_beds(
+        assumptions, functional_area_subgroup, assumptions_df
+    )
+    assert actual.loc[("MATERNITY_ASSESSMENT_BEDS", 1), 0] == 1.0
+    mock_derive.assert_called_once_with(functional_area_subgroup, "recovery_time")
+    mock_calculate.assert_called_once_with(
+        "occupancy_hours", "recovery_annual_operational_hours", "recovery_occupancy"
+    )
+
+
+def test_calculate_maternity_capacity(mocker):
+    def mock_formula(
+        assumptions,
+        functional_area_subgroup,
+        assumptions_df,
+    ):
+        return pd.DataFrame(
+            {"output": ["output"], "model_run": [1], "total": [1]}
+        ).set_index(["output", "model_run"])
+
+    fake_config = {
+        "output": MaternityConfig(
+            subgroup="subgroup",
+            col_to_use="spells",
+            formula=mock_formula,
+            assumptions={"assumption": "assumption"},
+        )
+    }
+
+    functional_areas = pd.DataFrame(
+        {"model_run": [1], "grouping": ["subgroup"], "spells": [1], "beddays": [2]}
+    ).set_index(["model_run", "grouping"])
+
+    assumptions_df = pd.DataFrame({"Value": {"some": 10}})
+    mock_calculate_ward_beds = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.calculate_maternity_ward_beds",
+        return_value=pd.DataFrame(
+            {"output": ["ward_beds"], "model_run": [1], "total": [1]}
+        ).set_index(["output", "model_run"]),
+    )
+    actual = calculate_maternity_capacity(
+        functional_areas,
+        assumptions_df,
+        config=fake_config,
+    )
+    mock_calculate_ward_beds.assert_called_once_with(
+        functional_areas, assumptions_df, ward_assumptions_dict
+    )
+    expected = pd.DataFrame(
+        {"output": ["output", "ward_beds"], "total": [1, 1], "model_run": [1, 1]}
+    ).set_index(["output", "model_run"])
+    assert_frame_equal(actual, expected)
 
 
 def test_main(mocker):

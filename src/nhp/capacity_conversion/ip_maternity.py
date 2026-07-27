@@ -247,7 +247,6 @@ def preprocess_ip_maternity_data(functional_areas: pd.DataFrame) -> pd.DataFrame
 
 
 def calculate_maternity_birth_rooms(
-    subgroup: str,
     assumptions: dict[str, str],
     functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
@@ -255,7 +254,6 @@ def calculate_maternity_birth_rooms(
     """Calculates capacity requirements for obstetric theatres using the FRM_TIME_UTIL conversion archetype
 
     Args:
-        subgroup (str): Name of functional area subgroup
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
         functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
@@ -287,7 +285,6 @@ def calculate_maternity_birth_rooms(
 
 
 def calculate_theatres_obstetric_proc(
-    subgroup: str,
     assumptions: dict[str, str],
     functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
@@ -295,7 +292,6 @@ def calculate_theatres_obstetric_proc(
     """Calculates capacity requirements for obstetric theatres using the FRM_TIME_UTIL conversion archetype
 
     Args:
-        subgroup (str): Name of functional area subgroup
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
         functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
@@ -334,7 +330,6 @@ def calculate_theatres_obstetric_proc(
 
 
 def calculate_maternity_assessment_beds(
-    subgroup: str,
     assumptions: dict[str, str],
     functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
@@ -342,7 +337,6 @@ def calculate_maternity_assessment_beds(
     """Calculates capacity requirements for maternity assessment beds using the FRM_RECOVERY_OCCUPANCY conversion archetype
 
     Args:
-        subgroup (str): Name of functional area subgroup
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
         functional_area_subgroup (pd.Series): Functional area groupings in a Pandas Series, with the index name model_run
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
@@ -454,7 +448,6 @@ def calculate_maternity_capacity(
         )[subgroup_config.col_to_use]
         results_list.append(
             subgroup_config.formula(
-                subgroup=subgroup_config.subgroup,
                 assumptions=subgroup_config.assumptions,
                 functional_area_subgroup=functional_area_subgroup,
                 assumptions_df=assumptions_df,
