@@ -251,7 +251,7 @@ def calculate_maternity_birth_rooms(
     functional_area_subgroup: pd.Series,
     assumptions_df: pd.DataFrame,
 ) -> pd.DataFrame:
-"""Calculates capacity requirements for maternity birth rooms using the FRM_BED_OCCUPANCY conversion archetype
+    """Calculates capacity requirements for maternity birth rooms using the FRM_BED_OCCUPANCY conversion archetype
 
     Args:
         assumptions (dict[str, str]): Mapping of assumption name to use for the specific subgroup
