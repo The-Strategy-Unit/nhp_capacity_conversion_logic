@@ -1,10 +1,29 @@
 from nhp.capacity_conversion.ip_formulas import (
+    calculate_beds,
     calculate_beds_from_session_capacity,
     calculate_recovery_capacity,
     calculate_time_util_capacity,
+    derive_beddays_from_spells,
     derive_recovery_occupancy_hours,
     derive_treatment_hours,
 )
+
+
+def test_derive_beddays_from_spells():
+    zero_day_spells = 2
+    zero_day_los = 2880
+    expected = 4
+    actual = derive_beddays_from_spells(zero_day_spells, zero_day_los)
+    assert actual == expected
+
+
+def test_calculate_beds():
+    beddays = 20
+    operational_days = 2
+    occupancy = 5
+    expected = 2
+    actual = calculate_beds(beddays, operational_days, occupancy)
+    assert actual == expected
 
 
 def test_derive_treatment_hours():

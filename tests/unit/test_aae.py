@@ -89,7 +89,7 @@ def test_calculate_aae_capacity(mocker, caplog):
     assert "Calculating A&E capacity" in caplog.text
 
     # test calls to mocked functions
-    args, kwargs = mock_workload.call_args
+    args, _kwargs = mock_workload.call_args
 
     assert args[1] == "LOS"
     assert_series_equal(

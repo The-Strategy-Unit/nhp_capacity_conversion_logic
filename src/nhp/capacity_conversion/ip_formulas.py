@@ -4,6 +4,58 @@ import pandas as pd
 
 
 @overload
+def derive_beddays_from_spells(spells: float, los: float) -> float: ...
+
+
+@overload
+def derive_beddays_from_spells(spells: pd.Series, los: float) -> pd.Series: ...
+
+
+def derive_beddays_from_spells(
+    spells: float | pd.Series, los: float
+) -> float | pd.Series:
+    """Derive beddays given LOS assumption and number of spells
+
+    Args:
+        spells (float | pd.Series): Number of spells
+        los (float): LOS in minutes
+
+    Returns:
+        float | pd.Series: Calculated beddays for spells
+    """
+    return spells * (los / 1440)
+
+
+@overload
+def calculate_beds(
+    beddays: float, operational_days: float, occupancy: float
+) -> float: ...
+
+
+@overload
+def calculate_beds(
+    beddays: pd.Series, operational_days: float, occupancy: float
+) -> pd.Series: ...
+
+
+def calculate_beds(
+    beddays: float | pd.Series, operational_days: float, occupancy: float
+) -> float | pd.Series:
+    """Formula used for converting beddays to required beds.
+    Aligns with FRM_BED_OCCUPANCY in conversion archetypes catalogue.
+
+    Args:
+        beddays (float | pd.Series): Number of beddays
+        operational_days (float): Annual operational days
+        occupancy (float): Occupancy rate
+
+    Returns:
+        float | pd.Series: Calculated bed capacity requirement
+    """
+    return beddays / (operational_days * occupancy)
+
+
+@overload
 def derive_treatment_hours(time: float, procedures: float) -> float: ...
 
 
