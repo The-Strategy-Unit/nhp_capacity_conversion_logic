@@ -112,6 +112,3 @@ The development deployment was verified on 4 August 2026 using Posit Connect
 
 > NHP Capacity Conversion is running.
 
-The default PIP build failed during Connect's `pip-compile` bootstrap. Selecting
-the `UV` package installer explicitly allowed the deployment to build
-successfully.
