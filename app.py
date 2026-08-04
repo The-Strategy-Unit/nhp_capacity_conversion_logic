@@ -1,6 +1,5 @@
 from shiny import App, Inputs, Outputs, Session, render, ui
 
-
 app_ui = ui.page_fluid(
     ui.output_text("message"),
     title="NHP Capacity Conversion",
