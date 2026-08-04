@@ -1,0 +1,28 @@
+name: Application requirements
+
+on: pull_request
+
+jobs:
+  requirements-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Regenerate application requirements
+        run: >
+          uv export
+          --only-group app
+          --no-emit-project
+          --no-hashes
+          --output-file requirements.txt
+
+      - name: Check application requirements are current
+        run: git diff --exit-code -- requirements.txt

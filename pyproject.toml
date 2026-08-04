@@ -27,12 +27,16 @@ where = ["src"]
 nhp-products = { git = "https://github.com/the-strategy-unit/nhp_products.git", rev = "v4.4.0" }
 
 [dependency-groups]
+app = [
+    "shiny[theme]>=1.7.0,<2", # 1.7.0 passed the Connect deployment smoke test; review before Shiny 2.
+]
 dev = [
     "pandas-stubs>=3.0.0.260204",
     "pyright>=1.1.408",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "pytest-mock>=3.15.1",
+    "rsconnect-python>=1.30.0,<2",
     "ruff>=0.15.0",
     "ty>=0.0.19",
 ]

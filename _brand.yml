@@ -1,0 +1,12 @@
+meta:
+  name: NHP Capacity Conversion
+
+color:
+  palette:
+    nhp-blue: "#337AB7"
+    nhp-black: "#222222"
+    nhp-white: "#FFFFFF"
+
+  foreground: nhp-black
+  background: nhp-white
+  primary: nhp-blue
