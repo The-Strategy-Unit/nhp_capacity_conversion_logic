@@ -36,6 +36,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "pytest-mock>=3.15.1",
+    "pytest-playwright>=0.8.0",
     "rsconnect-python>=1.30.0,<2",
     "ruff>=0.15.0",
     "ty>=0.0.19",
@@ -56,5 +57,5 @@ skip_empty = false
 show_missing = true
 
 [tool.pytest.ini_options]
-addopts = "--ignore=tests -vv"
-testpaths = ["tests/unit"]
+addopts = "-vv"
+testpaths = ["tests"]

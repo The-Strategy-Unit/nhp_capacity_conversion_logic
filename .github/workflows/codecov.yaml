@@ -23,14 +23,23 @@ jobs:
           version: "latest"
           activate-environment: true
 
+      - name: Install Chromium
+        run: >
+          uv run --locked --group app
+          python -m playwright install --with-deps chromium
+
       - name: Generate coverage report
         run: >
           uv run --locked --group app python -m pytest
-          --cov=.
+          --cov=src/nhp
           --cov-branch
           --cov-report xml:coverage.xml
           tests/unit
-          --ignore=tests
+
+      - name: Run end-to-end smoke tests
+        run: >
+          uv run --locked --group app
+          python -m pytest tests/e2e
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v5
