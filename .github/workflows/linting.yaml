@@ -28,10 +28,6 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           version: "latest"
-          activate-environment: true
 
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Generate Report
-        run: uvx ty check .
+      - name: Type check
+        run: uv run --locked --group app ty check .

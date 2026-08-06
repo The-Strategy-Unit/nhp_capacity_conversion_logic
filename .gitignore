@@ -45,8 +45,9 @@ docs/
 # translation temp files
 po/*~
 
-# RStudio Connect folder
+# Posit Connect local deployment metadata
 rsconnect/
+rsconnect-python/
 
 # Unit test / coverage reports
 htmlcov/
@@ -197,6 +198,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
