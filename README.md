@@ -65,9 +65,17 @@ The application requires these runtime environment variables:
 
 - `AZ_STORAGE_EP`: Azure Storage account endpoint.
 - `AZ_STORAGE_RESULTS`: results container name.
-- `AZ_FUNC_AGG_BLOB_PATH`: container-relative path to the known functional
-  aggregation blob, in the form
-  `functional-aggregations/<version>/<guid>/<activity_type>.parquet`.
+- `AZ_FUNC_AGG_OP_PATH`:
+  `functional-aggregations/<version>/<guid>/op.parquet`.
+- `AZ_FUNC_AGG_AAE_PATH`:
+  `functional-aggregations/<version>/<guid>/aae.parquet`.
+- `AZ_FUNC_AGG_IP_DAYCASE_PATH`:
+  `functional-aggregations/<version>/<guid>/ip_daycase.parquet`.
+- `AZ_FUNC_AGG_IP_MAT_PATH`:
+  `functional-aggregations/<version>/<guid>/ip_maternity.parquet`.
+
+All four paths are relative to the results container and must reference the
+same model version and GUID.
 
 Azure authentication uses `DefaultAzureCredential`; the Connect runtime must
 provide a supported credential with read access to the results container.
@@ -93,7 +101,10 @@ uv run --locked --group app rsconnect deploy shiny \
     --entrypoint app:app \
     --requirements-file requirements.txt \
     --package-installer UV \
-    -E AZ_FUNC_AGG_BLOB_PATH \
+    -E AZ_FUNC_AGG_OP_PATH \
+    -E AZ_FUNC_AGG_AAE_PATH \
+    -E AZ_FUNC_AGG_IP_DAYCASE_PATH \
+    -E AZ_FUNC_AGG_IP_MAT_PATH \
     -E AZ_STORAGE_EP \
     -E AZ_STORAGE_RESULTS \
     --exclude "**" \
@@ -121,7 +132,10 @@ uv run --locked --group app rsconnect deploy shiny \
     --entrypoint app:app \
     --requirements-file requirements.txt \
     --package-installer UV \
-    -E AZ_FUNC_AGG_BLOB_PATH \
+    -E AZ_FUNC_AGG_OP_PATH \
+    -E AZ_FUNC_AGG_AAE_PATH \
+    -E AZ_FUNC_AGG_IP_DAYCASE_PATH \
+    -E AZ_FUNC_AGG_IP_MAT_PATH \
     -E AZ_STORAGE_EP \
     -E AZ_STORAGE_RESULTS \
     --exclude "**" \

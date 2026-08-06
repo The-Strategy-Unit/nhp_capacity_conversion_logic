@@ -3,6 +3,7 @@ import os
 from io import BytesIO
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import call
 
 import pandas as pd
 import pytest
@@ -21,15 +22,27 @@ def _load_app_module() -> ModuleType:
 
 app = _load_app_module()
 
+FUNCTIONAL_AGGREGATION_ENVIRONMENT = {
+    "AZ_FUNC_AGG_OP_PATH": "functional-aggregations/v1/guid-123/op.parquet",
+    "AZ_FUNC_AGG_AAE_PATH": "functional-aggregations/v1/guid-123/aae.parquet",
+    "AZ_FUNC_AGG_IP_DAYCASE_PATH": (
+        "functional-aggregations/v1/guid-123/ip_daycase.parquet"
+    ),
+    "AZ_FUNC_AGG_IP_MAT_PATH": (
+        "functional-aggregations/v1/guid-123/ip_maternity.parquet"
+    ),
+}
+
 
 def test_load_capacity_results(mocker):
     mocker.patch.dict(
         os.environ,
         {
-            "AZ_FUNC_AGG_BLOB_PATH": ("functional-aggregations/v1/guid-123/op.parquet"),
+            **FUNCTIONAL_AGGREGATION_ENVIRONMENT,
             "AZ_STORAGE_EP": "https://storage.example.com",
             "AZ_STORAGE_RESULTS": "results",
         },
+        clear=True,
     )
     mock_datetime = mocker.patch.object(app, "datetime")
     mock_datetime.now.return_value.strftime.return_value = "20260101_120000"
@@ -50,21 +63,54 @@ def test_load_capacity_results(mocker):
     mocker.patch.object(app, "load_assumptions", return_value=assumptions)
     process = mocker.patch.object(app, "process_activity_type")
 
-    activity_type, data_to_save = app._load_capacity_results()
+    data_to_save = app._load_capacity_results()
 
-    assert activity_type == "op"
     connect.assert_called_once_with("https://storage.example.com", "results")
-    load_parquet.assert_called_once_with(
-        connection,
-        "functional-aggregations/v1/guid-123/op.parquet",
+    load_parquet.assert_has_calls(
+        [
+            call(connection, FUNCTIONAL_AGGREGATION_ENVIRONMENT[environment_variable])
+            for environment_variable in app.FUNCTIONAL_AGGREGATION_ENV_VARS.values()
+        ]
     )
-    process.assert_called_once_with(
-        "op",
-        aggregations,
-        app.calculate_op_capacity,
-        assumptions,
-        data_to_save,
+    assert load_parquet.call_count == 4
+    process.assert_has_calls(
+        [
+            call(
+                "op",
+                aggregations,
+                app.calculate_op_capacity,
+                assumptions,
+                data_to_save,
+                preprocess=None,
+            ),
+            call(
+                "aae",
+                aggregations,
+                app.calculate_aae_capacity,
+                assumptions,
+                data_to_save,
+                preprocess=None,
+            ),
+            call(
+                "ip_daycase",
+                aggregations,
+                app.calculate_daycase_capacity,
+                assumptions,
+                data_to_save,
+                preprocess=None,
+            ),
+            call(
+                "ip_maternity",
+                aggregations,
+                app.calculate_maternity_capacity,
+                assumptions,
+                data_to_save,
+                preprocess=app.preprocess_ip_maternity_data,
+            ),
+        ]
     )
+    assert process.call_count == 4
+    mock_datetime.now.assert_called_once_with(tz=app.UTC)
     assert data_to_save["metadata"].to_dict() == {
         "guid": "guid-123",
         "capacity_model_version": "v1",
@@ -75,27 +121,33 @@ def test_load_capacity_results(mocker):
 def test_load_capacity_results_rejects_invalid_blob_path(mocker):
     mocker.patch.dict(
         os.environ,
-        {"AZ_FUNC_AGG_BLOB_PATH": "op.parquet"},
+        {
+            **FUNCTIONAL_AGGREGATION_ENVIRONMENT,
+            "AZ_FUNC_AGG_OP_PATH": "op.parquet",
+        },
+        clear=True,
     )
 
     with pytest.raises(
         ValueError,
-        match="AZ_FUNC_AGG_BLOB_PATH must have the form",
+        match="AZ_FUNC_AGG_OP_PATH must have the form",
     ):
         app._load_capacity_results()
 
 
-def test_load_capacity_results_rejects_unknown_activity_type(mocker):
+def test_load_capacity_results_rejects_different_model_results(mocker):
     mocker.patch.dict(
         os.environ,
         {
-            "AZ_FUNC_AGG_BLOB_PATH": (
-                "functional-aggregations/v1/guid-123/unknown.parquet"
-            )
+            **FUNCTIONAL_AGGREGATION_ENVIRONMENT,
+            "AZ_FUNC_AGG_AAE_PATH": ("functional-aggregations/v1/guid-456/aae.parquet"),
         },
+        clear=True,
     )
 
-    with pytest.raises(ValueError, match="Unsupported aggregation type 'unknown'"):
+    with pytest.raises(
+        ValueError, match="must reference the same model version and GUID"
+    ):
         app._load_capacity_results()
 
 
