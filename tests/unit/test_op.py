@@ -93,7 +93,7 @@ def test_calculate_op_capacity(mocker, caplog):
 
     assert "Calculating OP capacity" in caplog.text
     # assert calls
-    args, kwargs = mock_workload.call_args
+    args, _kwargs = mock_workload.call_args
 
     assert args[:3] == ("TIME", "DNA_RATE", "DNA_TIME")
     assert_series_equal(

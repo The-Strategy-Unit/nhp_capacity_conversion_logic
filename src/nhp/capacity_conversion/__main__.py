@@ -1,6 +1,6 @@
 import argparse
+import datetime
 import sys
-from datetime import datetime
 from logging import INFO
 
 import pandas as pd
@@ -12,6 +12,10 @@ from nhpy.utils import (
 from nhp.capacity_conversion.aae import calculate_aae_capacity
 from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.ip_daycase import calculate_daycase_capacity
+from nhp.capacity_conversion.ip_maternity import (
+    calculate_maternity_capacity,
+    preprocess_ip_maternity_data,
+)
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
@@ -34,7 +38,9 @@ def main():
         int: Exit code (0 for success, 2 for errors)
     """
     configure_logging(INFO)
-    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
+    capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
+        "%Y%m%d_%H%M%S"
+    )
 
     parser = argparse.ArgumentParser(
         description="Generate capacity outputs for all available activity types"
@@ -98,6 +104,20 @@ def main():
         calculate_daycase_capacity,
         assumptions,
         data_to_save,
+    )
+    ip_maternity_aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"],
+        config["AZ_STORAGE_RESULTS"],
+        aggregations_path,
+        "ip_maternity",
+    )
+    process_activity_type(
+        "ip_maternity",
+        ip_maternity_aggregations,
+        calculate_maternity_capacity,
+        assumptions,
+        data_to_save,
+        preprocess=preprocess_ip_maternity_data,
     )
 
     process_and_save_results_to_excel(data_to_save)

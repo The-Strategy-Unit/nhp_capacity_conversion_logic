@@ -1,11 +1,10 @@
 import argparse
+import datetime
 import os
-from datetime import datetime
+from collections.abc import Callable
 from logging import INFO
-from typing import Callable
 
 import pandas as pd
-from azure.core.exceptions import ResourceNotFoundError
 from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
@@ -24,7 +23,7 @@ logger = get_logger()
 SUPPRESSION_THRESHOLD = 7  # suppress counts 1–7; round all others to nearest 5
 
 
-def get_baseline_activity(aggregations: pd.DataFrame) -> pd.Series:
+def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
     """Extract baseline (model run 0) total activity per functional area.
 
     Applies NHS England HES suppression rules:
@@ -36,9 +35,14 @@ def get_baseline_activity(aggregations: pd.DataFrame) -> pd.Series:
             grouping and total columns
 
     Returns:
-        pd.Series: Baseline activity per grouping, suppressed and rounded
+        pd.DataFrame: Baseline activity per grouping, suppressed and rounded
     """
-    baseline = aggregations[aggregations.index == 0].groupby("grouping")["total"].sum()
+    value_columns = aggregations.select_dtypes("number").columns.tolist()
+    baseline = (
+        aggregations.loc[aggregations.index == 0]
+        .groupby("grouping")[value_columns]
+        .sum()
+    )
 
     def _suppress_and_round(x: float) -> float | None:
         if 1 <= x <= SUPPRESSION_THRESHOLD:
@@ -77,19 +81,25 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Summarised DataFrame
     """
-    value_cols = [c for c in df.columns if c != "model_run"]
-
-    if len(value_cols) != 1:
-        raise ValueError("Expected exactly one value column.")
-
-    value_col = value_cols[0]
-
     group_col_names = [name for name in df.index.names if name != "model_run"]
     if len(group_col_names) != 1:
         raise ValueError("Expected exactly one index column.")
-
+    value_cols = [c for c in df.columns if c != "model_run"]
+    if len(value_cols) > 1:
+        df_list = []
+        for col in value_cols:
+            summary_df = pd.DataFrame(
+                df.groupby(level=group_col_names)[col].agg(
+                    p10=lambda s: s.quantile(0.10),
+                    mean="mean",
+                    p90=lambda s: s.quantile(0.90),
+                )
+            )
+            summary_df["measure"] = col
+            df_list.append(summary_df.reset_index())
+        return pd.concat(df_list).set_index(["grouping", "measure"]).sort_index()
     return pd.DataFrame(
-        df.groupby(level=group_col_names)[value_col].agg(
+        df.groupby(level=group_col_names)[value_cols[0]].agg(
             p10=lambda s: s.quantile(0.10),
             mean="mean",
             p90=lambda s: s.quantile(0.90),
@@ -169,16 +179,11 @@ def load_metadata_from_ats(
     table_client = TableClient(
         endpoint=storage_endpoint, table_name=table_name, credential=credential
     )
-    try:
-        entity = table_client.get_entity(
-            partition_key=capacity_model_version, row_key=guid
-        )
-        metadata = dict(entity)
-        metadata["guid"] = guid
-        metadata["capacity_model_version"] = capacity_model_version
-        return metadata
-    except ResourceNotFoundError:
-        raise
+    entity = table_client.get_entity(partition_key=capacity_model_version, row_key=guid)
+    metadata = dict(entity)
+    metadata["guid"] = guid
+    metadata["capacity_model_version"] = capacity_model_version
+    return metadata
 
 
 def create_aggregations_path(metadata: dict) -> str:
@@ -220,7 +225,7 @@ def validate_required_env_vars() -> dict:
             values[var] = value
 
     if missing:
-        raise EnvironmentError(
+        raise OSError(
             f"Missing required environment variables in .env: {', '.join(missing)}"
         )
 
@@ -289,7 +294,9 @@ def run_single_activity_type(
     optional preprocessing, capacity calculation, and Excel saving.
     """
     configure_logging(INFO)
-    capacity_conversion_runtime = datetime.now().strftime("%Y%m%d_%H%M%S")
+    capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
+        "%Y%m%d_%H%M%S"
+    )
 
     parser = argparse.ArgumentParser(
         description=f"Generate {activity_type.upper()} capacity outputs given functional area aggregations of {activity_type.upper()} activity"
