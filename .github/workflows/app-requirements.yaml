@@ -11,7 +11,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          version: "latest"
+          version: "0.12.1"
 
       - name: Check lockfile
         run: uv lock --check
@@ -19,10 +19,15 @@ jobs:
       - name: Regenerate application requirements
         run: >
           uv export
-          --only-group app
-          --no-emit-project
+          --no-default-groups
+          --group app
           --no-hashes
           --output-file requirements.txt
+
+      - name: Verify Connect dependency resolution
+        run: >
+          uv pip compile requirements.txt
+          --output-file /tmp/nhp-capacity-connect-requirements.txt
 
       - name: Check application requirements are current
         run: git diff --exit-code -- requirements.txt
