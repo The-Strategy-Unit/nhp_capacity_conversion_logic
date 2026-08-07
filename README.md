@@ -65,6 +65,8 @@ The application requires these runtime environment variables:
 
 - `AZ_STORAGE_EP`: Azure Storage account endpoint.
 - `AZ_STORAGE_RESULTS`: results container name.
+- `FEEDBACK_FORM_URL`: the `src` URL from the Microsoft Forms
+  [embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
 - `AZ_FUNC_AGG_OP_PATH`:
   `functional-aggregations/<version>/<guid>/op.parquet`.
 - `AZ_FUNC_AGG_AAE_PATH`:
@@ -76,6 +78,11 @@ The application requires these runtime environment variables:
 
 All four paths are relative to the results container and must reference the
 same model version and GUID.
+
+In Microsoft Forms, select **Collect responses**, choose the response audience,
+then select **Embed** and **Copy**. Set `FEEDBACK_FORM_URL` to only the URL in
+the copied iframe's `src` attribute, not the complete iframe HTML. If it is
+unset, the application displays a configuration warning.
 
 Azure authentication uses `DefaultAzureCredential`; the Connect runtime must
 provide a supported credential with read access to the results container.
@@ -107,6 +114,7 @@ uv run --locked --group app rsconnect deploy shiny \
     -E AZ_FUNC_AGG_IP_MAT_PATH \
     -E AZ_STORAGE_EP \
     -E AZ_STORAGE_RESULTS \
+    -E FEEDBACK_FORM_URL \
     --exclude "**" \
     . \
     app.py \
@@ -138,6 +146,7 @@ uv run --locked --group app rsconnect deploy shiny \
     -E AZ_FUNC_AGG_IP_MAT_PATH \
     -E AZ_STORAGE_EP \
     -E AZ_STORAGE_RESULTS \
+    -E FEEDBACK_FORM_URL \
     --exclude "**" \
     . \
     app.py \
