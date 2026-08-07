@@ -16,6 +16,9 @@ dependencies = [
     "pandas-stubs>=3.0.0.260204",
 ]
 
+[project.scripts]
+nhp-deploy = "nhp.deploy:main"
+
 [build-system]
 requires = ["setuptools>=80", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"

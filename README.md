@@ -80,78 +80,25 @@ same model version and GUID.
 Azure authentication uses `DefaultAzureCredential`; the Connect runtime must
 provide a supported credential with read access to the results container.
 
-The deployment commands require `CONNECT_SERVER` and `CONNECT_API_KEY` to be
-exported in the current shell. Do not store the API key in this repository.
-Confirm connectivity before deploying:
+The interactive deployment helper loads `.env` automatically and does not
+override variables already set in the current environment. `.env` is ignored
+by Git; never commit the API key. Set these variables before deploying:
+
+- `CONNECT_SERVER`: the Posit Connect server URL.
+- `CONNECT_API_KEY`: a Posit Connect API key with permission to publish.
+- `CONNECT_APP_ID`: the existing content GUID, required only for a
+  redeployment. This is not the numeric content ID.
+
+From the repository root, start the deployment interface with:
 
 ```console
-uv run --locked --group app rsconnect details \
-    -s "$CONNECT_SERVER" \
-    -k "$CONNECT_API_KEY"
+uv run --locked --group dev nhp-deploy
 ```
 
-For the initial deployment only, create new content with:
-
-```console
-uv run --locked --group app rsconnect deploy shiny \
-    -s "$CONNECT_SERVER" \
-    -k "$CONNECT_API_KEY" \
-    --new \
-    --title "NHP Capacity Conversion (development)" \
-    --entrypoint app:app \
-    --requirements-file requirements.txt \
-    --package-installer UV \
-    -E AZ_FUNC_AGG_OP_PATH \
-    -E AZ_FUNC_AGG_AAE_PATH \
-    -E AZ_FUNC_AGG_IP_DAYCASE_PATH \
-    -E AZ_FUNC_AGG_IP_MAT_PATH \
-    -E AZ_STORAGE_EP \
-    -E AZ_STORAGE_RESULTS \
-    --exclude "**" \
-    . \
-    app.py \
-    _brand.yml \
-    README.md \
-    pyproject.toml \
-    requirements.txt \
-    src/nhp/__init__.py \
-    src/nhp/capacity_conversion/*.py
-```
-
-Do not use `--new` for subsequent deployments. Update the existing development
-content using its Connect content GUID from the **Info** panel. Set
-`CONNECT_APP_ID` to that GUID in the current shell; this is a deployment
-identifier, not a secret. Do not use the numeric content ID.
-
-```console
-uv run --locked --group app rsconnect deploy shiny \
-    -s "$CONNECT_SERVER" \
-    -k "$CONNECT_API_KEY" \
-    --app-id "$CONNECT_APP_ID" \
-    --title "NHP Capacity Conversion (development)" \
-    --entrypoint app:app \
-    --requirements-file requirements.txt \
-    --package-installer UV \
-    -E AZ_FUNC_AGG_OP_PATH \
-    -E AZ_FUNC_AGG_AAE_PATH \
-    -E AZ_FUNC_AGG_IP_DAYCASE_PATH \
-    -E AZ_FUNC_AGG_IP_MAT_PATH \
-    -E AZ_STORAGE_EP \
-    -E AZ_STORAGE_RESULTS \
-    --exclude "**" \
-    . \
-    app.py \
-    _brand.yml \
-    README.md \
-    pyproject.toml \
-    requirements.txt \
-    src/nhp/__init__.py \
-    src/nhp/capacity_conversion/*.py
-```
-
-`rsconnect` accepts files, not directories, as extra bundle arguments. The
-explicit source paths above are required because `--exclude "**"` excludes
-everything that is not named.
+Choose whether to create new content or replace an existing deployment. Before
+deploying, the helper checks the required tools, bundle files, and environment
+variables, then verifies the Connect server and asks for confirmation. It does
+not display the API key or include it in subprocess arguments.
 
 After the initial deployment, set its **Custom content URL** under
 **Settings → Manage access** to:
