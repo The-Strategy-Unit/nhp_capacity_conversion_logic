@@ -133,15 +133,6 @@ def _create_workbook(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> bytes
 
 app_ui = ui.page_fluid(
     ui.div(
-        ui.tags.a(
-            " Feedback",
-            href=os.getenv("FEEDBACK_FORM_URL", "#"),
-            target="_blank",
-            class_="btn btn-primary",
-        ),
-        class_="d-flex justify-content-end border-bottom bg-light py-2",
-    ),
-    ui.div(
         ui.h1("Capacity Conversion Estimates", class_="mb-3"),
         ui.card(
             ui.card_header("Capacity estimates"),
@@ -154,13 +145,6 @@ app_ui = ui.page_fluid(
                 ),
                 class_="d-flex justify-content-end mt-3",
             ),
-        ),
-        ui.card(
-            ui.card_header("Feedback"),
-            ui.p(
-                "Please use the feedback button to share your comments about this app."
-            ),
-            class_="mt-3",
         ),
         class_="py-4",
         style="max-width: 920px;",
