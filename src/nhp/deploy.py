@@ -26,6 +26,7 @@ RUNTIME_ENV_VARS = (
     "AZ_FUNC_AGG_IP_MAT_PATH",
     "AZ_STORAGE_EP",
     "AZ_STORAGE_RESULTS",
+    "FEEDBACK_FORM_URL",
 )
 BUNDLE_FILES = (
     "app.py",
@@ -239,14 +240,17 @@ def main() -> int:
         return 1
 
     print("\nChecking the Posit Connect connection...")
-    if run_command(
-        [
-            rsconnect_executable,
-            "details",
-            "--server",
-            os.environ["CONNECT_SERVER"],
-        ]
-    ) != 0:
+    if (
+        run_command(
+            [
+                rsconnect_executable,
+                "details",
+                "--server",
+                os.environ["CONNECT_SERVER"],
+            ]
+        )
+        != 0
+    ):
         print("Connection check failed; deployment was not started.")
         return 1
 

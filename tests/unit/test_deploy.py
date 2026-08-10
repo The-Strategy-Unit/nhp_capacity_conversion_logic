@@ -69,6 +69,22 @@ def test_new_deployment_does_not_require_app_id(
     assert checks[".env file"].required is False
 
 
+def test_new_deployment_requires_feedback_form_url(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _configure_valid_preflight(monkeypatch, tmp_path)
+    monkeypatch.delenv("FEEDBACK_FORM_URL")
+
+    checks = {
+        check.label: check
+        for check in deploy.collect_preflight_checks(deploy.DeploymentType.NEW)
+    }
+
+    assert checks["FEEDBACK_FORM_URL"].passed is False
+    assert checks["FEEDBACK_FORM_URL"].required is True
+
+
 def test_redeployment_requires_app_id(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
