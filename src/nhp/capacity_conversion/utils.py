@@ -352,3 +352,25 @@ def run_single_activity_type(
 
     process_and_save_results_to_excel(data_to_save)
     return 0
+
+
+def filter_aggregations(
+    aggregations: pd.DataFrame, sites: list[str] | None = None
+) -> pd.DataFrame:
+    """Filters aggregations by selected sites
+
+    Args:
+        aggregations (pd.DataFrame): Aggregations by functional area, with sitetret column
+        sites (list[str] | None, optional): List of sites to filter to. Defaults to None.
+
+    Returns:
+        pd.DataFrame: Filtered aggregations, with sitetret column removed
+    """
+    if sites:
+        aggregations = aggregations[aggregations["sitetret"].isin(sites)]
+    groupby_cols = [
+        col
+        for col in aggregations.select_dtypes(exclude=["number"]).columns.tolist()
+        if col != "sitetret"
+    ]
+    return aggregations.groupby(groupby_cols).sum(numeric_only=True)
