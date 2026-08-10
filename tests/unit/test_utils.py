@@ -6,6 +6,7 @@ from pandas.testing import assert_frame_equal
 from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
     create_aggregations_path,
+    filter_aggregations,
     get_baseline_activity,
     load_aggregations,
     load_assumptions,
@@ -15,7 +16,20 @@ from nhp.capacity_conversion.utils import (
     run_single_activity_type,
     summarise_model_runs,
     validate_required_env_vars,
+    validate_sites,
 )
+
+
+@pytest.fixture
+def filter_agg_df():
+    return pd.DataFrame(
+        {
+            "model_run": [0] * 4,
+            "sitetret": ["A", "B"] * 2,
+            "group": ["X", "X", "Y", "Y"],
+            "value": [1] * 4,
+        }
+    ).set_index("model_run")
 
 
 def test_summarise_model_runs():
@@ -395,6 +409,7 @@ def test_run_single_activity_type(mocker):
         guid="test-guid",
         capacity_model_version="v1",
         path_to_assumptions_file="assumptions.csv",
+        sites="sites",
     )
 
     mock_parser = mocker.Mock()
@@ -441,6 +456,10 @@ def test_run_single_activity_type(mocker):
         "nhp.capacity_conversion.utils.load_aggregations",
         return_value=aggregations,
     )
+    mock_filter = mocker.patch(
+        "nhp.capacity_conversion.utils.filter_aggregations",
+        return_value=aggregations,
+    )
 
     process_activity = mocker.patch(
         "nhp.capacity_conversion.utils.process_activity_type"
@@ -478,6 +497,7 @@ def test_run_single_activity_type(mocker):
     assert kwargs["assumptions"] is assumptions
     assert kwargs["preprocess"] is preprocess
     assert kwargs["include_baseline"] is True
+    mock_filter.assert_called_once_with(aggregations, "sites")
 
     # Metadata should have been augmented with the runtime
     data_to_save = kwargs["data_to_save"]
@@ -485,3 +505,42 @@ def test_run_single_activity_type(mocker):
     assert "capacity_conversion_runtime" in data_to_save["metadata"].index
 
     save_results.assert_called_once_with(data_to_save)
+
+
+def test_validate_sites_invalid(filter_agg_df):
+    with pytest.raises(ValueError):
+        validate_sites(filter_agg_df, ["C"])
+
+
+def test_validate_sites_valid(filter_agg_df):
+    validate_sites(filter_agg_df, ["A"])
+
+
+def test_filter_aggregations_all(filter_agg_df):
+    expected = pd.DataFrame(
+        {
+            "model_run": [0] * 2,
+            "group": [
+                "X",
+                "Y",
+            ],
+            "value": [2, 2],
+        }
+    ).set_index("model_run")
+    actual = filter_aggregations(filter_agg_df, "ALL")
+    assert_frame_equal(actual, expected)
+
+
+def test_filter_aggregations(filter_agg_df):
+    expected = pd.DataFrame(
+        {
+            "model_run": [0] * 2,
+            "group": [
+                "X",
+                "Y",
+            ],
+            "value": [1, 1],
+        }
+    ).set_index("model_run")
+    actual = filter_aggregations(filter_agg_df, "A")
+    assert_frame_equal(actual, expected)
