@@ -157,13 +157,6 @@ app_ui = ui.page_fluid(
                 class_="d-flex justify-content-end mt-3",
             ),
         ),
-        ui.card(
-            ui.card_header("Feedback"),
-            ui.p(
-                "Please use the feedback button to share your comments about this app."
-            ),
-            class_="mt-3",
-        ),
         class_="py-4",
         style="max-width: 920px;",
     ),
