@@ -252,7 +252,8 @@ def load_aggregations(
     logger.info(f"Loading {aggregation_type} data from {aggregations_path}...")
     results_connection = connect_to_container(account_url, results_container)
     aggregations = load_parquet_file(
-        results_connection, f"{aggregations_path}/{aggregation_type}.parquet"
+        results_connection,
+        f"{aggregations_path.rstrip('/')}/{aggregation_type}.parquet",
     )
     return aggregations
 
