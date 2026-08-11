@@ -26,6 +26,10 @@ where = ["src"]
 [tool.uv.sources]
 nhp-products = { git = "https://github.com/the-strategy-unit/nhp_products.git", rev = "v4.4.0" }
 
+[tool.uv.pip]
+# Connect must use the commit-pinned URLs exported from uv.lock, not transitive source overrides.
+no-sources = true
+
 [dependency-groups]
 app = [
     "shiny[theme]>=1.7.0,<2", # 1.7.0 passed the Connect deployment smoke test; review before Shiny 2.

@@ -300,7 +300,7 @@ def test_load_aggregations(mocker, caplog):
         "nhp.capacity_conversion.utils.connect_to_container",
         return_value=mock_connection,
     )
-    mocker.patch(
+    mock_load_parquet_file = mocker.patch(
         "nhp.capacity_conversion.utils.load_parquet_file",
         return_value=pd.DataFrame({"col": [1]}),
     )
@@ -310,6 +310,7 @@ def test_load_aggregations(mocker, caplog):
 
     # assert
     assert "Loading type data from path..." in caplog.text
+    mock_load_parquet_file.assert_called_once_with(mock_connection, "path/type.parquet")
 
 
 def test_process_activity_type_with_preprocess():
