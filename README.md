@@ -41,9 +41,6 @@ The application uses the project dependencies and the `app` dependency group in
 `pyproject.toml`. `requirements.txt` is generated for Posit Connect and should
 not be edited manually.
 
-`nhp-products` declares an unversioned transitive Git source for `nhp-aci`.
-The `[tool.uv.pip] no-sources = true` setting makes Connect's `uv pip` resolver
-ignore that moving source and use the exact Git commits exported from `uv.lock`.
 Regenerate and validate the Connect requirements after changing dependencies:
 
 ```console
@@ -52,9 +49,8 @@ uv export --no-default-groups --group app --no-hashes --output-file requirements
 uv pip compile requirements.txt --output-file /tmp/nhp-capacity-connect-requirements.txt
 ```
 
-The final command reproduces Connect's dependency-resolution step. It must
-complete without a conflicting-URL error, and `requirements.txt` must contain
-commit-pinned entries for both `nhp-products` and `nhp-aci`.
+The final command reproduces Connect's dependency-resolution step and must
+complete successfully.
 
 ## Deploying to Posit Connect
 

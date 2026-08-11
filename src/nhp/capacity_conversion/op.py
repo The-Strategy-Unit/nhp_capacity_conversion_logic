@@ -1,12 +1,12 @@
+import logging
 import sys
 from typing import cast, overload
 
 import pandas as pd
-from nhpy.utils import get_logger
 
 from nhp.capacity_conversion.utils import run_single_activity_type
 
-logger = get_logger()
+logger = logging.getLogger(__name__)
 
 
 ASSUMPTIONS_MAPPING = {
