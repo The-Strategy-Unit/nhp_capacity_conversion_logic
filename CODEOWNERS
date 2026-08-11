@@ -8,5 +8,12 @@
 
 *       @yiwen-h @ai-mindset 
 
-# Shiny-related CODEOWNERS
-app.py @The-Strategy-Unit/capcon-shiny-app
+# Shiny application
+/.github/workflows/app-requirements.yaml @The-Strategy-Unit/capcon-shiny-app
+/_brand.yml @The-Strategy-Unit/capcon-shiny-app
+/app.py @The-Strategy-Unit/capcon-shiny-app
+/requirements.txt @The-Strategy-Unit/capcon-shiny-app
+/tests/e2e/ @The-Strategy-Unit/capcon-shiny-app
+# Shared files containing Shiny documentation or dependency configuration
+/README.md      @yiwen-h @ai-mindset @StatsRhian
+/pyproject.toml @yiwen-h @ai-mindset @StatsRhian
