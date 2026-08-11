@@ -23,40 +23,43 @@ def _load_app_module() -> ModuleType:
 app = _load_app_module()
 
 FUNCTIONAL_AGGREGATION_ENVIRONMENT = {
-    "AZ_FUNC_AGG_OP_PATH": "functional-aggregations/v1/guid-123/op.parquet",
-    "AZ_FUNC_AGG_AAE_PATH": "functional-aggregations/v1/guid-123/aae.parquet",
-    "AZ_FUNC_AGG_IP_DAYCASE_PATH": (
-        "functional-aggregations/v1/guid-123/ip_daycase.parquet"
-    ),
-    "AZ_FUNC_AGG_IP_MAT_PATH": (
-        "functional-aggregations/v1/guid-123/ip_maternity.parquet"
-    ),
+    "AZ_FUNC_AGG_GUID": "guid-123",
+    "AZ_STORAGE_EP": "https://storage.example.com",
+    "AZ_STORAGE_RESULTS": "results",
+    "AZ_TABLE_ENDPOINT": "https://table.example.com",
+    "TABLE_NAME": "metadata",
 }
 
 
 def test_load_capacity_results(mocker):
     mocker.patch.dict(
         os.environ,
-        {
-            **FUNCTIONAL_AGGREGATION_ENVIRONMENT,
-            "AZ_STORAGE_EP": "https://storage.example.com",
-            "AZ_STORAGE_RESULTS": "results",
-        },
+        FUNCTIONAL_AGGREGATION_ENVIRONMENT,
         clear=True,
     )
     mock_datetime = mocker.patch.object(app, "datetime")
     mock_datetime.now.return_value.strftime.return_value = "20260101_120000"
 
-    connection = mocker.Mock()
-    connect = mocker.patch.object(
+    metadata = {
+        "PartitionKey": "dev",
+        "RowKey": "guid-123",
+        "guid": "guid-123",
+        "capacity_model_version": "dev",
+    }
+    load_metadata = mocker.patch.object(
         app,
-        "connect_to_container",
-        return_value=connection,
+        "load_metadata_from_ats",
+        return_value=metadata,
+    )
+    create_path = mocker.patch.object(
+        app,
+        "create_aggregations_path",
+        return_value="functional-aggregations/dev/guid-123/",
     )
     aggregations = pd.DataFrame({"total": [1]})
-    load_parquet = mocker.patch.object(
+    load_aggregation = mocker.patch.object(
         app,
-        "load_parquet_file",
+        "load_aggregations",
         return_value=aggregations,
     )
     assumptions = pd.DataFrame({"Value": [1]})
@@ -65,14 +68,25 @@ def test_load_capacity_results(mocker):
 
     data_to_save = app._load_capacity_results()
 
-    connect.assert_called_once_with("https://storage.example.com", "results")
-    load_parquet.assert_has_calls(
+    load_metadata.assert_called_once_with(
+        "guid-123",
+        "https://table.example.com",
+        "metadata",
+        "dev",
+    )
+    create_path.assert_called_once_with(metadata)
+    load_aggregation.assert_has_calls(
         [
-            call(connection, FUNCTIONAL_AGGREGATION_ENVIRONMENT[environment_variable])
-            for environment_variable in app.FUNCTIONAL_AGGREGATION_ENV_VARS.values()
+            call(
+                "https://storage.example.com",
+                "results",
+                "functional-aggregations/dev/guid-123/",
+                activity_type,
+            )
+            for activity_type in app.ACTIVITY_TYPES
         ]
     )
-    assert load_parquet.call_count == 4
+    assert load_aggregation.call_count == 4
     process.assert_has_calls(
         [
             call(
@@ -113,40 +127,25 @@ def test_load_capacity_results(mocker):
     mock_datetime.now.assert_called_once_with(tz=app.UTC)
     assert data_to_save["metadata"].to_dict() == {
         "guid": "guid-123",
-        "capacity_model_version": "v1",
+        "capacity_model_version": "dev",
         "capacity_conversion_runtime": "20260101_120000",
     }
 
 
-def test_load_capacity_results_rejects_invalid_blob_path(mocker):
+def test_load_capacity_results_requires_guid(mocker):
     mocker.patch.dict(
         os.environ,
         {
-            **FUNCTIONAL_AGGREGATION_ENVIRONMENT,
-            "AZ_FUNC_AGG_OP_PATH": "op.parquet",
+            key: value
+            for key, value in FUNCTIONAL_AGGREGATION_ENVIRONMENT.items()
+            if key != "AZ_FUNC_AGG_GUID"
         },
         clear=True,
     )
 
     with pytest.raises(
-        ValueError,
-        match="AZ_FUNC_AGG_OP_PATH must have the form",
-    ):
-        app._load_capacity_results()
-
-
-def test_load_capacity_results_rejects_different_model_results(mocker):
-    mocker.patch.dict(
-        os.environ,
-        {
-            **FUNCTIONAL_AGGREGATION_ENVIRONMENT,
-            "AZ_FUNC_AGG_AAE_PATH": ("functional-aggregations/v1/guid-456/aae.parquet"),
-        },
-        clear=True,
-    )
-
-    with pytest.raises(
-        ValueError, match="must reference the same model version and GUID"
+        RuntimeError,
+        match="Missing required environment variable: AZ_FUNC_AGG_GUID",
     ):
         app._load_capacity_results()
 

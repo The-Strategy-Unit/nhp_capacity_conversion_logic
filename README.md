@@ -67,17 +67,12 @@ The application requires these runtime environment variables:
 - `AZ_STORAGE_RESULTS`: results container name.
 - `FEEDBACK_FORM_URL`: the `src` URL from the Microsoft Forms
   [embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
-- `AZ_FUNC_AGG_OP_PATH`:
-  `functional-aggregations/<version>/<guid>/op.parquet`.
-- `AZ_FUNC_AGG_AAE_PATH`:
-  `functional-aggregations/<version>/<guid>/aae.parquet`.
-- `AZ_FUNC_AGG_IP_DAYCASE_PATH`:
-  `functional-aggregations/<version>/<guid>/ip_daycase.parquet`.
-- `AZ_FUNC_AGG_IP_MAT_PATH`:
-  `functional-aggregations/<version>/<guid>/ip_maternity.parquet`.
+- `AZ_TABLE_ENDPOINT`: Azure Table Storage endpoint.
+- `TABLE_NAME`: table containing functional aggregation metadata.
+- `AZ_FUNC_AGG_GUID`: GUID of the functional aggregation result to display.
 
-All four paths are relative to the results container and must reference the
-same model version and GUID.
+The application uses the `dev` capacity model version and derives all four
+activity paths from the functional aggregation GUID.
 
 In Microsoft Forms, select **Collect responses**, choose the response audience,
 then select **Embed** and **Copy**. Set `FEEDBACK_FORM_URL` to only the URL in
@@ -108,13 +103,12 @@ uv run --locked --group app rsconnect deploy shiny \
     --entrypoint app:app \
     --requirements-file requirements.txt \
     --package-installer UV \
-    -E AZ_FUNC_AGG_OP_PATH \
-    -E AZ_FUNC_AGG_AAE_PATH \
-    -E AZ_FUNC_AGG_IP_DAYCASE_PATH \
-    -E AZ_FUNC_AGG_IP_MAT_PATH \
+    -E AZ_FUNC_AGG_GUID \
     -E AZ_STORAGE_EP \
     -E AZ_STORAGE_RESULTS \
     -E FEEDBACK_FORM_URL \
+    -E AZ_TABLE_ENDPOINT \
+    -E TABLE_NAME \
     --exclude "**" \
     . \
     app.py \
@@ -140,13 +134,12 @@ uv run --locked --group app rsconnect deploy shiny \
     --entrypoint app:app \
     --requirements-file requirements.txt \
     --package-installer UV \
-    -E AZ_FUNC_AGG_OP_PATH \
-    -E AZ_FUNC_AGG_AAE_PATH \
-    -E AZ_FUNC_AGG_IP_DAYCASE_PATH \
-    -E AZ_FUNC_AGG_IP_MAT_PATH \
+    -E AZ_FUNC_AGG_GUID \
     -E AZ_STORAGE_EP \
     -E AZ_STORAGE_RESULTS \
     -E FEEDBACK_FORM_URL \
+    -E AZ_TABLE_ENDPOINT \
+    -E TABLE_NAME \
     --exclude "**" \
     . \
     app.py \
