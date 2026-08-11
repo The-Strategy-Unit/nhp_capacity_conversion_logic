@@ -147,7 +147,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
             summary=False,
         )
 
-    @render.download(
+    @render.download_button(
         filename="capacity_conversion_results.xlsx",
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
