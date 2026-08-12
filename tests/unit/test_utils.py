@@ -35,6 +35,8 @@ def filter_agg_df():
             "value": [1] * 4,
         }
     ).set_index("model_run")
+
+
 def test_configure_logging(mocker):
     mock_basic_config = mocker.patch(
         "nhp.capacity_conversion.utils.logging.basicConfig"
