@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import pytest
 from azure.core.exceptions import ResourceNotFoundError
@@ -5,12 +7,15 @@ from pandas.testing import assert_frame_equal
 
 from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
+    configure_logging,
+    connect_to_container,
     create_aggregations_path,
     filter_aggregations,
     get_baseline_activity,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
+    load_parquet_file,
     process_activity_type,
     process_and_save_results_to_excel,
     run_single_activity_type,
@@ -30,6 +35,81 @@ def filter_agg_df():
             "value": [1] * 4,
         }
     ).set_index("model_run")
+def test_configure_logging(mocker):
+    mock_basic_config = mocker.patch(
+        "nhp.capacity_conversion.utils.logging.basicConfig"
+    )
+    mock_azure_logger = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.logging.getLogger",
+        return_value=mock_azure_logger,
+    )
+
+    configure_logging(logging.DEBUG)
+
+    mock_basic_config.assert_called_once_with(
+        level=logging.DEBUG,
+        format="%(message)s",
+        force=True,
+    )
+    mock_azure_logger.setLevel.assert_called_once_with(logging.WARNING)
+
+
+def test_connect_to_container(mocker):
+    credential = mocker.Mock()
+    container = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.DefaultAzureCredential",
+        return_value=credential,
+    )
+    mock_container_client = mocker.patch(
+        "nhp.capacity_conversion.utils.ContainerClient",
+        return_value=container,
+    )
+
+    result = connect_to_container("https://example.blob.core.windows.net", "results")
+
+    assert result is container
+    mock_container_client.assert_called_once_with(
+        account_url="https://example.blob.core.windows.net",
+        container_name="results",
+        credential=credential,
+    )
+
+
+@pytest.mark.parametrize(
+    ("account_url", "container_name", "message"),
+    [
+        (None, "results", "An account URL is required"),
+        ("https://example.blob.core.windows.net", None, "A container name is required"),
+    ],
+)
+def test_connect_to_container_requires_configuration(
+    account_url,
+    container_name,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        connect_to_container(account_url, container_name)
+
+
+def test_load_parquet_file(mocker):
+    container_client = mocker.Mock()
+    parquet_bytes = b"parquet data"
+    container_client.get_blob_client.return_value.download_blob.return_value.readall.return_value = parquet_bytes
+    expected = pd.DataFrame({"value": [1]})
+    mock_read_parquet = mocker.patch(
+        "nhp.capacity_conversion.utils.pd.read_parquet",
+        return_value=expected,
+    )
+
+    result = load_parquet_file(container_client, "path/results.parquet")
+
+    assert result is expected
+    container_client.get_blob_client.assert_called_once_with("path/results.parquet")
+    parquet_stream = mock_read_parquet.call_args.args[0]
+    assert parquet_stream.getvalue() == parquet_bytes
+    assert mock_read_parquet.call_args.kwargs == {"engine": "pyarrow"}
 
 
 def test_summarise_model_runs():
@@ -314,7 +394,7 @@ def test_load_aggregations(mocker, caplog):
         "nhp.capacity_conversion.utils.connect_to_container",
         return_value=mock_connection,
     )
-    mocker.patch(
+    mock_load_parquet_file = mocker.patch(
         "nhp.capacity_conversion.utils.load_parquet_file",
         return_value=pd.DataFrame({"col": [1]}),
     )
@@ -324,6 +404,7 @@ def test_load_aggregations(mocker, caplog):
 
     # assert
     assert "Loading type data from path..." in caplog.text
+    mock_load_parquet_file.assert_called_once_with(mock_connection, "path/type.parquet")
 
 
 def test_process_activity_type_with_preprocess():
