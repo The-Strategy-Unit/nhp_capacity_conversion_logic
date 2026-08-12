@@ -352,6 +352,11 @@ def run_single_activity_type(
         help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
         default=ASSUMPTIONS_URL,
     )
+    parser.add_argument(
+        "--sites",
+        help="Sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
+        default="ALL",
+    )
     args = parser.parse_args()
 
     config = validate_required_env_vars()
@@ -364,6 +369,7 @@ def run_single_activity_type(
         args.capacity_model_version,
     )
     metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
+    metadata["sites"] = args.sites
     data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
@@ -376,6 +382,7 @@ def run_single_activity_type(
         aggregations_path,
         activity_type,
     )
+    aggregations = filter_aggregations(aggregations, args.sites)
 
     process_activity_type(
         name=activity_type,
@@ -389,3 +396,49 @@ def run_single_activity_type(
 
     process_and_save_results_to_excel(data_to_save)
     return 0
+
+
+def validate_sites(aggregations: pd.DataFrame, sites: list[str]) -> None:
+    """Validates that all supplied sites exist in the aggregations sitetret column
+
+    Args:
+        aggregations (pd.DataFrame): Aggregations by functional area, with sitetret column
+        sites (list[str]): List of sites to validate
+
+    Raises:
+        ValueError: If any of the supplied sites are not present in the sitetret column
+    """
+    valid_sites = set(aggregations["sitetret"])
+    invalid_sites = [site for site in sites if site not in valid_sites]
+
+    if invalid_sites:
+        raise ValueError(
+            f"The following sites are not valid: {', '.join(invalid_sites)}"
+        )
+
+
+def filter_aggregations(aggregations: pd.DataFrame, sites: str) -> pd.DataFrame:
+    """Filters aggregations by selected sites
+
+    Args:
+        aggregations (pd.DataFrame): Aggregations by functional area, with sitetret column
+        sites (list[str]): List of sites to filter to.
+
+    Returns:
+        pd.DataFrame: Filtered aggregations, with sitetret column removed
+    """
+    logger.info(f"Filtering by sites: {sites}")
+    if sites != "ALL":
+        sites_split = sites.upper().split(",")
+        validate_sites(aggregations, sites_split)
+        aggregations = aggregations[aggregations["sitetret"].isin(sites_split)]
+    # collapse all remaining sites
+    groupby_cols = [
+        col
+        for col in aggregations.select_dtypes(exclude=["number"]).columns.tolist()
+        if col != "sitetret"
+    ]
+    aggregations = aggregations.groupby(["model_run"] + groupby_cols).sum(
+        numeric_only=True
+    )
+    return aggregations.reset_index().set_index("model_run")

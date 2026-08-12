@@ -16,6 +16,7 @@ from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     configure_logging,
     create_aggregations_path,
+    filter_aggregations,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
@@ -54,6 +55,21 @@ def main():
         help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
         default=ASSUMPTIONS_URL,
     )
+    parser.add_argument(
+        "--ip_sites",
+        help="IP sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
+        default="ALL",
+    )
+    parser.add_argument(
+        "--op_sites",
+        help="OP sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
+        default="ALL",
+    )
+    parser.add_argument(
+        "--aae_sites",
+        help="AAE sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
+        default="ALL",
+    )
     args = parser.parse_args()
 
     config = validate_required_env_vars()
@@ -65,6 +81,9 @@ def main():
         config["TABLE_NAME"],
         args.capacity_model_version,
     )
+    metadata["ip_sites"] = args.ip_sites
+    metadata["op_sites"] = args.op_sites
+    metadata["aae_sites"] = args.aae_sites
     metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
     data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
 
@@ -76,6 +95,7 @@ def main():
     op_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "op"
     )
+    op_aggregations = filter_aggregations(op_aggregations, args.op_sites)
     process_activity_type(
         "op", op_aggregations, calculate_op_capacity, assumptions, data_to_save
     )
@@ -83,6 +103,7 @@ def main():
     aae_aggregations = load_aggregations(
         config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
     )
+    aae_aggregations = filter_aggregations(aae_aggregations, args.aae_sites)
     process_activity_type(
         "aae", aae_aggregations, calculate_aae_capacity, assumptions, data_to_save
     )
@@ -92,6 +113,9 @@ def main():
         config["AZ_STORAGE_RESULTS"],
         aggregations_path,
         "ip_daycase",
+    )
+    ip_daycase_aggregations = filter_aggregations(
+        ip_daycase_aggregations, args.ip_sites
     )
     process_activity_type(
         "ip_daycase",
@@ -105,6 +129,9 @@ def main():
         config["AZ_STORAGE_RESULTS"],
         aggregations_path,
         "ip_maternity",
+    )
+    ip_maternity_aggregations = filter_aggregations(
+        ip_maternity_aggregations, args.ip_sites
     )
     process_activity_type(
         "ip_maternity",

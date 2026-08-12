@@ -19,6 +19,9 @@ def test_main(mocker):
     mock_args.guid = "GUID123"
     mock_args.path_to_assumptions_file = "assumptions.csv"
     mock_args.capacity_model_version = "dev"
+    mock_args.ip_sites = "ip_sites"
+    mock_args.op_sites = "op_sites"
+    mock_args.aae_sites = "aae_sites"
 
     mock_parser.parse_args.return_value = mock_args
     mocker.patch(f"{main_path}.argparse.ArgumentParser", return_value=mock_parser)
@@ -46,14 +49,17 @@ def test_main(mocker):
     mock_assumptions = pd.DataFrame()
     mocker.patch(f"{main_path}.load_assumptions", return_value=mock_assumptions)
 
-    mock_aggregations = pd.DataFrame(
+    mock_filtered_aggregations = pd.DataFrame(
         {
             "grouping": ["a", "b", "c"] * 3,
             "model_run": [0] * 3 + [1] * 3 + [2] * 3,
             "total": [3] * 3 + [4] * 3 + [5] * 3,
         }
     )
-    mocker.patch(f"{main_path}.load_aggregations", return_value=mock_aggregations)
+    mocker.patch(f"{main_path}.load_aggregations", return_value="aggregations")
+    mocker.patch(
+        f"{main_path}.filter_aggregations", return_value=mock_filtered_aggregations
+    )
     mocker.patch(f"{main_path}.process_activity_type")
 
     mock_save = mocker.patch(f"{main_path}.process_and_save_results_to_excel")
@@ -82,6 +88,14 @@ def test_main(mocker):
     ]
     main_mod.load_aggregations.assert_has_calls(expected_calls)
 
+    assert main_mod.filter_aggregations.call_count == 4
+    expected_calls = [
+        call("aggregations", "op_sites"),
+        call("aggregations", "aae_sites"),
+        call("aggregations", "ip_sites"),
+        call("aggregations", "ip_sites"),
+    ]
+
     assert main_mod.process_activity_type.call_count == 4
     main_mod.process_activity_type.assert_has_calls(
         [
@@ -107,6 +121,9 @@ def test_main(mocker):
             {
                 "guid": "GUID123",
                 "capacity_model_version": "dev",
+                "ip_sites": "ip_sites",
+                "op_sites": "op_sites",
+                "aae_sites": "aae_sites",
                 "capacity_conversion_runtime": "20250101_120000",
             }
         ),
