@@ -1,26 +1,62 @@
 import argparse
 import datetime
+import logging
 import os
 from collections.abc import Callable
-from logging import INFO
+from io import BytesIO
+from typing import cast
 
 import pandas as pd
 from azure.data.tables import TableClient
 from azure.identity import DefaultAzureCredential
+from azure.storage.blob import ContainerClient
 from dotenv import load_dotenv
-from nhpy.az import connect_to_container, load_parquet_file
-from nhpy.utils import configure_logging, get_logger
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 
-logger = get_logger()
+logger = logging.getLogger(__name__)
 
 # Suppression methodology follows NHS England HES standard:
 # https://digital.nhs.uk/data-and-information/publications/statistical/
 # hospital-admitted-patient-care-activity/supporting-information#suppression-methodology
 SUPPRESSION_THRESHOLD = 7  # suppress counts 1–7; round all others to nearest 5
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    """Configure concise CLI logging and suppress verbose Azure SDK logs."""
+    logging.basicConfig(level=level, format="%(message)s", force=True)
+    logging.getLogger("azure").setLevel(logging.WARNING)
+
+
+def connect_to_container(
+    account_url: str | None,
+    container_name: str | None,
+) -> ContainerClient:
+    """Create an authenticated Azure Blob Storage container client."""
+    if not account_url:
+        raise ValueError("An account URL is required and cannot be empty")
+    if not container_name:
+        raise ValueError("A container name is required and cannot be empty")
+
+    return ContainerClient(
+        account_url=account_url,
+        container_name=container_name,
+        credential=DefaultAzureCredential(),
+    )
+
+
+def load_parquet_file(
+    container_client: ContainerClient,
+    path_to_file: str,
+) -> pd.DataFrame:
+    """Download a Parquet blob and load it into a DataFrame."""
+    parquet_bytes = cast(
+        bytes,
+        container_client.get_blob_client(path_to_file).download_blob().readall(),
+    )
+    return pd.read_parquet(BytesIO(parquet_bytes), engine="pyarrow")
 
 
 def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
@@ -295,7 +331,7 @@ def run_single_activity_type(
     Handles argument parsing, metadata/assumptions loading, aggregation loading,
     optional preprocessing, capacity calculation, and Excel saving.
     """
-    configure_logging(INFO)
+    configure_logging(logging.INFO)
     capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
         "%Y%m%d_%H%M%S"
     )

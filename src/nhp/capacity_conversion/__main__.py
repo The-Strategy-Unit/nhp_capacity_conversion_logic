@@ -4,10 +4,6 @@ import sys
 from logging import INFO
 
 import pandas as pd
-from nhpy.utils import (
-    configure_logging,
-    get_logger,
-)
 
 from nhp.capacity_conversion.aae import calculate_aae_capacity
 from nhp.capacity_conversion.config import ASSUMPTIONS_URL
@@ -18,6 +14,7 @@ from nhp.capacity_conversion.ip_maternity import (
 )
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
+    configure_logging,
     create_aggregations_path,
     load_aggregations,
     load_assumptions,
@@ -26,8 +23,6 @@ from nhp.capacity_conversion.utils import (
     process_and_save_results_to_excel,
     validate_required_env_vars,
 )
-
-logger = get_logger()
 
 
 def main():
