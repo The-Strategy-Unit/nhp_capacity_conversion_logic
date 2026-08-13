@@ -31,9 +31,11 @@ jobs:
       - name: Generate coverage report
         run: >
           uv run --locked --group app python -m pytest
-          --cov=src/nhp
+          --cov=src/nhp/capacity_conversion
           --cov-branch
-          --cov-report xml:coverage.xml
+          --cov-fail-under=100
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
           tests/unit
 
       - name: Run end-to-end smoke tests
