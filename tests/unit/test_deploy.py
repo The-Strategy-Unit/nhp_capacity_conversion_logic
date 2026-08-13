@@ -148,6 +148,8 @@ def test_build_deploy_command(
     assert command[:3] == ["rsconnect", "deploy", "shiny"]
     assert all(option in command for option in expected_option)
     assert "secret-api-key" not in command
+    exclude_index = command.index("--exclude=**")
+    assert command[exclude_index + 1] == "."
     assert command[-2:] == ["app.py", "capacity.py"]
     for env_var in deploy.RUNTIME_ENV_VARS:
         assert ["-E", env_var] == command[

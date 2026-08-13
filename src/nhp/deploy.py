@@ -178,7 +178,7 @@ def build_deploy_command(
     for env_var in RUNTIME_ENV_VARS:
         command.extend(["-E", env_var])
 
-    command.extend(["--exclude", "**", ".", *BUNDLE_FILES])
+    command.extend(["--exclude=**", ".", *BUNDLE_FILES])
     command.extend(
         path.relative_to(PROJECT_ROOT).as_posix()
         for path in sorted(PROJECT_ROOT.glob(CAPACITY_SOURCE_GLOB))
