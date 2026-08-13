@@ -175,6 +175,7 @@ def process_and_save_results_to_excel(
     filepath = os.path.join(directory, "capacity_conversion_results.xlsx")
     wb = Workbook()
     default_sheet = wb.active
+    assert default_sheet is not None
     wb.remove(default_sheet)
     for sheet_name, df in data_to_save.items():
         if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
