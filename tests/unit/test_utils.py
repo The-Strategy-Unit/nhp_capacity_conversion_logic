@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import pytest
 from azure.core.exceptions import ResourceNotFoundError
@@ -5,17 +7,111 @@ from pandas.testing import assert_frame_equal
 
 from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
+    configure_logging,
+    connect_to_container,
     create_aggregations_path,
+    filter_aggregations,
     get_baseline_activity,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
+    load_parquet_file,
     process_activity_type,
     process_and_save_results_to_excel,
     run_single_activity_type,
     summarise_model_runs,
     validate_required_env_vars,
+    validate_sites,
 )
+
+
+@pytest.fixture
+def filter_agg_df():
+    return pd.DataFrame(
+        {
+            "model_run": [0] * 4,
+            "sitetret": ["A", "B"] * 2,
+            "group": ["X", "X", "Y", "Y"],
+            "value": [1] * 4,
+        }
+    ).set_index("model_run")
+
+
+def test_configure_logging(mocker):
+    mock_basic_config = mocker.patch(
+        "nhp.capacity_conversion.utils.logging.basicConfig"
+    )
+    mock_azure_logger = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.logging.getLogger",
+        return_value=mock_azure_logger,
+    )
+
+    configure_logging(logging.DEBUG)
+
+    mock_basic_config.assert_called_once_with(
+        level=logging.DEBUG,
+        format="%(message)s",
+        force=True,
+    )
+    mock_azure_logger.setLevel.assert_called_once_with(logging.WARNING)
+
+
+def test_connect_to_container(mocker):
+    credential = mocker.Mock()
+    container = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.DefaultAzureCredential",
+        return_value=credential,
+    )
+    mock_container_client = mocker.patch(
+        "nhp.capacity_conversion.utils.ContainerClient",
+        return_value=container,
+    )
+
+    result = connect_to_container("https://example.blob.core.windows.net", "results")
+
+    assert result is container
+    mock_container_client.assert_called_once_with(
+        account_url="https://example.blob.core.windows.net",
+        container_name="results",
+        credential=credential,
+    )
+
+
+@pytest.mark.parametrize(
+    ("account_url", "container_name", "message"),
+    [
+        (None, "results", "An account URL is required"),
+        ("https://example.blob.core.windows.net", None, "A container name is required"),
+    ],
+)
+def test_connect_to_container_requires_configuration(
+    account_url,
+    container_name,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        connect_to_container(account_url, container_name)
+
+
+def test_load_parquet_file(mocker):
+    container_client = mocker.Mock()
+    parquet_bytes = b"parquet data"
+    container_client.get_blob_client.return_value.download_blob.return_value.readall.return_value = parquet_bytes
+    expected = pd.DataFrame({"value": [1]})
+    mock_read_parquet = mocker.patch(
+        "nhp.capacity_conversion.utils.pd.read_parquet",
+        return_value=expected,
+    )
+
+    result = load_parquet_file(container_client, "path/results.parquet")
+
+    assert result is expected
+    container_client.get_blob_client.assert_called_once_with("path/results.parquet")
+    parquet_stream = mock_read_parquet.call_args.args[0]
+    assert parquet_stream.getvalue() == parquet_bytes
+    assert mock_read_parquet.call_args.kwargs == {"engine": "pyarrow"}
 
 
 def test_summarise_model_runs():
@@ -396,6 +492,7 @@ def test_run_single_activity_type(mocker):
         guid="test-guid",
         capacity_model_version="v1",
         path_to_assumptions_file="assumptions.csv",
+        sites="sites",
     )
 
     mock_parser = mocker.Mock()
@@ -442,6 +539,10 @@ def test_run_single_activity_type(mocker):
         "nhp.capacity_conversion.utils.load_aggregations",
         return_value=aggregations,
     )
+    mock_filter = mocker.patch(
+        "nhp.capacity_conversion.utils.filter_aggregations",
+        return_value=aggregations,
+    )
 
     process_activity = mocker.patch(
         "nhp.capacity_conversion.utils.process_activity_type"
@@ -479,6 +580,7 @@ def test_run_single_activity_type(mocker):
     assert kwargs["assumptions"] is assumptions
     assert kwargs["preprocess"] is preprocess
     assert kwargs["include_baseline"] is True
+    mock_filter.assert_called_once_with(aggregations, "sites")
 
     # Metadata should have been augmented with the runtime
     data_to_save = kwargs["data_to_save"]
@@ -486,3 +588,42 @@ def test_run_single_activity_type(mocker):
     assert "capacity_conversion_runtime" in data_to_save["metadata"].index
 
     save_results.assert_called_once_with(data_to_save)
+
+
+def test_validate_sites_invalid(filter_agg_df):
+    with pytest.raises(ValueError):
+        validate_sites(filter_agg_df, ["C"])
+
+
+def test_validate_sites_valid(filter_agg_df):
+    validate_sites(filter_agg_df, ["A"])
+
+
+def test_filter_aggregations_all(filter_agg_df):
+    expected = pd.DataFrame(
+        {
+            "model_run": [0] * 2,
+            "group": [
+                "X",
+                "Y",
+            ],
+            "value": [2, 2],
+        }
+    ).set_index("model_run")
+    actual = filter_aggregations(filter_agg_df, "ALL")
+    assert_frame_equal(actual, expected)
+
+
+def test_filter_aggregations(filter_agg_df):
+    expected = pd.DataFrame(
+        {
+            "model_run": [0] * 2,
+            "group": [
+                "X",
+                "Y",
+            ],
+            "value": [1, 1],
+        }
+    ).set_index("model_run")
+    actual = filter_aggregations(filter_agg_df, "A")
+    assert_frame_equal(actual, expected)

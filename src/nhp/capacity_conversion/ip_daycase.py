@@ -1,10 +1,10 @@
+import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
 import pandas as pd
-from nhpy.utils import get_logger
 
 from nhp.capacity_conversion.ip_formulas import (
     calculate_beds_from_session_capacity,
@@ -15,7 +15,7 @@ from nhp.capacity_conversion.ip_formulas import (
 )
 from nhp.capacity_conversion.utils import run_single_activity_type
 
-logger = get_logger()
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

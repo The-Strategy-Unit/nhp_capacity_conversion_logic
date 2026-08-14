@@ -1,6 +1,7 @@
 import os
 from datetime import UTC, datetime
 from io import BytesIO
+from urllib.parse import urlparse
 
 import pandas as pd
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
@@ -24,6 +25,8 @@ from nhp.capacity_conversion.utils import (
 
 CAPACITY_MODEL_VERSION = "dev"
 ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity")
+
+FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
 
 CAPACITY_CALCULATIONS = {
     "aae": calculate_aae_capacity,
@@ -102,6 +105,14 @@ def _create_workbook(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> bytes
 
 app_ui = ui.page_fluid(
     ui.div(
+        ui.input_action_button(
+            "feedback",
+            "Feedback",
+            class_="btn-primary btn-sm",
+        ),
+        class_="d-flex justify-content-end border-bottom bg-light py-2",
+    ),
+    ui.div(
         ui.h1("Capacity Conversion Estimates", class_="mb-3"),
         ui.card(
             ui.card_header("Capacity estimates"),
@@ -110,7 +121,7 @@ app_ui = ui.page_fluid(
                 ui.download_button(
                     "download_estimates",
                     "Download Estimates",
-                    class_="btn-primary",
+                    class_="btn-primary btn-sm",
                 ),
                 class_="d-flex justify-content-end mt-3",
             ),
@@ -124,6 +135,41 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session) -> None:
+    @reactive.effect
+    @reactive.event(input.feedback)
+    def show_feedback_form() -> None:
+        feedback_url = urlparse(FEEDBACK_FORM_URL or "")
+        if feedback_url.scheme != "https" or not feedback_url.netloc:
+            ui.modal_show(
+                ui.modal(
+                    ui.p("The feedback form is not currently available."),
+                    title="Feedback",
+                    easy_close=True,
+                    footer=ui.modal_button(
+                        "Close",
+                        class_="btn-primary btn-sm",
+                    ),
+                )
+            )
+            return
+
+        ui.modal_show(
+            ui.modal(
+                ui.tags.iframe(
+                    src=FEEDBACK_FORM_URL,
+                    title="Feedback form",
+                    style="width: 100%; height: 70vh; border: 0;",
+                ),
+                title="Feedback",
+                size="l",
+                easy_close=True,
+                footer=ui.modal_button(
+                    "Close",
+                    class_="btn-primary btn-sm",
+                ),
+            )
+        )
+
     @reactive.calc
     def capacity_results() -> dict[str, pd.DataFrame | pd.Series]:
         return _load_capacity_results()
