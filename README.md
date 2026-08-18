@@ -27,10 +27,14 @@ below were verified with `uv 0.12.1`. Run the capacity conversion pipeline
 using:
 
 ````console
-uv run --locked -m nhp.capacity_conversion GUID # Run all settings
-uv run --locked -m nhp.capacity_conversion.op GUID # Run Outpatient setting
-uv run --locked -m nhp.capacity_conversion.aae GUID # Run Accident and Emergency setting
-```.
+uv run --locked -m nhp.capacity_conversion GUID # Run all settings, with all sites
+uv run --locked -m nhp.capacity_conversion GUID --ip-sites ALL --op-sites SITEA,SITEB --aae-sites SITEA  # Run all settings, with all sites for IP, SITEA and SITEB for OP, and SITEA only for A&E
+````
+
+````console
+uv run --locked -m nhp.capacity_conversion.op GUID  # Run Outpatient setting, all sites
+uv run --locked -m nhp.capacity_conversion.aae GUID --sites SITEA # Run Accident and Emergency setting for SITEA only
+````
 
 Running the pipeline will create a `results/GUID/RUNTIME` folder, with a `capacity_conversion_results.xlsx` file within it.
 
