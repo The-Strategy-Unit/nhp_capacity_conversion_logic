@@ -94,7 +94,7 @@ by Git; never commit the API key. Set these variables before deploying:
 From the repository root, start the deployment interface with:
 
 ```console
-uv run --locked --group dev nhp-deploy
+uv run --locked --group dev scripts/deploy_shiny.py
 ```
 
 Choose whether to create new content or replace an existing deployment. Before
