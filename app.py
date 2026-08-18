@@ -16,6 +16,7 @@ from nhp.capacity_conversion.ip_maternity import (
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
+    filter_aggregations,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
@@ -77,6 +78,7 @@ def _load_capacity_results() -> dict[str, pd.DataFrame | pd.Series]:
             aggregations_path,
             activity_type,
         )
+        aggregations = filter_aggregations(aggregations, "ALL")
         process_activity_type(
             activity_type,
             aggregations,
