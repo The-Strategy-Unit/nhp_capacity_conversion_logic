@@ -147,7 +147,7 @@ def calculate_maternity_ward_beds(
     return results
 
 
-ward_assumptions_dict = {
+maternity_ward_assumptions_dict = {
     "maternity_normal_delivery": {
         "zero_day_los": "MATERNITY_WARD_NORMAL_DELIVERY_ZERO_DAY_LOS",
         "birthroom_los": "MATERNITY_NORMAL_DELIVERY_BIRTH_ROOM_LOS",
@@ -455,7 +455,7 @@ def calculate_maternity_capacity(
         )
     results_list.append(
         calculate_maternity_ward_beds(
-            functional_areas_processed, assumptions_df, ward_assumptions_dict
+            functional_areas_processed, assumptions_df, maternity_ward_assumptions_dict
         )
     )
     return pd.concat(results_list)

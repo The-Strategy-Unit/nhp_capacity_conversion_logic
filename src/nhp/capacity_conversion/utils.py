@@ -301,12 +301,15 @@ def process_activity_type(
     calculate_fn: Callable,
     assumptions: pd.DataFrame,
     data_to_save: dict[str, pd.DataFrame | pd.Series],
-    preprocess: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    preprocess: Callable | None = None,
     include_baseline: bool = True,
 ) -> None:
     """Summarise functional areas, optionally extract baseline, and calculate capacity."""
     if preprocess is not None:
-        aggregations = preprocess(aggregations)
+        if name == "ip_wards":
+            aggregations = preprocess(aggregations, assumptions)
+        else:
+            aggregations = preprocess(aggregations)
     # We exclude baseline (model run 0) from conversion to capacity
     functional_areas = (
         aggregations[aggregations.index != 0]
@@ -442,4 +445,4 @@ def filter_aggregations(aggregations: pd.DataFrame, sites: str) -> pd.DataFrame:
     aggregations = aggregations.groupby(["model_run"] + groupby_cols).sum(
         numeric_only=True
     )
-    return aggregations.reset_index().set_index("model_run")
+    return aggregations
