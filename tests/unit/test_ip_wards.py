@@ -3,9 +3,12 @@ import pytest
 from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.ip_wards import (
+    WARD_CAPACITY_ASSUMPTIONS_DICT,
     WARD_WORKLOAD_ASSUMPTIONS_DICT,
+    calculate_ip_wards_capacity,
     derive_ward_beddays,
     group_ip_wards_beddays,
+    main,
     preprocess_ip_wards_data,
 )
 
@@ -376,4 +379,106 @@ def test_preprocess_ip_wards_data(mocker):
     assert_frame_equal(
         grouped_input,
         expected_input,
+    )
+
+
+def test_calculate_ip_wards_capacity(mocker):
+    functional_areas_processed = pd.DataFrame(
+        {
+            "total": [1] * 14,
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("adult_assessment_beddays", 1),
+                ("adult_assessment_beddays", 2),
+                ("adult_critical_care_beddays", 1),
+                ("adult_critical_care_beddays", 2),
+                ("adult_elective_wards_beddays", 1),
+                ("adult_elective_wards_beddays", 2),
+                ("adult_nonelective_wards_beddays", 1),
+                ("adult_nonelective_wards_beddays", 2),
+                ("paediatric_assessment_beddays", 1),
+                ("paediatric_assessment_beddays", 2),
+                ("paediatric_critical_care_beddays", 1),
+                ("paediatric_critical_care_beddays", 2),
+                ("paediatric_wards_beddays", 1),
+                ("paediatric_wards_beddays", 2),
+            ],
+            names=["grouping", "model_run"],
+        ),
+    )
+
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": {
+                "INPATIENT_ASSESSMENT_ANNUAL_OPERATIONAL_DAYS": 365.0,
+                "INPATIENT_ASSESSMENT_ADULT_OCC": 0.85,
+                "CRITICAL_CARE_ANNUAL_OPERATIONAL_DAYS": 365.0,
+                "CRITICAL_CARE_ADULT_OCC": 0.90,
+                "WARD_ANNUAL_OPERATIONAL_DAYS": 365.0,
+                "WARD_ADULT_ELECTIVE_OCC": 0.90,
+                "WARD_ADULT_NON_ELECTIVE_OCC": 0.85,
+                "INPATIENT_ASSESSMENT_PAEDIATRIC_OCC": 0.80,
+                "CRITICAL_CARE_PAEDIATRIC_OCC": 0.90,
+                "WARD_PAEDIATRIC_OCC": 0.85,
+            }
+        }
+    )
+
+    mock_calculate_beds = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.calculate_beds",
+        side_effect=lambda beddays, operational_days, occupancy: pd.Series(
+            [999.0] * len(beddays),
+            index=beddays.index,
+            name="capacity",
+        ),
+    )
+
+    result = calculate_ip_wards_capacity(
+        functional_areas_processed=functional_areas_processed,
+        assumptions_df=assumptions_df,
+    )
+
+    # calculate_beds should be called once for each capacity grouping.
+    assert mock_calculate_beds.call_count == len(WARD_CAPACITY_ASSUMPTIONS_DICT)
+
+    # calculate_beds returns 999 for every model run, so the only
+    # thing this function should add/change is the output label.
+    expected = pd.DataFrame(
+        {
+            "capacity": [999.0] * 14,
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("ADULT_INPATIENT_ASSESSMENT_BEDS", 1),
+                ("ADULT_INPATIENT_ASSESSMENT_BEDS", 2),
+                ("ADULT_CRITICAL_CARE_BEDS", 1),
+                ("ADULT_CRITICAL_CARE_BEDS", 2),
+                ("ADULT_ELECTIVE_INPATIENT_WARD_BEDS", 1),
+                ("ADULT_ELECTIVE_INPATIENT_WARD_BEDS", 2),
+                ("ADULT_NON_ELECTIVE_INPATIENT_WARD_BEDS", 1),
+                ("ADULT_NON_ELECTIVE_INPATIENT_WARD_BEDS", 2),
+                ("PAEDIATRIC_INPATIENT_ASSESSMENT_BEDS", 1),
+                ("PAEDIATRIC_INPATIENT_ASSESSMENT_BEDS", 2),
+                ("PAEDIATRIC_CRITICAL_CARE_BEDS", 1),
+                ("PAEDIATRIC_CRITICAL_CARE_BEDS", 2),
+                ("PAEDIATRIC_INPATIENT_WARD_BEDS", 1),
+                ("PAEDIATRIC_INPATIENT_WARD_BEDS", 2),
+            ],
+            names=["output", "model_run"],
+        ),
+    )
+
+    assert_frame_equal(result, expected)
+
+
+def test_main(mocker):
+    mock_run_single = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.run_single_activity_type"
+    )
+    main()
+    mock_run_single.assert_called_with(
+        "ip_wards",
+        calculate_ip_wards_capacity,
+        preprocess=preprocess_ip_wards_data,
     )
