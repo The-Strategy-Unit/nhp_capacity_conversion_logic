@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
-from pandas.testing import assert_series_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
-from nhp.capacity_conversion.ip_wards import derive_ward_beddays
+from nhp.capacity_conversion.ip_wards import derive_ward_beddays, group_ip_wards_beddays
 
 
 @pytest.fixture
@@ -167,3 +167,134 @@ def test_derive_ward_beddays_nonelective(
         pd.Series([30], pd.Index([1], name="model_run"), name="spells"),
     )
     assert assessment_los == 1.0
+
+
+def test_group_ip_wards_beddays():
+    index = pd.MultiIndex.from_tuples(
+        [
+            ("adult_nonelective_medical", 1),
+            ("adult_elective_medical", 1),
+            ("adult_nonelective_surgical", 1),
+            ("adult_elective_surgical", 1),
+            ("paediatric_nonelective_medical", 1),
+            ("paediatric_elective_medical", 1),
+            ("paediatric_nonelective_surgical", 1),
+            ("paediatric_elective_surgical", 1),
+            ("unrelated_group", 1),
+            ("adult_nonelective_medical", 2),
+            ("adult_elective_medical", 2),
+            ("adult_nonelective_surgical", 2),
+            ("adult_elective_surgical", 2),
+            ("paediatric_nonelective_medical", 2),
+            ("paediatric_elective_medical", 2),
+            ("paediatric_nonelective_surgical", 2),
+            ("paediatric_elective_surgical", 2),
+        ],
+        names=["grouping", "model_run"],
+    )
+
+    df = pd.DataFrame(
+        {
+            "ward_beddays": [
+                100,
+                200,
+                300,
+                400,
+                50,
+                60,
+                70,
+                80,
+                999,
+                10,
+                20,
+                30,
+                40,
+                0,
+                0,
+                0,
+                0,
+            ],
+            "critical_care_beddays": [
+                10,
+                20,
+                30,
+                40,
+                5,
+                6,
+                7,
+                8,
+                999,
+                1,
+                2,
+                3,
+                4,
+                0,
+                0,
+                0,
+                0,
+            ],
+            "assessment_beddays": [
+                11,
+                21,
+                31,
+                41,
+                15,
+                16,
+                17,
+                18,
+                999,
+                2,
+                3,
+                4,
+                5,
+                0,
+                0,
+                0,
+                0,
+            ],
+        },
+        index=index,
+    )
+
+    result = group_ip_wards_beddays(df)
+
+    expected = pd.DataFrame(
+        {
+            "total": [
+                104,
+                100,
+                600,
+                400,
+                66,
+                26,
+                260,
+                14,
+                10,
+                60,
+                40,
+                0,
+                0,
+                0,
+            ]
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                (1, "adult_assessment_beddays"),
+                (1, "adult_critical_care_beddays"),
+                (1, "adult_elective_wards_beddays"),
+                (1, "adult_nonelective_wards_beddays"),
+                (1, "paediatric_assessment_beddays"),
+                (1, "paediatric_critical_care_beddays"),
+                (1, "paediatric_wards_beddays"),
+                (2, "adult_assessment_beddays"),
+                (2, "adult_critical_care_beddays"),
+                (2, "adult_elective_wards_beddays"),
+                (2, "adult_nonelective_wards_beddays"),
+                (2, "paediatric_assessment_beddays"),
+                (2, "paediatric_critical_care_beddays"),
+                (2, "paediatric_wards_beddays"),
+            ],
+            names=["model_run", "grouping"],
+        ),
+    )
+    assert_frame_equal(result, expected)
