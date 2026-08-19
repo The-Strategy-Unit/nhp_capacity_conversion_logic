@@ -16,6 +16,7 @@ from nhp.capacity_conversion.ip_maternity import (
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
+    filter_aggregations,
     load_aggregations,
     load_assumptions,
     load_metadata_from_ats,
@@ -25,6 +26,7 @@ from nhp.capacity_conversion.utils import (
 
 CAPACITY_MODEL_VERSION = "dev"
 ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity")
+SITES = {"op": "ALL", "aae": "ALL", "ip_daycase": "ALL", "ip_maternity": "ALL"}
 
 FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
 
@@ -60,7 +62,7 @@ def _load_capacity_results() -> dict[str, pd.DataFrame | pd.Series]:
     metadata["capacity_conversion_runtime"] = datetime.now(tz=UTC).strftime(
         "%Y%m%d_%H%M%S"
     )
-
+    metadata.update(SITES)
     assumptions = load_assumptions(ASSUMPTIONS_URL)
     data_to_save: dict[str, pd.DataFrame | pd.Series] = {
         "metadata": pd.Series(metadata).drop(
@@ -77,6 +79,7 @@ def _load_capacity_results() -> dict[str, pd.DataFrame | pd.Series]:
             aggregations_path,
             activity_type,
         )
+        aggregations = filter_aggregations(aggregations, SITES[activity_type])
         process_activity_type(
             activity_type,
             aggregations,

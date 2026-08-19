@@ -62,6 +62,11 @@ def test_load_capacity_results(mocker):
         "load_aggregations",
         return_value=aggregations,
     )
+    filter_aggregation = mocker.patch.object(
+        app,
+        "filter_aggregations",
+        return_value=aggregations,
+    )
     assumptions = pd.DataFrame({"Value": [1]})
     mocker.patch.object(app, "load_assumptions", return_value=assumptions)
     process = mocker.patch.object(app, "process_activity_type")
@@ -87,6 +92,7 @@ def test_load_capacity_results(mocker):
         ]
     )
     assert load_aggregation.call_count == 4
+    assert filter_aggregation.call_count == 4
     process.assert_has_calls(
         [
             call(
@@ -129,6 +135,10 @@ def test_load_capacity_results(mocker):
         "guid": "guid-123",
         "capacity_model_version": "dev",
         "capacity_conversion_runtime": "20260101_120000",
+        "ip_daycase": "ALL",
+        "ip_maternity": "ALL",
+        "op": "ALL",
+        "aae": "ALL",
     }
 
 
