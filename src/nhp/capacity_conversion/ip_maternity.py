@@ -178,6 +178,7 @@ def process_theatres_obstetric_proc_data(
     Returns:
         pd.DataFrame: IP maternity functional areas with new grouping obstetric_theatre_procedures
     """
+    functional_areas = functional_areas.reset_index("grouping")
     obstetric_theatre_procedures = (
         functional_areas[
             functional_areas["grouping"].isin(
@@ -193,7 +194,11 @@ def process_theatres_obstetric_proc_data(
         .sum()
         .assign(grouping="obstetric_theatre_procedures")
     )
-    result = pd.concat([functional_areas, obstetric_theatre_procedures]).sort_index()
+    result = (
+        pd.concat([functional_areas, obstetric_theatre_procedures])
+        .set_index("grouping", append=True)
+        .sort_index()
+    )
     return result
 
 
@@ -209,6 +214,7 @@ def process_maternity_birth_data(
     Returns:
         pd.DataFrame: IP maternity functional areas with new groupings
     """
+    functional_areas = functional_areas.reset_index("grouping")
     df_list = []
     groups_list = [
         ["maternity_normal_delivery_zerolos", "maternity_normal_delivery_nonzerolos"],
@@ -228,7 +234,11 @@ def process_maternity_birth_data(
             .sum()
             .assign(grouping="_".join(groups[0].split("_")[:-1]))
         )
-    result = pd.concat([functional_areas] + df_list).sort_index()
+    result = (
+        pd.concat([functional_areas] + df_list)
+        .set_index("grouping", append=True)
+        .sort_index()
+    )
     return result
 
 

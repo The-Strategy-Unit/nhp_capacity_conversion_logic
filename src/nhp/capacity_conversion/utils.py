@@ -75,7 +75,7 @@ def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
     """
     value_columns = aggregations.select_dtypes("number").columns.tolist()
     baseline = (
-        aggregations.loc[aggregations.index == 0]
+        aggregations.loc[aggregations.index.get_level_values("model_run") == 0, :]
         .groupby("grouping")[value_columns]
         .sum()
     )
@@ -311,11 +311,9 @@ def process_activity_type(
         else:
             aggregations = preprocess(aggregations)
     # We exclude baseline (model run 0) from conversion to capacity
-    functional_areas = (
-        aggregations[aggregations.index != 0]
-        .reset_index()
-        .set_index(["grouping", "model_run"])
-    )
+    functional_areas = aggregations.loc[
+        aggregations.index.get_level_values("model_run") != 0, :
+    ]
     data_to_save[f"{name}_fun_area_groupings"] = functional_areas
     if include_baseline:
         data_to_save[f"{name}_baseline"] = get_baseline_activity(aggregations)

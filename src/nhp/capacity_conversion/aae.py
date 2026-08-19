@@ -123,7 +123,7 @@ def calculate_aae_capacity(
     logger.info("Calculating A&E capacity")
     results_list = []
     for subgroup in functional_areas.index.get_level_values("grouping").unique():
-        fa_df = functional_areas.loc[subgroup, :]
+        fa_df = functional_areas.xs(key=subgroup, level="grouping")
         assumed_los_mins = cast(
             float,
             assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["los"], "Value"],

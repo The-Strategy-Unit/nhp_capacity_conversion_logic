@@ -11,10 +11,10 @@ from nhp.capacity_conversion.ip_maternity import (
     derive_birth_related_ward_beddays,
     derive_total_maternity_ward_beddays,
     main,
+    maternity_ward_assumptions_dict,
     preprocess_ip_maternity_data,
     process_maternity_birth_data,
     process_theatres_obstetric_proc_data,
-    ward_assumptions_dict,
 )
 
 
@@ -164,10 +164,10 @@ def test_calculate_maternity_ward_beds(mocker):
         {"output": ["MATERNITY_WARD_BEDS"], "model_run": [1], "total": [1.0]}
     ).set_index(["output", "model_run"])
     actual = calculate_maternity_ward_beds(
-        functional_areas_processed, assumptions_df, ward_assumptions_dict
+        functional_areas_processed, assumptions_df, maternity_ward_assumptions_dict
     )
     mock_derive.assert_called_once_with(
-        functional_areas_processed, assumptions_df, ward_assumptions_dict
+        functional_areas_processed, assumptions_df, maternity_ward_assumptions_dict
     )
     mock_calculate.assert_called_once_with(
         "total_maternity_ward_beddays",
@@ -191,21 +191,25 @@ def test_process_theatres_obstetric_proc_data():
             "spells": [1] * 5,
         },
         index=pd.Index([1] * 5, name="model_run"),
-    )
-    expected = pd.DataFrame(
-        {
-            "grouping": [
-                "maternity_elective_csection_nonzerolos",
-                "maternity_nonelective_csection_nonzerolos",
-                "maternity_elective_csection_zerolos",
-                "maternity_nonelective_csection_zerolos",
-                "maternity_group",
-                "obstetric_theatre_procedures",
-            ],
-            "beddays": [1] * 5 + [4],
-            "spells": [1] * 5 + [4],
-        },
-        index=pd.Index([1] * 6, name="model_run"),
+    ).set_index("grouping", append=True)
+    expected = (
+        pd.DataFrame(
+            {
+                "grouping": [
+                    "maternity_elective_csection_nonzerolos",
+                    "maternity_nonelective_csection_nonzerolos",
+                    "maternity_elective_csection_zerolos",
+                    "maternity_nonelective_csection_zerolos",
+                    "maternity_group",
+                    "obstetric_theatre_procedures",
+                ],
+                "beddays": [1] * 5 + [4],
+                "spells": [1] * 5 + [4],
+            },
+            index=pd.Index([1] * 6, name="model_run"),
+        )
+        .set_index("grouping", append=True)
+        .sort_index()
     )
     actual = process_theatres_obstetric_proc_data(functional_areas)
     assert_frame_equal(actual, expected)
@@ -227,25 +231,29 @@ def test_process_maternity_birth_data():
             "spells": [0, 1, 1, 2, 2, 3, 3],
         },
         index=pd.Index([1] * 7, name="model_run"),
-    )
-    expected = pd.DataFrame(
-        {
-            "grouping": [
-                "maternity_group",
-                "maternity_normal_delivery_zerolos",
-                "maternity_normal_delivery_nonzerolos",
-                "maternity_assisted_delivery_zerolos",
-                "maternity_assisted_delivery_nonzerolos",
-                "maternity_nonelective_csection_zerolos",
-                "maternity_nonelective_csection_nonzerolos",
-                "maternity_normal_delivery",
-                "maternity_assisted_delivery",
-                "maternity_nonelective_csection",
-            ],
-            "beddays": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
-            "spells": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
-        },
-        index=pd.Index([1] * 10, name="model_run"),
+    ).set_index("grouping", append=True)
+    expected = (
+        pd.DataFrame(
+            {
+                "grouping": [
+                    "maternity_group",
+                    "maternity_normal_delivery_zerolos",
+                    "maternity_normal_delivery_nonzerolos",
+                    "maternity_assisted_delivery_zerolos",
+                    "maternity_assisted_delivery_nonzerolos",
+                    "maternity_nonelective_csection_zerolos",
+                    "maternity_nonelective_csection_nonzerolos",
+                    "maternity_normal_delivery",
+                    "maternity_assisted_delivery",
+                    "maternity_nonelective_csection",
+                ],
+                "beddays": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
+                "spells": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
+            },
+            index=pd.Index([1] * 10, name="model_run"),
+        )
+        .set_index("grouping", append=True)
+        .sort_index()
     )
     actual = process_maternity_birth_data(functional_areas)
     assert_frame_equal(actual, expected)
@@ -387,7 +395,7 @@ def test_calculate_maternity_capacity(mocker):
         config=fake_config,
     )
     mock_calculate_ward_beds.assert_called_once_with(
-        functional_areas, assumptions_df, ward_assumptions_dict
+        functional_areas, assumptions_df, maternity_ward_assumptions_dict
     )
     expected = pd.DataFrame(
         {"output": ["output", "ward_beds"], "total": [1, 1], "model_run": [1, 1]}

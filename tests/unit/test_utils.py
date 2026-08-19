@@ -166,7 +166,7 @@ def test_get_baseline_activity():
             "model_run": [0] * 3 + [1] * 3 + [2] * 3,
             "total": [3, 10, 100] * 3,
         }
-    ).set_index("model_run")
+    ).set_index(["model_run", "grouping"])
 
     result = get_baseline_activity(aggregations)
 
@@ -416,7 +416,7 @@ def test_process_activity_type_with_preprocess():
             "model_run": [0] * 2 + [1] * 2 + [2] * 2,
             "total": [1, 2, 3, 4, 5, 6],
         }
-    )
+    ).set_index(["grouping", "model_run"])
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -442,7 +442,7 @@ def test_process_activity_type_with_baseline():
             "model_run": [0] * 2 + [1] * 2 + [2] * 2,
             "total": [1, 2, 3, 4, 5, 6],
         }
-    )
+    ).set_index(["grouping", "model_run"])
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -465,7 +465,7 @@ def test_process_activity_type_without_baseline():
             "model_run": [0] * 2 + [1] * 2 + [2] * 2,
             "total": [1, 2, 3, 4, 5, 6],
         }
-    )
+    ).set_index(["grouping", "model_run"])
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -609,7 +609,7 @@ def test_filter_aggregations_all(filter_agg_df):
             ],
             "value": [2, 2],
         }
-    ).set_index("model_run")
+    ).set_index(["model_run", "group"])
     actual = filter_aggregations(filter_agg_df, "ALL")
     assert_frame_equal(actual, expected)
 
@@ -624,6 +624,6 @@ def test_filter_aggregations(filter_agg_df):
             ],
             "value": [1, 1],
         }
-    ).set_index("model_run")
+    ).set_index(["model_run", "group"])
     actual = filter_aggregations(filter_agg_df, "A")
     assert_frame_equal(actual, expected)
