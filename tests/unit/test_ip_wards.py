@@ -2,7 +2,12 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal, assert_series_equal
 
-from nhp.capacity_conversion.ip_wards import derive_ward_beddays, group_ip_wards_beddays
+from nhp.capacity_conversion.ip_wards import (
+    WARD_WORKLOAD_ASSUMPTIONS_DICT,
+    derive_ward_beddays,
+    group_ip_wards_beddays,
+    preprocess_ip_wards_data,
+)
 
 
 @pytest.fixture
@@ -53,7 +58,7 @@ def test_derive_ward_beddays_elective(
 ):
     grouping = "adult_elective_medical"
 
-    functional_areas_processed = make_functional_areas(grouping)
+    functional_areas = make_functional_areas(grouping)
 
     mock_derive_beddays = mocker.patch(
         "nhp.capacity_conversion.ip_wards.derive_beddays_from_spells",
@@ -62,7 +67,7 @@ def test_derive_ward_beddays_elective(
 
     result = derive_ward_beddays(
         grouping=grouping,
-        functional_areas_processed=functional_areas_processed,
+        functional_areas=functional_areas,
         assumptions_df=assumptions_df,
         assumptions_dict=assumptions_dict,
     )
@@ -105,7 +110,7 @@ def test_derive_ward_beddays_nonelective(
 ):
     grouping = "adult_nonelective_medical"
 
-    functional_areas_processed = make_functional_areas(grouping)
+    functional_areas = make_functional_areas(grouping)
 
     # First call = zero-day beddays.
     # Second call = assessment beddays.
@@ -119,7 +124,7 @@ def test_derive_ward_beddays_nonelective(
 
     result = derive_ward_beddays(
         grouping=grouping,
-        functional_areas_processed=functional_areas_processed,
+        functional_areas=functional_areas,
         assumptions_df=assumptions_df,
         assumptions_dict=assumptions_dict,
     )
@@ -298,3 +303,77 @@ def test_group_ip_wards_beddays():
         ),
     )
     assert_frame_equal(result, expected)
+
+
+def test_preprocess_ip_wards_data(mocker):
+    functional_areas = mocker.Mock()
+    assumptions_df = mocker.Mock()
+
+    derived_beddays = {
+        "ward_beddays": pd.Series(
+            [100.0, 200.0], index=pd.Index([1, 2], name="model_run")
+        ),
+        "critical_care_beddays": pd.Series(
+            [10.0, 20.0], index=pd.Index([1, 2], name="model_run")
+        ),
+        "assessment_beddays": pd.Series(
+            [5.0, 6.0], index=pd.Index([1, 2], name="model_run")
+        ),
+    }
+
+    mock_derive_ward_beddays = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.derive_ward_beddays",
+        return_value=derived_beddays,
+    )
+
+    expected_result = pd.DataFrame(
+        {"total": [321.0]},
+        index=pd.MultiIndex.from_tuples(
+            [(1, "grouping")],
+            names=["model_run", "grouping"],
+        ),
+    )
+
+    mock_group_ip_wards_beddays = mocker.patch(
+        "nhp.capacity_conversion.ip_wards.group_ip_wards_beddays",
+        return_value=expected_result,
+    )
+
+    result = preprocess_ip_wards_data(
+        functional_areas=functional_areas,
+        assumptions_df=assumptions_df,
+    )
+
+    # Check the final result is returned unchanged.
+    assert_frame_equal(result, expected_result)
+
+    # derive_ward_beddays should be called once for every configured grouping.
+    assert mock_derive_ward_beddays.call_count == len(WARD_WORKLOAD_ASSUMPTIONS_DICT)
+
+    # Check each grouping receives the correct assumptions.
+    for grouping, assumptions_dict in WARD_WORKLOAD_ASSUMPTIONS_DICT.items():
+        mock_derive_ward_beddays.assert_any_call(
+            grouping,
+            functional_areas,
+            assumptions_df,
+            assumptions_dict,
+        )
+
+    # group_ip_wards_beddays should be called once with the combined result.
+    mock_group_ip_wards_beddays.assert_called_once()
+
+    grouped_input = mock_group_ip_wards_beddays.call_args.args[0]
+
+    expected_input = pd.concat(
+        [
+            pd.DataFrame(derived_beddays)
+            .assign(grouping=grouping)
+            .set_index("grouping", append=True)
+            for grouping in WARD_WORKLOAD_ASSUMPTIONS_DICT
+        ]
+    )
+
+    assert_frame_equal(
+        grouped_input,
+        expected_input,
+    )

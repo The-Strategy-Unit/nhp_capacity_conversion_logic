@@ -150,7 +150,7 @@ WARD_CAPACITY_ASSUMPTIONS_DICT = {
 
 def derive_ward_beddays(
     grouping: str,
-    functional_areas_processed: pd.DataFrame,
+    functional_areas: pd.DataFrame,
     assumptions_df: pd.DataFrame,
     assumptions_dict: dict[str, str],
 ) -> dict[str, pd.Series]:
@@ -158,8 +158,7 @@ def derive_ward_beddays(
 
     Args:
         grouping (str): Name of functional area grouping
-        functional_areas_processed (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
-        Functional areas should first be processed with preprocess_ip_ward_data
+        functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating beddays
 
 
@@ -175,9 +174,7 @@ def derive_ward_beddays(
         ],
     )
     zero_day_beddays = derive_beddays_from_spells(
-        functional_areas_processed.xs(key=grouping + "_zerolos", level="grouping")[
-            "spells"
-        ],
+        functional_areas.xs(key=grouping + "_zerolos", level="grouping")["spells"],
         zero_day_los,
     )
 
@@ -187,9 +184,7 @@ def derive_ward_beddays(
     )
     critical_care_beddays = (
         critical_care_percentage
-        * functional_areas_processed.xs(key=grouping + "_nonzerolos", level="grouping")[
-            "beddays"
-        ]
+        * functional_areas.xs(key=grouping + "_nonzerolos", level="grouping")["beddays"]
     )
     # Assessment beddays are always 0 for elective activity
     assessment_beddays = pd.Series(0, index=critical_care_beddays.index.copy())
@@ -202,20 +197,16 @@ def derive_ward_beddays(
             ],
         )
         assessment_spells = (
-            functional_areas_processed.xs(
-                key=grouping + "_nonzerolos", level="grouping"
-            )["spells"]
-            + functional_areas_processed.xs(
-                key=grouping + "_zerolos", level="grouping"
-            )["spells"]
+            functional_areas.xs(key=grouping + "_nonzerolos", level="grouping")[
+                "spells"
+            ]
+            + functional_areas.xs(key=grouping + "_zerolos", level="grouping")["spells"]
         )
         assessment_beddays = derive_beddays_from_spells(
             assessment_spells, assessment_los
         )
     ward_beddays = (
-        functional_areas_processed.xs(key=grouping + "_nonzerolos", level="grouping")[
-            "beddays"
-        ]
+        functional_areas.xs(key=grouping + "_nonzerolos", level="grouping")["beddays"]
         + zero_day_beddays
         - assessment_beddays
         - critical_care_beddays
