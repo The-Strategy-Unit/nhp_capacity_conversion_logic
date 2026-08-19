@@ -14,6 +14,7 @@ from nhp.capacity_conversion.utils import (
     get_baseline_activity,
     load_aggregations,
     load_assumptions,
+    load_functional_aggregations_from_ats,
     load_metadata_from_ats,
     load_parquet_file,
     process_activity_type,
@@ -325,6 +326,42 @@ def test_load_metadata_from_ats_not_found(mocker):
             table_name=table_name,
             capacity_model_version=capacity_model_version,
         )
+
+
+def test_load_functional_aggregations_from_ats(mocker):
+    credential = mocker.Mock()
+    table_client = mocker.Mock()
+    entities = [
+        {"PartitionKey": "dev", "RowKey": "guid-1"},
+        {"PartitionKey": "dev", "RowKey": "guid-2"},
+    ]
+    mocker.patch(
+        "nhp.capacity_conversion.utils.DefaultAzureCredential",
+        return_value=credential,
+    )
+    table_client_class = mocker.patch(
+        "nhp.capacity_conversion.utils.TableClient",
+        return_value=table_client,
+    )
+    table_client.query_entities.return_value = iter(entities)
+
+    result = load_functional_aggregations_from_ats(
+        "https://example.table.core.windows.net",
+        "catalogue",
+        "dev",
+    )
+
+    table_client_class.assert_called_once_with(
+        endpoint="https://example.table.core.windows.net",
+        table_name="catalogue",
+        credential=credential,
+    )
+    table_client.query_entities.assert_called_once_with(
+        query_filter="PartitionKey eq @capacity_model_version",
+        parameters={"capacity_model_version": "dev"},
+    )
+    assert result == entities
+    assert result[0] is not entities[0]
 
 
 def test_create_aggregations_path():
