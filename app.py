@@ -285,7 +285,7 @@ app_ui = ui.page_fluid(
                 ui.input_action_button(
                     "generate",
                     "Generate capacity estimates",
-                    class_="btn-primary",
+                    class_="btn-primary btn-sm",
                 ),
                 class_="d-flex justify-content-end",
             ),
