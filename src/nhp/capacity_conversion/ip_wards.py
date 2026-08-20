@@ -281,7 +281,7 @@ def preprocess_ip_wards_data(
 def calculate_ip_wards_capacity(
     functional_areas_processed: pd.DataFrame,
     assumptions_df: pd.DataFrame,
-):
+) -> pd.DataFrame:
     """Converts functional areas into capacity requirements using supplied assumptions
 
         Args:

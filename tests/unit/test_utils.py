@@ -466,29 +466,25 @@ def test_process_activity_type_with_ip_wards_preprocess(mocker):
         :,
     ]
 
-    # calculate_fn should be called once.
     mock_calculate.assert_called_once()
 
     actual_functional_areas, actual_assumptions = mock_calculate.call_args.args
 
-    # Compare DataFrames using pandas' testing utilities.
-    pd.testing.assert_frame_equal(
+    assert_frame_equal(
         actual_functional_areas,
         expected_functional_areas,
     )
 
-    pd.testing.assert_frame_equal(
+    assert_frame_equal(
         actual_assumptions,
         assumptions,
     )
 
-    # The baseline-excluded functional areas should be saved.
-    pd.testing.assert_frame_equal(
+    assert_frame_equal(
         data_to_save["ip_wards_fun_area_groupings"],
         expected_functional_areas,
     )
 
-    # Capacity should be saved.
     assert "ip_wards_capacity" in data_to_save
 
 
