@@ -103,8 +103,11 @@ uv run --locked --group dev scripts/deploy_shiny.py
 
 Choose whether to create new content or replace an existing deployment. Before
 deploying, the helper checks the required tools, bundle files, and environment
-variables, then verifies the Connect server and asks for confirmation. It does
-not display the API key or include it in subprocess arguments.
+variables, reports whether each effective value came from `.env` or the current
+environment, and rejects an invalid `FEEDBACK_FORM_URL`. It then verifies the
+Connect server and asks for confirmation. It does not display environment
+variable values, include the API key in subprocess arguments, or override a
+current-environment value with its `.env` counterpart.
 
 After the initial deployment, set its **Custom content URL** under **Settings →
 Manage access** to:

@@ -70,6 +70,18 @@ def _configure_valid_preflight(
 
     for env_var in (*deploy.CONNECT_ENV_VARS, *deploy.RUNTIME_ENV_VARS):
         monkeypatch.setenv(env_var, "configured")
+    monkeypatch.setenv(
+        "FEEDBACK_FORM_URL",
+        "https://forms.example.test/feedback",
+    )
+
+
+def _current_environment_sources() -> dict[str, object]:
+    return {
+        name: deploy.EnvironmentSource.CURRENT_ENVIRONMENT
+        for name in deploy.DEPLOYMENT_ENV_VARS
+        if name in deploy.os.environ
+    }
 
 
 def test_new_deployment_does_not_require_app_id(
@@ -81,7 +93,10 @@ def test_new_deployment_does_not_require_app_id(
 
     checks = {
         check.label: check
-        for check in deploy.collect_preflight_checks(deploy.DeploymentType.NEW)
+        for check in deploy.collect_preflight_checks(
+            deploy.DeploymentType.NEW,
+            _current_environment_sources(),
+        )
     }
 
     assert "CONNECT_APP_ID" not in checks
@@ -98,11 +113,75 @@ def test_new_deployment_requires_feedback_form_url(
 
     checks = {
         check.label: check
-        for check in deploy.collect_preflight_checks(deploy.DeploymentType.NEW)
+        for check in deploy.collect_preflight_checks(
+            deploy.DeploymentType.NEW,
+            _current_environment_sources(),
+        )
     }
 
     assert checks["FEEDBACK_FORM_URL"].passed is False
     assert checks["FEEDBACK_FORM_URL"].required is True
+    assert checks["FEEDBACK_FORM_URL"].source is deploy.EnvironmentSource.UNSET
+
+
+def test_preflight_rejects_stale_feedback_url_from_current_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _configure_valid_preflight(monkeypatch, tmp_path)
+    (tmp_path / ".env").write_text(
+        "FEEDBACK_FORM_URL=https://forms.example.test/feedback\n",
+        encoding="utf-8",
+    )
+    stale_value = "not-a-valid-url"
+    monkeypatch.setenv("FEEDBACK_FORM_URL", stale_value)
+
+    environment_sources = deploy.load_deployment_environment()
+    checks = {
+        check.label: check
+        for check in deploy.collect_preflight_checks(
+            deploy.DeploymentType.NEW,
+            environment_sources,
+        )
+    }
+    feedback_check = checks["FEEDBACK_FORM_URL"]
+
+    assert deploy.os.environ["FEEDBACK_FORM_URL"] == stale_value
+    assert feedback_check.passed is False
+    assert feedback_check.failure_status == "INVALID"
+    assert feedback_check.source is deploy.EnvironmentSource.CURRENT_ENVIRONMENT
+
+    deploy.print_preflight_checks([feedback_check])
+    output = capsys.readouterr().out
+    assert "INVALID FEEDBACK_FORM_URL (source: current environment)" in output
+    assert "must be a valid HTTPS URL" in output
+    assert stale_value not in output
+
+
+def test_preflight_reports_feedback_url_loaded_from_dotenv(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(deploy, "ENV_FILE", tmp_path / ".env")
+    (tmp_path / ".env").write_text(
+        "FEEDBACK_FORM_URL=https://forms.example.test/feedback\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("FEEDBACK_FORM_URL", raising=False)
+
+    environment_sources = deploy.load_deployment_environment()
+    feedback_check = deploy._environment_preflight_check(
+        "FEEDBACK_FORM_URL",
+        environment_sources,
+    )
+
+    assert feedback_check.passed is True
+    assert feedback_check.source is deploy.EnvironmentSource.DOTENV
+
+    deploy.print_preflight_checks([feedback_check])
+    assert "OK      FEEDBACK_FORM_URL (source: .env)" in capsys.readouterr().out
 
 
 def test_redeployment_requires_app_id(
@@ -114,7 +193,10 @@ def test_redeployment_requires_app_id(
 
     checks = {
         check.label: check
-        for check in deploy.collect_preflight_checks(deploy.DeploymentType.REDEPLOY)
+        for check in deploy.collect_preflight_checks(
+            deploy.DeploymentType.REDEPLOY,
+            _current_environment_sources(),
+        )
     }
 
     assert checks["CONNECT_APP_ID"].passed is False
@@ -133,7 +215,7 @@ def test_preflight_reports_missing_tools_and_bundle_files(
 
     checks = {
         check.label: check
-        for check in deploy.collect_preflight_checks(deploy.DeploymentType.NEW)
+        for check in deploy.collect_preflight_checks(deploy.DeploymentType.NEW, {})
     }
 
     assert checks["uv CLI"].passed is False
@@ -205,7 +287,7 @@ def test_main_checks_connection_then_deploys(mocker) -> None:
         deploy.os.environ,
         {"CONNECT_SERVER": "https://connect.example.test"},
     )
-    mocker.patch.object(deploy, "load_dotenv")
+    mocker.patch.object(deploy, "load_deployment_environment", return_value={})
     mocker.patch.object(
         deploy,
         "choose_deployment_type",
@@ -245,7 +327,7 @@ def test_main_stops_when_connection_check_fails(mocker) -> None:
         deploy.os.environ,
         {"CONNECT_SERVER": "https://connect.example.test"},
     )
-    mocker.patch.object(deploy, "load_dotenv")
+    mocker.patch.object(deploy, "load_deployment_environment", return_value={})
     mocker.patch.object(
         deploy,
         "choose_deployment_type",
