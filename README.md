@@ -47,21 +47,19 @@ The application requires:
 - `TABLE_NAME`: table containing functional-aggregation metadata.
 
 `FEEDBACK_FORM_URL` is optional. Set it to the `src` URL from the Microsoft
-Forms [embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
+Forms
+[embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
 If it is unset, the feedback button reports that the form is unavailable.
 
 Azure authentication uses `DefaultAzureCredential`. The credential must have
 read access to both the Table catalogue and Blob results container. For local
 Azure CLI authentication, run `az login` when needed.
 
-The local application does not load `.env` automatically. Export its variables,
-then start the development server from the repository root:
+The local application does not load `.env` automatically. Start the development
+server from the repository root, pointing `uv` to your `.env` file:
 
 ```console
-set -a
-source .env
-set +a
-uv run --locked --group app shiny run --reload app.py
+uv run --env-file .env --locked --group app shiny run --reload app.py
 ```
 
 The application queries the table's `dev` partition. It presents permitted
