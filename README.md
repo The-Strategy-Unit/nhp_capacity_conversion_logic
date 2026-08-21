@@ -46,10 +46,10 @@ The application requires:
 - `AZ_TABLE_ENDPOINT`: Azure Table Storage account endpoint.
 - `TABLE_NAME`: table containing functional-aggregation metadata.
 
-`FEEDBACK_FORM_URL` is optional. Set it to the `src` URL from the Microsoft
-Forms
+`FEEDBACK_FORM_URL` is required. Set it to the `src` URL from the Microsoft Forms
 [embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
-If it is unset, the feedback button reports that the form is unavailable.
+Deployment rejects a missing or invalid URL. The application still reports that
+the form is unavailable if the runtime configuration is unexpectedly missing.
 
 Azure authentication uses `DefaultAzureCredential`. The credential must have
 read access to both the Table catalogue and Blob results container. For local

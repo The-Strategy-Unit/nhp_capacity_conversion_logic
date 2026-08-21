@@ -26,9 +26,9 @@ REQUIRED_RUNTIME_ENV_VARS = (
     "AZ_STORAGE_RESULTS",
     "AZ_TABLE_ENDPOINT",
     "TABLE_NAME",
+    "FEEDBACK_FORM_URL",
 )
-OPTIONAL_RUNTIME_ENV_VARS = ("FEEDBACK_FORM_URL",)
-RUNTIME_ENV_VARS = (*REQUIRED_RUNTIME_ENV_VARS, *OPTIONAL_RUNTIME_ENV_VARS)
+RUNTIME_ENV_VARS = REQUIRED_RUNTIME_ENV_VARS
 BUNDLE_FILES = (
     "app.py",
     "_brand.yml",
@@ -89,8 +89,6 @@ def load_deployment_environment() -> dict[str, EnvironmentSource]:
 def _environment_preflight_check(
     name: str,
     environment_sources: Mapping[str, EnvironmentSource],
-    *,
-    required: bool = True,
 ) -> PreflightCheck:
     """Validate one deployment environment variable."""
     value = os.getenv(name, "").strip()
@@ -109,12 +107,7 @@ def _environment_preflight_check(
     return PreflightCheck(
         label=name,
         passed=bool(value),
-        detail=(
-            "set it in .env or the current environment"
-            if required
-            else "optional; set it in .env to enable this feature"
-        ),
-        required=required,
+        detail="set it in .env or the current environment",
         source=source,
     )
 
@@ -198,14 +191,6 @@ def collect_preflight_checks(
         _environment_preflight_check(env_var, environment_sources)
         for env_var in required_env_vars
     )
-    checks.extend(
-        _environment_preflight_check(
-            env_var,
-            environment_sources,
-            required=False,
-        )
-        for env_var in OPTIONAL_RUNTIME_ENV_VARS
-    )
     return checks
 
 
@@ -250,15 +235,7 @@ def build_deploy_command(
     else:
         command.extend(["--app-id", os.environ["CONNECT_APP_ID"]])
 
-    runtime_env_vars = [
-        *REQUIRED_RUNTIME_ENV_VARS,
-        *(
-            env_var
-            for env_var in OPTIONAL_RUNTIME_ENV_VARS
-            if os.getenv(env_var, "").strip()
-        ),
-    ]
-    for env_var in runtime_env_vars:
+    for env_var in RUNTIME_ENV_VARS:
         command.extend(["-E", env_var])
 
     command.extend(["--exclude=**", ".", *BUNDLE_FILES])

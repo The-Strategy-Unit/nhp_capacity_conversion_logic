@@ -104,7 +104,7 @@ def test_new_deployment_does_not_require_app_id(
     assert checks[".env file"].required is False
 
 
-def test_new_deployment_allows_missing_feedback_form_url(
+def test_new_deployment_requires_feedback_form_url(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -120,8 +120,9 @@ def test_new_deployment_allows_missing_feedback_form_url(
     }
 
     assert checks["FEEDBACK_FORM_URL"].passed is False
-    assert checks["FEEDBACK_FORM_URL"].required is False
+    assert checks["FEEDBACK_FORM_URL"].required is True
     assert checks["FEEDBACK_FORM_URL"].source is deploy.EnvironmentSource.UNSET
+    assert "AZ_FUNC_AGG_GUID" not in deploy.RUNTIME_ENV_VARS
 
 
 def test_dotenv_feedback_url_overrides_stale_current_environment_value(
@@ -296,21 +297,6 @@ def test_build_deploy_command(
         assert ["-E", env_var] == command[
             command.index(env_var) - 1 : command.index(env_var) + 1
         ]
-
-
-def test_build_deploy_command_omits_unconfigured_optional_runtime_variable(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(deploy, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(deploy, "BUNDLE_FILES", ())
-    monkeypatch.setattr(deploy, "CAPACITY_SOURCE_GLOB", "*.py")
-    monkeypatch.delenv("FEEDBACK_FORM_URL", raising=False)
-
-    command = deploy.build_deploy_command(deploy.DeploymentType.NEW, "rsconnect")
-
-    assert "FEEDBACK_FORM_URL" not in command
-    assert "AZ_FUNC_AGG_GUID" not in deploy.RUNTIME_ENV_VARS
 
 
 def test_confirm_deployment_does_not_print_api_key(
