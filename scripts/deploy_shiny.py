@@ -11,7 +11,7 @@ from enum import StrEnum
 from pathlib import Path
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -69,16 +69,17 @@ class PreflightCheck:
 
 
 def load_deployment_environment() -> dict[str, EnvironmentSource]:
-    """Load `.env` without overriding values and record each effective source."""
+    """Load `.env` with precedence and record each effective value's source."""
     inherited_environment = set(os.environ)
-    load_dotenv(dotenv_path=ENV_FILE, override=False)
+    dotenv_environment = dotenv_values(dotenv_path=ENV_FILE)
+    load_dotenv(dotenv_path=ENV_FILE, override=True)
 
     return {
         name: (
-            EnvironmentSource.CURRENT_ENVIRONMENT
+            EnvironmentSource.DOTENV
+            if dotenv_environment.get(name) is not None
+            else EnvironmentSource.CURRENT_ENVIRONMENT
             if name in inherited_environment
-            else EnvironmentSource.DOTENV
-            if name in os.environ
             else EnvironmentSource.UNSET
         )
         for name in DEPLOYMENT_ENV_VARS

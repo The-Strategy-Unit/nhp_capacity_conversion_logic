@@ -124,14 +124,15 @@ def test_new_deployment_requires_feedback_form_url(
     assert checks["FEEDBACK_FORM_URL"].source is deploy.EnvironmentSource.UNSET
 
 
-def test_preflight_rejects_stale_feedback_url_from_current_environment(
+def test_dotenv_feedback_url_overrides_stale_current_environment_value(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _configure_valid_preflight(monkeypatch, tmp_path)
+    dotenv_value = "https://forms.example.test/feedback"
     (tmp_path / ".env").write_text(
-        "FEEDBACK_FORM_URL=https://forms.example.test/feedback\n",
+        f"FEEDBACK_FORM_URL={dotenv_value}\n",
         encoding="utf-8",
     )
     stale_value = "not-a-valid-url"
@@ -147,7 +148,32 @@ def test_preflight_rejects_stale_feedback_url_from_current_environment(
     }
     feedback_check = checks["FEEDBACK_FORM_URL"]
 
-    assert deploy.os.environ["FEEDBACK_FORM_URL"] == stale_value
+    assert deploy.os.environ["FEEDBACK_FORM_URL"] == dotenv_value
+    assert feedback_check.passed is True
+    assert feedback_check.source is deploy.EnvironmentSource.DOTENV
+
+    deploy.print_preflight_checks([feedback_check])
+    output = capsys.readouterr().out
+    assert "OK      FEEDBACK_FORM_URL (source: .env)" in output
+    assert stale_value not in output
+    assert dotenv_value not in output
+
+
+def test_preflight_rejects_invalid_feedback_url_from_current_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _configure_valid_preflight(monkeypatch, tmp_path)
+    invalid_value = "not-a-valid-url"
+    monkeypatch.setenv("FEEDBACK_FORM_URL", invalid_value)
+
+    environment_sources = deploy.load_deployment_environment()
+    feedback_check = deploy._environment_preflight_check(
+        "FEEDBACK_FORM_URL",
+        environment_sources,
+    )
+
     assert feedback_check.passed is False
     assert feedback_check.failure_status == "INVALID"
     assert feedback_check.source is deploy.EnvironmentSource.CURRENT_ENVIRONMENT
@@ -156,7 +182,7 @@ def test_preflight_rejects_stale_feedback_url_from_current_environment(
     output = capsys.readouterr().out
     assert "INVALID FEEDBACK_FORM_URL (source: current environment)" in output
     assert "must be a valid HTTPS URL" in output
-    assert stale_value not in output
+    assert invalid_value not in output
 
 
 def test_preflight_reports_feedback_url_loaded_from_dotenv(

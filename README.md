@@ -86,9 +86,10 @@ If it is unset, the application displays a configuration warning.
 Azure authentication uses `DefaultAzureCredential`; the Connect runtime must
 provide a supported credential with read access to the results container.
 
-The interactive deployment helper loads `.env` automatically and does not
-override variables already set in the current environment. `.env` is ignored
-by Git; never commit the API key. Set these variables before deploying:
+The interactive deployment helper loads `.env` automatically. Values in `.env`
+override variables already set in the current environment, making `.env` the
+source of truth for deployment. `.env` is ignored by Git; never commit the API
+key. Set these variables before deploying:
 
 - `CONNECT_SERVER`: the Posit Connect server URL.
 - `CONNECT_API_KEY`: a Posit Connect API key with permission to publish.
@@ -106,8 +107,7 @@ deploying, the helper checks the required tools, bundle files, and environment
 variables, reports whether each effective value came from `.env` or the current
 environment, and rejects an invalid `FEEDBACK_FORM_URL`. It then verifies the
 Connect server and asks for confirmation. It does not display environment
-variable values, include the API key in subprocess arguments, or override a
-current-environment value with its `.env` counterpart.
+variable values or include the API key in subprocess arguments.
 
 After the initial deployment, set its **Custom content URL** under **Settings →
 Manage access** to:
