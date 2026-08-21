@@ -5,11 +5,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlparse
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -36,6 +38,7 @@ BUNDLE_FILES = (
     "src/nhp/__init__.py",
 )
 CAPACITY_SOURCE_GLOB = "src/nhp/capacity_conversion/*.py"
+DEPLOYMENT_ENV_VARS = (*CONNECT_ENV_VARS, *RUNTIME_ENV_VARS, "CONNECT_APP_ID")
 
 
 class DeploymentType(StrEnum):
@@ -43,6 +46,14 @@ class DeploymentType(StrEnum):
 
     NEW = "new"
     REDEPLOY = "redeploy"
+
+
+class EnvironmentSource(StrEnum):
+    """Where an effective deployment environment variable came from."""
+
+    CURRENT_ENVIRONMENT = "current environment"
+    DOTENV = ".env"
+    UNSET = "not configured"
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,59 @@ class PreflightCheck:
     passed: bool
     detail: str = ""
     required: bool = True
+    source: EnvironmentSource | None = None
+    failure_status: str = "MISSING"
+
+
+def load_deployment_environment() -> dict[str, EnvironmentSource]:
+    """Load `.env` with precedence and record each effective value's source."""
+    inherited_environment = set(os.environ)
+    dotenv_environment = dotenv_values(dotenv_path=ENV_FILE)
+    load_dotenv(dotenv_path=ENV_FILE, override=True)
+
+    return {
+        name: (
+            EnvironmentSource.DOTENV
+            if dotenv_environment.get(name) is not None
+            else EnvironmentSource.CURRENT_ENVIRONMENT
+            if name in inherited_environment
+            else EnvironmentSource.UNSET
+        )
+        for name in DEPLOYMENT_ENV_VARS
+    }
+
+
+def _environment_preflight_check(
+    name: str,
+    environment_sources: Mapping[str, EnvironmentSource],
+    *,
+    required: bool = True,
+) -> PreflightCheck:
+    """Validate one deployment environment variable."""
+    value = os.getenv(name, "").strip()
+    source = environment_sources.get(name, EnvironmentSource.UNSET)
+    if name == "FEEDBACK_FORM_URL" and value:
+        feedback_url = urlparse(value)
+        if feedback_url.scheme != "https" or not feedback_url.netloc:
+            return PreflightCheck(
+                label=name,
+                passed=False,
+                detail="must be a valid HTTPS URL",
+                source=source,
+                failure_status="INVALID",
+            )
+
+    return PreflightCheck(
+        label=name,
+        passed=bool(value),
+        detail=(
+            "set it in .env or the current environment"
+            if required
+            else "optional; set it in .env to enable this feature"
+        ),
+        required=required,
+        source=source,
+    )
 
 
 def choose_deployment_type() -> DeploymentType | None:
@@ -79,7 +143,10 @@ def choose_deployment_type() -> DeploymentType | None:
         print("Enter 1, 2, or q.")
 
 
-def collect_preflight_checks(deployment_type: DeploymentType) -> list[PreflightCheck]:
+def collect_preflight_checks(
+    deployment_type: DeploymentType,
+    environment_sources: Mapping[str, EnvironmentSource],
+) -> list[PreflightCheck]:
     """Check local tools, bundle inputs, and deployment configuration."""
     checks = [
         PreflightCheck(
@@ -128,18 +195,13 @@ def collect_preflight_checks(deployment_type: DeploymentType) -> list[PreflightC
         required_env_vars.append("CONNECT_APP_ID")
 
     checks.extend(
-        PreflightCheck(
-            label=env_var,
-            passed=bool(os.getenv(env_var, "").strip()),
-            detail="set it in .env or the current environment",
-        )
+        _environment_preflight_check(env_var, environment_sources)
         for env_var in required_env_vars
     )
     checks.extend(
-        PreflightCheck(
-            label=env_var,
-            passed=bool(os.getenv(env_var, "").strip()),
-            detail="optional; set it in .env to enable this feature",
+        _environment_preflight_check(
+            env_var,
+            environment_sources,
             required=False,
         )
         for env_var in OPTIONAL_RUNTIME_ENV_VARS
@@ -154,11 +216,12 @@ def print_preflight_checks(checks: list[PreflightCheck]) -> None:
         if check.passed:
             status = "OK"
         elif check.required:
-            status = "MISSING"
+            status = check.failure_status
         else:
             status = "NOTICE"
 
-        print(f"  {status:<7} {check.label}")
+        source = f" (source: {check.source})" if check.source is not None else ""
+        print(f"  {status:<7} {check.label}{source}")
         if not check.passed and check.detail:
             print(f"          {check.detail}")
 
@@ -235,7 +298,7 @@ def run_command(command: list[str]) -> int:
 
 def main() -> int:
     """Validate configuration and deploy the Shiny app to Posit Connect."""
-    load_dotenv(dotenv_path=ENV_FILE, override=False)
+    environment_sources = load_deployment_environment()
 
     print("NHP Capacity Conversion deployment\n")
     deployment_type = choose_deployment_type()
@@ -243,7 +306,7 @@ def main() -> int:
         print("Deployment cancelled.")
         return 0
 
-    checks = collect_preflight_checks(deployment_type)
+    checks = collect_preflight_checks(deployment_type, environment_sources)
     print_preflight_checks(checks)
     if any(not check.passed and check.required for check in checks):
         print("\nDeployment cannot continue.")

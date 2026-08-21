@@ -93,10 +93,10 @@ Consult the
 [official Posit Connect publishing documentation](https://docs.posit.co/connect/user/publishing-cli/)
 before using `rsconnect`.
 
-The interactive deployment helper loads `.env` automatically and does not
-override variables already set in the current environment. `.env` is ignored by
-Git; never commit its credentials. In addition to the application runtime
-variables above, set:
+The interactive deployment helper loads `.env` automatically. Values in `.env`
+override variables already set in the current environment, making `.env` the
+source of truth for deployment. `.env` is ignored by Git; never commit its
+credentials. In addition to the application runtime variables above, set:
 
 - `CONNECT_SERVER`: the Posit Connect server URL.
 - `CONNECT_API_KEY`: a Posit Connect API key with permission to publish.
@@ -111,8 +111,10 @@ uv run --locked --group dev scripts/deploy_shiny.py
 
 Choose whether to create new content or replace an existing deployment. Before
 deploying, the helper checks the required tools, bundle files, and environment
-variables, then verifies the Connect server and asks for confirmation. It does
-not display the API key or include it in subprocess arguments.
+variables, reports whether each effective value came from `.env` or the current
+environment, and rejects an invalid `FEEDBACK_FORM_URL`. It then verifies the
+Connect server and asks for confirmation. It does not display environment
+variable values or include the API key in subprocess arguments.
 
 After the initial deployment, set its **Custom content URL** under **Settings →
 Manage access** to:
