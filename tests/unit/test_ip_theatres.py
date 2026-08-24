@@ -1,11 +1,13 @@
 import pandas as pd
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.ip_theatres import (
     THEATRES_WORKLOAD_ASSUMPTIONS_DICT,
+    calculate_ip_theatres_capacity,
     calculate_procedure_time,
     combine_procedure_groupings,
     convert_procedure_time_to_hours,
+    main,
     preprocess_ip_theatres_data,
 )
 
@@ -149,3 +151,82 @@ def test_preprocess_ip_theatres_data(mocker):
     )
     mock_combine.assert_called_once_with(calculated_data)
     assert result is grouped_data
+
+
+def test_calculate_ip_theatres_capacity(mocker):
+    functional_areas_processed = pd.DataFrame(
+        {
+            "total_theatre_time": [100.0, 200.0],
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("procedure_a", 0),
+                ("procedure_a", 1),
+            ],
+            names=["procedure_grouping", "model_run"],
+        ),
+    )
+
+    assumptions_df = pd.DataFrame(
+        {
+            "Value": {
+                "annual_operational_hours": 1000.0,
+                "utilisation": 0.8,
+            }
+        }
+    )
+
+    mocker.patch.dict(
+        "nhp.capacity_conversion.ip_theatres.THEATRES_CAPACITY_ASSUMPTIONS_DICT",
+        {
+            "procedure_a": {
+                "annual_operational_hours": "annual_operational_hours",
+                "utilisation": "utilisation",
+                "output": "capacity_output",
+            }
+        },
+        clear=True,
+    )
+    mock_calculate = mocker.patch(
+        "nhp.capacity_conversion.ip_theatres.calculate_time_util_capacity",
+        return_value=pd.Series(
+            [1.5, 2.5],
+            index=pd.Index([0, 1], name="model_run"),
+            name="total_theatre_time",
+        ),
+    )
+    treatment_hours = pd.Series(
+        [100.0, 200.0],
+        index=pd.Index([0, 1], name="model_run"),
+        name="total_theatre_time",
+    )
+
+    expected = pd.DataFrame(
+        {"total": [1.5, 2.5]},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("capacity_output", 0),
+                ("capacity_output", 1),
+            ],
+            names=["output", "model_run"],
+        ),
+    )
+    actual = calculate_ip_theatres_capacity(
+        functional_areas_processed,
+        assumptions_df,
+    )
+    assert_frame_equal(actual, expected)
+    calculate_input = mock_calculate.call_args.args[0]
+    assert_series_equal(treatment_hours, calculate_input)
+
+
+def test_main(mocker):
+    mock_run_single = mocker.patch(
+        "nhp.capacity_conversion.ip_theatres.run_single_activity_type"
+    )
+    main()
+    mock_run_single.assert_called_with(
+        "ip_theatres",
+        calculate_ip_theatres_capacity,
+        preprocess=preprocess_ip_theatres_data,
+    )

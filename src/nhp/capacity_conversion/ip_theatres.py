@@ -1,4 +1,5 @@
 import logging
+import sys
 from typing import cast
 
 import pandas as pd
@@ -7,6 +8,7 @@ from nhp.capacity_conversion.ip_formulas import (
     calculate_time_util_capacity,
     derive_treatment_hours,
 )
+from nhp.capacity_conversion.utils import run_single_activity_type
 
 logger = logging.getLogger(__name__)
 
@@ -210,3 +212,21 @@ def calculate_ip_theatres_capacity(
         )
         results_list.append(capacity_df)
     return pd.concat(results_list)
+
+
+def main():
+    """
+    CLI entry point when module is run directly.
+
+    Returns:
+        int: Exit code (0 for success, 2 for errors)
+    """
+    return run_single_activity_type(
+        "ip_theatres",
+        calculate_ip_theatres_capacity,
+        preprocess=preprocess_ip_theatres_data,
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main())
