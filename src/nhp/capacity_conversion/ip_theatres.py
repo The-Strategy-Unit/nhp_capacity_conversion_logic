@@ -222,7 +222,7 @@ def main():
         int: Exit code (0 for success, 2 for errors)
     """
     return run_single_activity_type(
-        "ip_theatres",
+        "ip_procedures_and_theatres",
         calculate_ip_theatres_capacity,
         preprocess=preprocess_ip_theatres_data,
     )

@@ -226,7 +226,7 @@ def test_main(mocker):
     )
     main()
     mock_run_single.assert_called_with(
-        "ip_theatres",
+        "ip_procedures_and_theatres",
         calculate_ip_theatres_capacity,
         preprocess=preprocess_ip_theatres_data,
     )

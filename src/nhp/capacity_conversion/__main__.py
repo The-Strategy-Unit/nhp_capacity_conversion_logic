@@ -12,6 +12,10 @@ from nhp.capacity_conversion.ip_maternity import (
     calculate_maternity_capacity,
     preprocess_ip_maternity_data,
 )
+from nhp.capacity_conversion.ip_theatres import (
+    calculate_ip_theatres_capacity,
+    preprocess_ip_theatres_data,
+)
 from nhp.capacity_conversion.ip_wards import (
     calculate_ip_wards_capacity,
     preprocess_ip_wards_data,
@@ -160,7 +164,23 @@ def main():
         data_to_save,
         preprocess=preprocess_ip_wards_data,
     )
-
+    ip_theatres_aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"],
+        config["AZ_STORAGE_RESULTS"],
+        aggregations_path,
+        "ip_procedures_and_theatres",
+    )
+    ip_theatres_aggregations = filter_aggregations(
+        ip_theatres_aggregations, args.ip_sites
+    )
+    process_activity_type(
+        "ip_procedures_and_theatres",
+        ip_theatres_aggregations,
+        calculate_ip_theatres_capacity,
+        assumptions,
+        data_to_save,
+        preprocess=preprocess_ip_theatres_data,
+    )
     process_and_save_results_to_excel(data_to_save)
     return 0
 
