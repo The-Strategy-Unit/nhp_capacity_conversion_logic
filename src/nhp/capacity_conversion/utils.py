@@ -75,7 +75,7 @@ def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
     """
     value_columns = aggregations.select_dtypes("number").columns.tolist()
     baseline = (
-        aggregations.loc[aggregations.index == 0]
+        aggregations.loc[aggregations.index.get_level_values("model_run") == 0, :]
         .groupby("grouping")[value_columns]
         .sum()
     )
@@ -301,18 +301,19 @@ def process_activity_type(
     calculate_fn: Callable,
     assumptions: pd.DataFrame,
     data_to_save: dict[str, pd.DataFrame | pd.Series],
-    preprocess: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+    preprocess: Callable | None = None,
     include_baseline: bool = True,
 ) -> None:
     """Summarise functional areas, optionally extract baseline, and calculate capacity."""
     if preprocess is not None:
-        aggregations = preprocess(aggregations)
+        if name == "ip_wards":
+            aggregations = preprocess(aggregations, assumptions)
+        else:
+            aggregations = preprocess(aggregations)
     # We exclude baseline (model run 0) from conversion to capacity
-    functional_areas = (
-        aggregations[aggregations.index != 0]
-        .reset_index()
-        .set_index(["grouping", "model_run"])
-    )
+    functional_areas = aggregations.loc[
+        aggregations.index.get_level_values("model_run") != 0, :
+    ]
     data_to_save[f"{name}_fun_area_groupings"] = functional_areas
     if include_baseline:
         data_to_save[f"{name}_baseline"] = get_baseline_activity(aggregations)
@@ -442,4 +443,4 @@ def filter_aggregations(aggregations: pd.DataFrame, sites: str) -> pd.DataFrame:
     aggregations = aggregations.groupby(["model_run"] + groupby_cols).sum(
         numeric_only=True
     )
-    return aggregations.reset_index().set_index("model_run")
+    return aggregations

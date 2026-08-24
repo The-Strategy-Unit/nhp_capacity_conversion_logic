@@ -166,7 +166,7 @@ def test_get_baseline_activity():
             "model_run": [0] * 3 + [1] * 3 + [2] * 3,
             "total": [3, 10, 100] * 3,
         }
-    ).set_index("model_run")
+    ).set_index(["model_run", "grouping"])
 
     result = get_baseline_activity(aggregations)
 
@@ -409,6 +409,85 @@ def test_load_aggregations(mocker, caplog):
     mock_load_parquet_file.assert_called_once_with(mock_connection, "path/type.parquet")
 
 
+def test_process_activity_type_with_ip_wards_preprocess(mocker):
+    aggregations = pd.DataFrame(
+        {
+            "grouping": ["a", "b"] * 3,
+            "model_run": [0, 0, 1, 1, 2, 2],
+            "total": [1, 2, 3, 4, 5, 6],
+        }
+    ).set_index(["grouping", "model_run"])
+
+    assumptions = pd.DataFrame(
+        {"Value": [100]},
+        index=["test_assumption"],
+    )
+
+    data_to_save = {}
+
+    preprocessed = pd.DataFrame(
+        {
+            "total": [10, 20, 30, 40, 50, 60],
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("a", 0),
+                ("b", 0),
+                ("a", 1),
+                ("b", 1),
+                ("a", 2),
+                ("b", 2),
+            ],
+            names=["grouping", "model_run"],
+        ),
+    )
+
+    mock_preprocess = mocker.Mock(return_value=preprocessed)
+    mock_calculate = mocker.Mock(return_value=pd.DataFrame())
+
+    process_activity_type(
+        "ip_wards",
+        aggregations,
+        mock_calculate,
+        assumptions,
+        data_to_save,
+        preprocess=mock_preprocess,
+    )
+
+    # Check that the ip_wards-specific preprocess branch was used.
+    mock_preprocess.assert_called_once_with(
+        aggregations,
+        assumptions,
+    )
+
+    # Baseline should be excluded before calculating capacity.
+    expected_functional_areas = preprocessed.loc[
+        preprocessed.index.get_level_values("model_run") != 0,
+        :,
+    ]
+
+    mock_calculate.assert_called_once()
+
+    actual_functional_areas, actual_assumptions = mock_calculate.call_args.args
+
+    assert_frame_equal(
+        actual_functional_areas,
+        expected_functional_areas,
+    )
+
+    assert_frame_equal(
+        actual_assumptions,
+        assumptions,
+    )
+
+    assert_frame_equal(
+        data_to_save["ip_wards_fun_area_groupings"],
+        expected_functional_areas,
+    )
+
+    assert "ip_wards_capacity" in data_to_save
+
+
 def test_process_activity_type_with_preprocess():
     aggregations = pd.DataFrame(
         {
@@ -416,7 +495,7 @@ def test_process_activity_type_with_preprocess():
             "model_run": [0] * 2 + [1] * 2 + [2] * 2,
             "total": [1, 2, 3, 4, 5, 6],
         }
-    )
+    ).set_index(["grouping", "model_run"])
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -442,7 +521,7 @@ def test_process_activity_type_with_baseline():
             "model_run": [0] * 2 + [1] * 2 + [2] * 2,
             "total": [1, 2, 3, 4, 5, 6],
         }
-    )
+    ).set_index(["grouping", "model_run"])
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -465,7 +544,7 @@ def test_process_activity_type_without_baseline():
             "model_run": [0] * 2 + [1] * 2 + [2] * 2,
             "total": [1, 2, 3, 4, 5, 6],
         }
-    )
+    ).set_index(["grouping", "model_run"])
     assumptions = pd.DataFrame({"Value": []})
     data_to_save = {}
 
@@ -609,7 +688,7 @@ def test_filter_aggregations_all(filter_agg_df):
             ],
             "value": [2, 2],
         }
-    ).set_index("model_run")
+    ).set_index(["model_run", "group"])
     actual = filter_aggregations(filter_agg_df, "ALL")
     assert_frame_equal(actual, expected)
 
@@ -624,6 +703,6 @@ def test_filter_aggregations(filter_agg_df):
             ],
             "value": [1, 1],
         }
-    ).set_index("model_run")
+    ).set_index(["model_run", "group"])
     actual = filter_aggregations(filter_agg_df, "A")
     assert_frame_equal(actual, expected)
