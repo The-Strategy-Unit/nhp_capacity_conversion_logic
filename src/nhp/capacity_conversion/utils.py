@@ -223,6 +223,25 @@ def load_metadata_from_ats(
     return metadata
 
 
+def load_functional_aggregations_from_ats(
+    storage_endpoint: str,
+    table_name: str,
+    capacity_model_version: str,
+) -> list[dict]:
+    """Load available functional aggregations for one capacity model version."""
+    credential = DefaultAzureCredential()
+    table_client = TableClient(
+        endpoint=storage_endpoint,
+        table_name=table_name,
+        credential=credential,
+    )
+    entities = table_client.query_entities(
+        query_filter="PartitionKey eq @capacity_model_version",
+        parameters={"capacity_model_version": capacity_model_version},
+    )
+    return [dict(entity) for entity in entities]
+
+
 def create_aggregations_path(metadata: dict) -> str:
     """Create path to aggregations parquet files on Azure Storage
 

@@ -21,14 +21,14 @@ CONNECT_ENV_VARS = (
     "CONNECT_SERVER",
     "CONNECT_API_KEY",
 )
-RUNTIME_ENV_VARS = (
-    "AZ_FUNC_AGG_GUID",
+REQUIRED_RUNTIME_ENV_VARS = (
     "AZ_STORAGE_EP",
     "AZ_STORAGE_RESULTS",
     "AZ_TABLE_ENDPOINT",
-    "FEEDBACK_FORM_URL",
     "TABLE_NAME",
+    "FEEDBACK_FORM_URL",
 )
+RUNTIME_ENV_VARS = REQUIRED_RUNTIME_ENV_VARS
 BUNDLE_FILES = (
     "app.py",
     "_brand.yml",
@@ -90,7 +90,7 @@ def _environment_preflight_check(
     name: str,
     environment_sources: Mapping[str, EnvironmentSource],
 ) -> PreflightCheck:
-    """Validate one required deployment environment variable."""
+    """Validate one deployment environment variable."""
     value = os.getenv(name, "").strip()
     source = environment_sources.get(name, EnvironmentSource.UNSET)
     if name == "FEEDBACK_FORM_URL" and value:
@@ -183,7 +183,7 @@ def collect_preflight_checks(
         )
     )
 
-    required_env_vars = [*CONNECT_ENV_VARS, *RUNTIME_ENV_VARS]
+    required_env_vars = [*CONNECT_ENV_VARS, *REQUIRED_RUNTIME_ENV_VARS]
     if deployment_type is DeploymentType.REDEPLOY:
         required_env_vars.append("CONNECT_APP_ID")
 

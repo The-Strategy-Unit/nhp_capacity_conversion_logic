@@ -122,6 +122,7 @@ def test_new_deployment_requires_feedback_form_url(
     assert checks["FEEDBACK_FORM_URL"].passed is False
     assert checks["FEEDBACK_FORM_URL"].required is True
     assert checks["FEEDBACK_FORM_URL"].source is deploy.EnvironmentSource.UNSET
+    assert "AZ_FUNC_AGG_GUID" not in deploy.RUNTIME_ENV_VARS
 
 
 def test_dotenv_feedback_url_overrides_stale_current_environment_value(
@@ -278,6 +279,8 @@ def test_build_deploy_command(
     )
     monkeypatch.setenv("CONNECT_APP_ID", "app-guid")
     monkeypatch.setenv("CONNECT_API_KEY", "secret-api-key")
+    for env_var in deploy.RUNTIME_ENV_VARS:
+        monkeypatch.setenv(env_var, "configured")
 
     command = deploy.build_deploy_command(deployment_type, "rsconnect")
 

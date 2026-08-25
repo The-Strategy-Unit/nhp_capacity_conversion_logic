@@ -8,8 +8,12 @@ from shiny.run import ShinyAppProc
 app = create_app_fixture(
     "fixtures/app.py",
     env={
+        "AZ_STORAGE_EP": "https://storage.example.com",
+        "AZ_STORAGE_RESULTS": "results",
+        "AZ_TABLE_ENDPOINT": "https://table.example.com",
         "FEEDBACK_FORM_URL": "",
         "SHINY_TESTMODE": "1",
+        "TABLE_NAME": "catalogue",
     },
 )
 
@@ -23,11 +27,24 @@ def test_app_displays_capacity_conversion_interface(
     expect(
         page.get_by_role("heading", name="Capacity Conversion Estimates")
     ).to_be_visible()
+    dataset = controller.InputSelect(page, "dataset")
+    scenario = controller.InputSelect(page, "scenario")
+    model_run = controller.InputSelect(page, "model_run")
+    generate = controller.InputActionButton(page, "generate")
     estimates = controller.OutputDataFrame(page, "estimates")
-    expect(estimates.loc).to_be_visible()
     feedback = controller.InputActionButton(page, "feedback")
     download = controller.DownloadButton(page, "download_estimates")
 
+    dataset.expect_choices(["", "RXX"])
+    dataset.set("RXX")
+    scenario.expect_choices(["", "Example scenario"])
+    scenario.set("Example scenario")
+    model_run.expect_choices(["", "test-guid"])
+    expect(model_run.loc_choices.nth(1)).to_have_text("17 Aug 2026, 14:37 UTC")
+    model_run.set("test-guid")
+    generate.click()
+
+    expect(estimates.loc).to_be_visible()
     expect(feedback.loc).to_be_visible()
     expect(feedback.loc).to_have_class(re.compile(r"\bbtn-sm\b"))
     expect(download.loc).to_be_visible()

@@ -10,7 +10,9 @@ import pandas as pd
 
 class _CapacityConversionAppModule(Protocol):
     ACTIVITY_TYPES: tuple[str, ...]
-    _load_capacity_results: Callable[[], dict[str, pd.DataFrame | pd.Series]]
+    _load_capacity_results: Callable[[dict], dict[str, pd.DataFrame | pd.Series]]
+    load_functional_aggregations_from_ats: Callable[[str, str, str], list[dict]]
+    load_metadata_from_ats: Callable[[str, str, str, str], dict]
     app: object
 
 
@@ -27,7 +29,37 @@ def _load_app_module() -> _CapacityConversionAppModule:
 capacity_conversion_app = _load_app_module()
 
 
-def _load_capacity_results() -> dict[str, pd.DataFrame | pd.Series]:
+FUNCTIONAL_AGGREGATION = {
+    "PartitionKey": "dev",
+    "RowKey": "test-guid",
+    "dataset": "RXX",
+    "scenario_name": "Example scenario",
+    "scenario_runtime": "20260817_143723",
+}
+
+
+def _load_functional_aggregations_from_ats(
+    storage_endpoint: str,
+    table_name: str,
+    capacity_model_version: str,
+) -> list[dict]:
+    assert capacity_model_version == FUNCTIONAL_AGGREGATION["PartitionKey"]
+    return [FUNCTIONAL_AGGREGATION.copy()]
+
+
+def _load_metadata_from_ats(
+    guid: str,
+    storage_endpoint: str,
+    table_name: str,
+    capacity_model_version: str,
+) -> dict:
+    assert guid == FUNCTIONAL_AGGREGATION["RowKey"]
+    assert capacity_model_version == FUNCTIONAL_AGGREGATION["PartitionKey"]
+    return FUNCTIONAL_AGGREGATION.copy()
+
+
+def _load_capacity_results(model_run: dict) -> dict[str, pd.DataFrame | pd.Series]:
+    assert model_run["RowKey"] == FUNCTIONAL_AGGREGATION["RowKey"]
     capacity = pd.DataFrame(
         {"capacity": [10.0, 12.0, 14.0]},
         index=pd.MultiIndex.from_product(
@@ -44,5 +76,9 @@ def _load_capacity_results() -> dict[str, pd.DataFrame | pd.Series]:
     }
 
 
+capacity_conversion_app.load_functional_aggregations_from_ats = (
+    _load_functional_aggregations_from_ats
+)
+capacity_conversion_app.load_metadata_from_ats = _load_metadata_from_ats
 capacity_conversion_app._load_capacity_results = _load_capacity_results
 app = capacity_conversion_app.app
