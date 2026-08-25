@@ -26,6 +26,10 @@ def test_project_root_is_repository_root() -> None:
     assert deploy.PROJECT_ROOT == Path(__file__).resolve().parents[2]
 
 
+def test_deployment_bundle_includes_favicon() -> None:
+    assert "www/favicon.ico" in deploy.BUNDLE_FILES
+
+
 @pytest.mark.parametrize(
     ("choice", "expected"),
     [

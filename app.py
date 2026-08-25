@@ -6,6 +6,7 @@ from typing import cast
 from urllib.parse import urlparse
 
 import pandas as pd
+from htmltools import HTMLDependency
 from shiny import App, Inputs, Outputs, Session, reactive, render, req, ui
 
 from nhp.capacity_conversion.aae import calculate_aae_capacity
@@ -14,6 +15,10 @@ from nhp.capacity_conversion.ip_daycase import calculate_daycase_capacity
 from nhp.capacity_conversion.ip_maternity import (
     calculate_maternity_capacity,
     preprocess_ip_maternity_data,
+)
+from nhp.capacity_conversion.ip_wards import (
+    calculate_ip_wards_capacity,
+    preprocess_ip_wards_data,
 )
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.utils import (
@@ -30,8 +35,14 @@ from nhp.capacity_conversion.utils import (
 logger = logging.getLogger(__name__)
 
 CAPACITY_MODEL_VERSION = "dev"
-ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity")
-SITES = {"op": "ALL", "aae": "ALL", "ip_daycase": "ALL", "ip_maternity": "ALL"}
+ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity", "ip_wards")
+SITES = {
+    "op": "ALL",
+    "aae": "ALL",
+    "ip_daycase": "ALL",
+    "ip_maternity": "ALL",
+    "ip_wards": "ALL",
+}
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
 PROVIDER_GROUP_PREFIX = "nhp_provider_"
 CATALOGUE_COLUMNS = (
@@ -43,16 +54,24 @@ CATALOGUE_COLUMNS = (
 )
 
 FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
+STATIC_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "www")
+FAVICON_DEPENDENCY = HTMLDependency(
+    name="strategy-unit-favicon",
+    version="1.0.0",
+    head=ui.tags.link(rel="icon", type="image/x-icon", href="favicon.ico"),
+)
 
 CAPACITY_CALCULATIONS = {
     "aae": calculate_aae_capacity,
     "ip_daycase": calculate_daycase_capacity,
     "ip_maternity": calculate_maternity_capacity,
+    "ip_wards": calculate_ip_wards_capacity,
     "op": calculate_op_capacity,
 }
 
 CAPACITY_PREPROCESSORS = {
     "ip_maternity": preprocess_ip_maternity_data,
+    "ip_wards": preprocess_ip_wards_data,
 }
 
 
@@ -251,6 +270,7 @@ def _require_capacity_results(
 
 
 app_ui = ui.page_fluid(
+    FAVICON_DEPENDENCY,
     ui.div(
         ui.input_action_button(
             "feedback",
@@ -493,4 +513,8 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         yield _create_workbook(_require_capacity_results(capacity_results.get()))
 
 
-app = App(app_ui, server)
+app = App(
+    app_ui,
+    server,
+    static_assets=STATIC_ASSETS_DIR,
+)
