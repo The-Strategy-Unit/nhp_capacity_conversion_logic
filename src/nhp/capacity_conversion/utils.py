@@ -185,9 +185,7 @@ def process_and_save_results_to_excel(
     for sheet_name, df in data_to_save.items():
         if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
             df = summarise_model_runs(df)
-        if len(sheet_name) > 31:
-            sheet_name = sheet_name[:31]
-        ws = wb.create_sheet(title=sheet_name)
+        ws = wb.create_sheet(title=sheet_name[:31])
         for r_idx, row in enumerate(
             dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
             start=1,
