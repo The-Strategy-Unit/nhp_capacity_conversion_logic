@@ -54,18 +54,20 @@ def test_convert_procedure_time_to_hours(mocker):
         [
             (0, "procedure_a"),
             (0, "adult_elective_surgical_procedures_unknown_time"),
+            (1, "procedure_a"),
+            (1, "adult_elective_surgical_procedures_unknown_time"),
         ],
         names=["model_run", "procedure_grouping"],
     )
     functional_areas = pd.DataFrame(
         {
-            "total_theatre_time": [120.0, 60.0],
+            "total_theatre_time": [120.0, 60.0] * 2,
         },
         index=index,
     )
     expected = pd.DataFrame(
         {
-            "total_theatre_time": [2.0, 60.0],
+            "total_theatre_time": [2.0, 60.0] * 2,
         },
         index=index,
     )

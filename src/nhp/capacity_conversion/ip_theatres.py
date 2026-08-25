@@ -116,7 +116,9 @@ def convert_procedure_time_to_hours(functional_areas: pd.DataFrame) -> pd.DataFr
     Returns:
         pd.DataFrame: Functional areas from Azure for IP procedures and theatres, with total_theatre_time converted from minutes to hours
     """
-    for grouping in functional_areas.index.get_level_values("procedure_grouping"):
+    for grouping in functional_areas.index.get_level_values(
+        "procedure_grouping"
+    ).unique():
         if grouping not in THEATRES_WORKLOAD_ASSUMPTIONS_DICT:
             functional_areas.loc[(slice(None), grouping), "total_theatre_time"] = (
                 functional_areas.loc[(slice(None), grouping), "total_theatre_time"] / 60
