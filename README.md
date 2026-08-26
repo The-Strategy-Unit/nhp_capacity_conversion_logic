@@ -64,9 +64,10 @@ uv run --env-file .env --locked --group app shiny run --reload app.py
 
 The application queries the table's `dev` partition. It presents permitted
 datasets, `scenario_name` values and `scenario_runtime` model-run times, using
-the selected entity's `RowKey` as the functional aggregation GUID. It loads all
-four activity types and reshapes each aggregation across all sites before
-capacity conversion.
+the selected entity's `RowKey` as the functional aggregation GUID. It loads OP,
+A&E, IP day-case, IP maternity and IP wards aggregations, reshaping each across
+all sites before capacity conversion. It displays their capacity summaries and
+includes all five activity types in the Excel download.
 
 On Posit Connect, `nhp_provider_<dataset>` grants access to one dataset, while
 `nhp_devs` and `nhp_power_users` grant access to every available aggregation.

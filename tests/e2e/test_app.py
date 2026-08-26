@@ -24,6 +24,12 @@ def test_app_displays_capacity_conversion_interface(
 ) -> None:
     page.goto(app.url)
 
+    favicon = page.locator("head link[rel='icon']")
+    expect(favicon).to_have_attribute("href", "favicon.ico")
+    favicon_response = page.request.get(f"{app.url}/favicon.ico")
+    assert favicon_response.ok
+    assert favicon_response.headers["content-type"] == "image/vnd.microsoft.icon"
+
     expect(
         page.get_by_role("heading", name="Capacity Conversion Estimates")
     ).to_be_visible()
@@ -45,6 +51,7 @@ def test_app_displays_capacity_conversion_interface(
     generate.click()
 
     expect(estimates.loc).to_be_visible()
+    expect(estimates.loc).to_contain_text("ip_wards")
     expect(feedback.loc).to_be_visible()
     expect(feedback.loc).to_have_class(re.compile(r"\bbtn-sm\b"))
     expect(download.loc).to_be_visible()

@@ -31,6 +31,14 @@ APP_ENVIRONMENT = {
 }
 
 
+def test_app_registers_favicon():
+    assert app.FAVICON_DEPENDENCY.head is not None
+    html = app.FAVICON_DEPENDENCY.head.get_html_string()
+
+    assert '<link rel="icon" type="image/x-icon" href="favicon.ico"/>' in html
+    assert app.app._static_assets["/"] == Path(app.STATIC_ASSETS_DIR)
+
+
 def _functional_aggregation(**overrides) -> dict:
     entity = {
         "PartitionKey": "dev",
@@ -273,8 +281,8 @@ def test_load_capacity_results(mocker):
             for activity_type in app.ACTIVITY_TYPES
         ]
     )
-    assert load_aggregation.call_count == 4
-    assert filter_aggregation.call_count == 4
+    assert load_aggregation.call_count == 5
+    assert filter_aggregation.call_count == 5
     process.assert_has_calls(
         [
             call(
@@ -309,9 +317,17 @@ def test_load_capacity_results(mocker):
                 data_to_save,
                 preprocess=app.preprocess_ip_maternity_data,
             ),
+            call(
+                "ip_wards",
+                aggregations,
+                app.calculate_ip_wards_capacity,
+                assumptions,
+                data_to_save,
+                preprocess=app.preprocess_ip_wards_data,
+            ),
         ]
     )
-    assert process.call_count == 4
+    assert process.call_count == 5
     runtime = data_to_save["metadata"].loc["capacity_conversion_runtime"]
     assert len(runtime) == 15
     assert runtime[8] == "_"
