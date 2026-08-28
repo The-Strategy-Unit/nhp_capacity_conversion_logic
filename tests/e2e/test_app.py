@@ -33,6 +33,7 @@ def test_app_displays_capacity_conversion_interface(
     expect(
         page.get_by_role("heading", name="Capacity Conversion Estimates")
     ).to_be_visible()
+    logo = page.get_by_role("img", name="The Strategy Unit and NHS")
     dataset = controller.InputSelect(page, "dataset")
     scenario = controller.InputSelect(page, "scenario")
     model_run = controller.InputSelect(page, "model_run")
@@ -41,6 +42,9 @@ def test_app_displays_capacity_conversion_interface(
     feedback = controller.InputActionButton(page, "feedback")
     download = controller.DownloadButton(page, "download_estimates")
 
+    expect(logo).to_be_visible()
+    expect(logo).to_have_js_property("complete", True)
+    expect(logo).to_have_js_property("naturalWidth", 2000)
     dataset.expect_choices(["", "RXX"])
     dataset.set("RXX")
     scenario.expect_choices(["", "Example scenario"])

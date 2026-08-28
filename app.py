@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from io import BytesIO
+from pathlib import Path
 from typing import cast
 from urllib.parse import urlparse
 
@@ -54,7 +55,7 @@ CATALOGUE_COLUMNS = (
 )
 
 FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
-STATIC_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "www")
+STATIC_ASSETS_DIR = Path(__file__).parent / "www"
 FAVICON_DEPENDENCY = HTMLDependency(
     name="strategy-unit-favicon",
     version="1.0.0",
@@ -271,16 +272,74 @@ def _require_capacity_results(
 
 app_ui = ui.page_fluid(
     FAVICON_DEPENDENCY,
-    ui.div(
-        ui.input_action_button(
-            "feedback",
-            "Feedback",
-            class_="btn-primary btn-sm",
+    ui.tags.style(
+        """
+        .brand-header {
+            padding: 15px;
+        }
+
+        .brand-logo-frame {
+            aspect-ratio: 1892 / 638;
+            overflow: hidden;
+            position: relative;
+            width: 170px;
+        }
+
+        .brand-logo-image {
+            display: block;
+            left: 0;
+            max-width: none;
+            position: absolute;
+            top: 0;
+            transform: translate(-3.5%, -32.85%);
+            width: 105.71%;
+        }
+
+        @media (min-width: 600px) {
+            .brand-header {
+                padding: 20px;
+            }
+
+            .brand-logo-frame {
+                width: 194px;
+            }
+        }
+
+        @media (min-width: 1000px) {
+            .brand-header {
+                padding: 30px;
+            }
+
+            .brand-logo-frame {
+                width: 234px;
+            }
+        }
+        """
+    ),
+    ui.tags.header(
+        ui.div(
+            ui.img(
+                src="strategy-unit-nhs-logo.png",
+                alt="The Strategy Unit and NHS",
+                class_="brand-logo-image",
+            ),
+            class_="brand-logo-frame",
         ),
-        class_="d-flex justify-content-end border-bottom bg-light py-2",
+        class_="brand-header d-flex justify-content-end border-bottom bg-white",
     ),
     ui.div(
-        ui.h1("Capacity Conversion Estimates", class_="mb-3"),
+        ui.div(
+            ui.h1("Capacity Conversion Estimates", class_="mb-0"),
+            ui.input_action_button(
+                "feedback",
+                "Feedback",
+                class_="btn-primary btn-sm",
+            ),
+            class_=(
+                "d-flex flex-column flex-sm-row align-items-sm-center "
+                "justify-content-between gap-3 mb-3"
+            ),
+        ),
         ui.card(
             ui.card_header("Select model run"),
             ui.layout_columns(
