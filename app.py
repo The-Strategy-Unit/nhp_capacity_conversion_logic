@@ -272,50 +272,7 @@ def _require_capacity_results(
 
 app_ui = ui.page_fluid(
     FAVICON_DEPENDENCY,
-    ui.tags.style(
-        """
-        .brand-header {
-            padding: 15px;
-        }
-
-        .brand-logo-frame {
-            aspect-ratio: 1892 / 638;
-            overflow: hidden;
-            position: relative;
-            width: 170px;
-        }
-
-        .brand-logo-image {
-            display: block;
-            left: 0;
-            max-width: none;
-            position: absolute;
-            top: 0;
-            transform: translate(-3.5%, -32.85%);
-            width: 105.71%;
-        }
-
-        @media (min-width: 600px) {
-            .brand-header {
-                padding: 20px;
-            }
-
-            .brand-logo-frame {
-                width: 194px;
-            }
-        }
-
-        @media (min-width: 1000px) {
-            .brand-header {
-                padding: 30px;
-            }
-
-            .brand-logo-frame {
-                width: 234px;
-            }
-        }
-        """
-    ),
+    ui.head_content(ui.include_css(STATIC_ASSETS_DIR / "app.css")),
     ui.tags.header(
         ui.div(
             ui.img(
@@ -325,7 +282,7 @@ app_ui = ui.page_fluid(
             ),
             class_="brand-logo-frame",
         ),
-        class_="brand-header d-flex justify-content-end border-bottom bg-white",
+        class_="d-flex justify-content-end border-bottom bg-white p-3 p-md-4",
     ),
     ui.div(
         ui.div(
@@ -383,8 +340,7 @@ app_ui = ui.page_fluid(
                 class_="d-flex justify-content-end mt-3",
             ),
         ),
-        class_="py-4",
-        style="max-width: 920px;",
+        class_="container py-4",
     ),
     title="NHP Capacity Conversion",
     theme=ui.Theme.from_brand(__file__),

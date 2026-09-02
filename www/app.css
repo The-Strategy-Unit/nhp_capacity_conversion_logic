@@ -1,0 +1,16 @@
+.brand-logo-frame {
+    aspect-ratio: 1892 / 638;
+    overflow: hidden;
+    position: relative;
+    width: 12rem;
+}
+
+.brand-logo-image {
+    display: block;
+    left: 0;
+    max-width: none;
+    position: absolute;
+    top: 0;
+    transform: translate(-3.5%, -32.85%);
+    width: 105.71%;
+}

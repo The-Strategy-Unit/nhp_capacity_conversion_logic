@@ -36,6 +36,7 @@ BUNDLE_FILES = (
     "pyproject.toml",
     "requirements.txt",
     "src/nhp/__init__.py",
+    "www/app.css",
     "www/favicon.ico",
     "www/strategy-unit-nhs-logo.png",
 )
