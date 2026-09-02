@@ -23,7 +23,7 @@ def test_calculate_procedure_time(mocker):
             names=["model_run", "procedure_grouping"],
         ),
     )
-    functional_areas.loc[("unchanged_grouping", 0), :] = 1.0
+    functional_areas.loc[(0, "unchanged_grouping"), :] = 1.0
     assumptions_df = pd.DataFrame(
         {"Value": "Value" * len(THEATRES_WORKLOAD_ASSUMPTIONS_DICT)},
         index=[
@@ -32,12 +32,12 @@ def test_calculate_procedure_time(mocker):
         ],
     )
     mock_derive_treatment_hours = mocker.patch(
-        "nhp.capacity_conversion.ip_theatres.derive_treatment_hours", return_value=1.0
+        "nhp.capacity_conversion.ip_theatres.derive_treatment_hours", return_value=3.0
     )
     expected = pd.DataFrame(
         {
             "spells": [2.0] * len(THEATRES_WORKLOAD_ASSUMPTIONS_DICT) + [1.0],
-            "total_theatre_time": [1.0] * len(THEATRES_WORKLOAD_ASSUMPTIONS_DICT)
+            "total_theatre_time": [3.0] * len(THEATRES_WORKLOAD_ASSUMPTIONS_DICT)
             + [1.0],
         },
         index=functional_areas.index,
