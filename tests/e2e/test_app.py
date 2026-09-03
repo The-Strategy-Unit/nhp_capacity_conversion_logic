@@ -52,6 +52,7 @@ def test_app_displays_capacity_conversion_interface(
 
     expect(estimates.loc).to_be_visible()
     expect(estimates.loc).to_contain_text("ip_wards")
+    expect(estimates.loc).to_contain_text("ip_procedures_and_theatres")
     expect(feedback.loc).to_be_visible()
     expect(feedback.loc).to_have_class(re.compile(r"\bbtn-sm\b"))
     expect(download.loc).to_be_visible()
