@@ -77,7 +77,7 @@ def test_main(mocker):
     main_mod.load_assumptions.assert_called_once_with("assumptions.csv")
     main_mod.create_aggregations_path.assert_called_once_with(metadata_dict)
 
-    assert main_mod.load_aggregations.call_count == 5
+    assert main_mod.load_aggregations.call_count == 6
     expected_calls = [
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "op"),
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "aae"),
@@ -86,19 +86,26 @@ def test_main(mocker):
             "AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "ip_maternity"
         ),
         call("AZ_STORAGE_EP", "AZ_STORAGE_RESULTS", "aggregations_path", "ip_wards"),
+        call(
+            "AZ_STORAGE_EP",
+            "AZ_STORAGE_RESULTS",
+            "aggregations_path",
+            "ip_procedures_and_theatres",
+        ),
     ]
     main_mod.load_aggregations.assert_has_calls(expected_calls)
 
-    assert main_mod.filter_aggregations.call_count == 5
+    assert main_mod.filter_aggregations.call_count == 6
     expected_calls = [
         call("aggregations", "op_sites"),
         call("aggregations", "aae_sites"),
         call("aggregations", "ip_sites"),
         call("aggregations", "ip_sites"),
         call("aggregations", "ip_sites"),
+        call("aggregations", "ip_sites"),
     ]
 
-    assert main_mod.process_activity_type.call_count == 5
+    assert main_mod.process_activity_type.call_count == 6
     main_mod.process_activity_type.assert_has_calls(
         [
             call("op", mocker.ANY, mocker.ANY, mock_assumptions, mocker.ANY),
