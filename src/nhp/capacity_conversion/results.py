@@ -8,6 +8,34 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 logger = logging.getLogger(__name__)
 
 
+def tidy_metadata(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> dict[str, pd.DataFrame | pd.Series]:
+    if "metadata" in data_to_save:
+        rename = {
+            "app_version": "demand_model_version",
+            "scenario_name": "demand_model_scenario_name",
+            "scenario_runtime": "demand_model_scenario_runtime",
+        }
+
+        keep = [
+            "dataset",
+            "capacity_model_version",
+            "ip_sites",
+            "op_sites",
+            "aae_sites",
+            "capacity_conversion_runtime",
+            *rename,
+        ]
+
+        metadata = data_to_save["metadata"]
+
+        data_to_save["metadata"] = metadata.reindex(
+            [key for key in keep if key in metadata.index]
+        ).rename(index=rename)
+    return data_to_save
+
+
 def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
     """Calculate p10, p90 and mean across all model runs
 
@@ -66,6 +94,7 @@ def process_and_save_results_to_excel(
     default_sheet = wb.active
     assert default_sheet is not None
     wb.remove(default_sheet)
+    data_to_save = tidy_metadata(data_to_save)
     for sheet_name, df in data_to_save.items():
         if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
             df = summarise_model_runs(df)
