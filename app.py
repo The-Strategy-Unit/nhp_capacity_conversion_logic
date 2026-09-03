@@ -34,6 +34,7 @@ from nhp.capacity_conversion.utils import (
 
 logger = logging.getLogger(__name__)
 
+APP_TITLE = "OpenPlan Capacity Conversion Model"
 CAPACITY_MODEL_VERSION = "dev"
 ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity", "ip_wards")
 SITES = {
@@ -271,16 +272,24 @@ def _require_capacity_results(
 
 app_ui = ui.page_fluid(
     FAVICON_DEPENDENCY,
-    ui.div(
-        ui.input_action_button(
-            "feedback",
-            "Feedback",
-            class_="btn-primary btn-sm",
+    ui.tags.header(
+        ui.div(
+            ui.span(APP_TITLE, class_="fs-4 fw-semibold"),
+            ui.input_action_button(
+                "feedback",
+                "Feedback",
+                class_="btn-primary btn-sm",
+            ),
+            class_=(
+                "container d-flex flex-column flex-sm-row align-items-start "
+                "align-items-sm-center justify-content-sm-between gap-2 py-3"
+            ),
+            style="max-width: 920px;",
         ),
-        class_="d-flex justify-content-end border-bottom bg-light py-2",
+        class_="border-bottom bg-light",
     ),
     ui.div(
-        ui.h1("Capacity Conversion Estimates", class_="mb-3"),
+        ui.h1("Capacity estimates", class_="mb-3"),
         ui.card(
             ui.card_header("Select model run"),
             ui.layout_columns(
@@ -324,10 +333,10 @@ app_ui = ui.page_fluid(
                 class_="d-flex justify-content-end mt-3",
             ),
         ),
-        class_="py-4",
+        class_="container py-4",
         style="max-width: 920px;",
     ),
-    title="NHP Capacity Conversion",
+    title=APP_TITLE,
     theme=ui.Theme.from_brand(__file__),
 )
 

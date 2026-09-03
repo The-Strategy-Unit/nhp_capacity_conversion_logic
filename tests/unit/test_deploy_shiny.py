@@ -289,6 +289,10 @@ def test_build_deploy_command(
     command = deploy.build_deploy_command(deployment_type, "rsconnect")
 
     assert command[:3] == ["rsconnect", "deploy", "shiny"]
+    assert command[3:5] == [
+        "--title",
+        "OpenPlan Capacity Conversion Model (development)",
+    ]
     assert all(option in command for option in expected_option)
     assert "secret-api-key" not in command
     exclude_index = command.index("--exclude=**")
