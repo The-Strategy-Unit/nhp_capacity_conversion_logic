@@ -74,9 +74,14 @@ def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Baseline activity per grouping, suppressed and rounded
     """
     value_columns = aggregations.select_dtypes("number").columns.tolist()
+    groupby_col = [
+        name
+        for name in aggregations.index.names
+        if name not in ["model_run", "sitetret"]
+    ]
     baseline = (
         aggregations.loc[aggregations.index.get_level_values("model_run") == 0, :]
-        .groupby("grouping")[value_columns]
+        .groupby(groupby_col)[value_columns]
         .sum()
     )
 
@@ -133,7 +138,7 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
             )
             summary_df["measure"] = col
             df_list.append(summary_df.reset_index())
-        return pd.concat(df_list).set_index(["grouping", "measure"]).sort_index()
+        return pd.concat(df_list).set_index(group_col_names + ["measure"]).sort_index()
     return pd.DataFrame(
         df.groupby(level=group_col_names)[value_cols[0]].agg(
             p10=lambda s: s.quantile(0.10),
@@ -180,7 +185,7 @@ def process_and_save_results_to_excel(
     for sheet_name, df in data_to_save.items():
         if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
             df = summarise_model_runs(df)
-        ws = wb.create_sheet(title=sheet_name)
+        ws = wb.create_sheet(title=sheet_name[:31])
         for r_idx, row in enumerate(
             dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
             start=1,
@@ -325,7 +330,7 @@ def process_activity_type(
 ) -> None:
     """Summarise functional areas, optionally extract baseline, and calculate capacity."""
     if preprocess is not None:
-        if name == "ip_wards":
+        if name in ["ip_wards", "ip_procedures_and_theatres"]:
             aggregations = preprocess(aggregations, assumptions)
         else:
             aggregations = preprocess(aggregations)

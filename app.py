@@ -35,6 +35,7 @@ from nhp.capacity_conversion.utils import (
 
 logger = logging.getLogger(__name__)
 
+APP_TITLE = "OpenPlan Capacity Conversion Model"
 CAPACITY_MODEL_VERSION = "dev"
 ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity", "ip_wards")
 SITES = {
@@ -275,18 +276,25 @@ app_ui = ui.page_fluid(
     ui.head_content(ui.include_css(STATIC_ASSETS_DIR / "app.css")),
     ui.tags.header(
         ui.div(
-            ui.img(
-                src="strategy-unit-nhs-logo.png",
-                alt="The Strategy Unit and NHS",
-                class_="brand-logo-image",
+            ui.span(APP_TITLE, class_="fs-4 fw-semibold"),
+            ui.div(
+                ui.img(
+                    src="strategy-unit-nhs-logo.png",
+                    alt="The Strategy Unit and NHS",
+                    class_="brand-logo-image",
+                ),
+                class_="brand-logo-frame",
             ),
-            class_="brand-logo-frame",
+            class_=(
+                "container d-flex flex-column flex-sm-row align-items-start "
+                "align-items-sm-center justify-content-sm-between gap-2 py-3"
+            ),
         ),
-        class_="d-flex justify-content-end border-bottom bg-white p-3 p-md-4",
+        class_="border-bottom bg-white",
     ),
     ui.div(
         ui.div(
-            ui.h1("Capacity Conversion Estimates", class_="mb-0"),
+            ui.h1("Capacity estimates", class_="mb-0"),
             ui.input_action_button(
                 "feedback",
                 "Feedback",
@@ -342,7 +350,7 @@ app_ui = ui.page_fluid(
         ),
         class_="container py-4",
     ),
-    title="NHP Capacity Conversion",
+    title=APP_TITLE,
     theme=ui.Theme.from_brand(__file__),
 )
 
