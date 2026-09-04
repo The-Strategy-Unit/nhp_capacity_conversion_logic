@@ -17,6 +17,10 @@ from nhp.capacity_conversion.ip_maternity import (
     calculate_maternity_capacity,
     preprocess_ip_maternity_data,
 )
+from nhp.capacity_conversion.ip_theatres import (
+    calculate_ip_theatres_capacity,
+    preprocess_ip_theatres_data,
+)
 from nhp.capacity_conversion.ip_wards import (
     calculate_ip_wards_capacity,
     preprocess_ip_wards_data,
@@ -60,12 +64,14 @@ CAPACITY_CALCULATIONS = {
     "aae": calculate_aae_capacity,
     "ip_daycase": calculate_daycase_capacity,
     "ip_maternity": calculate_maternity_capacity,
+    "ip_procedures_and_theatres": calculate_ip_theatres_capacity,
     "ip_wards": calculate_ip_wards_capacity,
     "op": calculate_op_capacity,
 }
 
 CAPACITY_PREPROCESSORS = {
     "ip_maternity": preprocess_ip_maternity_data,
+    "ip_procedures_and_theatres": preprocess_ip_theatres_data,
     "ip_wards": preprocess_ip_wards_data,
 }
 
