@@ -1,10 +1,11 @@
 import pandas as pd
 import pytest
-from pandas.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.results import (
     process_and_save_results_to_excel,
     summarise_model_runs,
+    tidy_metadata,
 )
 
 
@@ -132,3 +133,44 @@ def test_summarise_model_runs_with_multiple_indexes():
     ).set_index(["model_run", "group", "index_2"])
     with pytest.raises(ValueError, match="Expected exactly one index column."):
         summarise_model_runs(df)
+
+
+def test_tidy_metadata():
+    metadata = pd.Series(
+        {
+            "dataset": "dataset",
+            "capacity_model_version": "1.2.3",
+            "ip_sites": "A,B",
+            "op_sites": "ALL",
+            "aae_sites": "ALL",
+            "capacity_conversion_runtime": "capacity_conversion_runtime",
+            "app_version": "4.5.6",
+            "scenario_name": "scenario_name",
+            "scenario_runtime": "scenario_runtime",
+            "unwanted_metadata": "remove me",
+        }
+    )
+    results = pd.DataFrame({"value": [1, 2, 3]})
+
+    data_to_save = {"metadata": metadata, "results": results}
+
+    result = tidy_metadata(data_to_save)
+
+    expected = pd.Series(
+        {
+            "dataset": "dataset",
+            "capacity_model_version": "1.2.3",
+            "ip_sites": "A,B",
+            "op_sites": "ALL",
+            "aae_sites": "ALL",
+            "capacity_conversion_runtime": "capacity_conversion_runtime",
+            "demand_model_version": "4.5.6",
+            "demand_model_scenario_name": "scenario_name",
+            "demand_model_scenario_runtime": "scenario_runtime",
+        }
+    )
+
+    # Test that metadata has changed
+    assert_series_equal(result["metadata"], expected)  # ty:ignore invalid-argument-type
+    # Test that results remain unchanged
+    assert_frame_equal(result["results"], results)  # ty:ignore invalid-argument-type
