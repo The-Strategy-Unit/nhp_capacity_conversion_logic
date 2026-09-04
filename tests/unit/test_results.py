@@ -174,3 +174,11 @@ def test_tidy_metadata():
     assert_series_equal(result["metadata"], expected)  # ty:ignore invalid-argument-type
     # Test that results remain unchanged
     assert_frame_equal(result["results"], results)  # ty:ignore invalid-argument-type
+
+
+def test_tidy_metadata_if_no_metadata():
+    results = pd.DataFrame({"value": [1, 2, 3]})
+    data_to_save = {"results": results}
+    result = tidy_metadata(data_to_save)
+    assert_frame_equal(result["results"], results)  # ty:ignore invalid-argument-type
+    assert "results" in result
