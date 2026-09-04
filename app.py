@@ -22,6 +22,7 @@ from nhp.capacity_conversion.ip_wards import (
     preprocess_ip_wards_data,
 )
 from nhp.capacity_conversion.op import calculate_op_capacity
+from nhp.capacity_conversion.results import summarise_model_runs
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
     filter_aggregations,
@@ -30,7 +31,6 @@ from nhp.capacity_conversion.utils import (
     load_functional_aggregations_from_ats,
     load_metadata_from_ats,
     process_activity_type,
-    summarise_model_runs,
 )
 
 logger = logging.getLogger(__name__)
