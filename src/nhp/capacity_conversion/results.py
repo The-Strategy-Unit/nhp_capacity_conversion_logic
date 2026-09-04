@@ -99,8 +99,21 @@ def process_and_save_results_to_excel(
         if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
             df = summarise_model_runs(df)
         ws = wb.create_sheet(title=sheet_name[:31])
+        if isinstance(df, pd.Series):
+            rows = dataframe_to_rows(
+                df.to_frame().reset_index(),
+                index=False,
+                header=False,
+            )
+        else:
+            rows = dataframe_to_rows(
+                df.reset_index(),
+                index=False,
+                header=True,
+            )
+
         for r_idx, row in enumerate(
-            dataframe_to_rows(pd.DataFrame(df).reset_index(), index=False, header=True),
+            rows,
             start=1,
         ):
             for c_idx, value in enumerate(row, start=1):

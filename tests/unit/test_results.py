@@ -23,14 +23,22 @@ def test_process_and_save_results_to_excel(mocker):
     mock_cell.column_letter = "A"
     mock_ws.columns = [(mock_cell,), (mock_cell,)]
     mock_ws.column_dimensions = {"A": mocker.Mock()}
+
     mocker.patch("nhp.capacity_conversion.results.Workbook", return_value=mock_wb)
     mock_wb.active = mocker.Mock()
     mock_wb.create_sheet.return_value = mock_ws
-    mocker.patch(
+
+    mock_dataframe_to_rows = mocker.patch(
         "nhp.capacity_conversion.results.dataframe_to_rows",
-        return_value=[
-            ["col1", "col2"],
-            ["val1", "val2"],
+        side_effect=[
+            [
+                ["guid", "123"],
+                ["capacity_conversion_runtime", "456"],
+            ],
+            [
+                ["col1", "col2"],
+                ["val1", "val2"],
+            ],
         ],
     )
     mock_logger = mocker.patch("nhp.capacity_conversion.results.logger")
@@ -63,6 +71,18 @@ def test_process_and_save_results_to_excel(mocker):
     mock_summarise.assert_called_once()
     mock_wb.remove.assert_called_once_with(mock_wb.active)
     assert mock_wb.create_sheet.call_count == len(data_to_save)
+    assert mock_dataframe_to_rows.call_count == 2
+
+    # metadata is a Series, so it should be written without headers
+    metadata_call = mock_dataframe_to_rows.call_args_list[0]
+    assert metadata_call.kwargs["index"] is False
+    assert metadata_call.kwargs["header"] is False
+
+    # results is a DataFrame, so it should include headers
+    results_call = mock_dataframe_to_rows.call_args_list[1]
+    assert results_call.kwargs["index"] is False
+    assert results_call.kwargs["header"] is True
+
     mock_wb.save.assert_called_once_with(
         "results/123/456/capacity_conversion_results.xlsx"
     )
