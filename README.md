@@ -1,4 +1,4 @@
-# NHP Capacity Conversion
+# OpenPlan Capacity Conversion Model
 
 <!-- badges: start -->
 

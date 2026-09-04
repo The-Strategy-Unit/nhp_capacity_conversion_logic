@@ -15,7 +15,7 @@ from dotenv import dotenv_values, load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = PROJECT_ROOT / ".env"
-APP_TITLE = "NHP Capacity Conversion (development)"
+APP_TITLE = "OpenPlan Capacity Conversion Model (development)"
 
 CONNECT_ENV_VARS = (
     "CONNECT_SERVER",
@@ -278,7 +278,7 @@ def main() -> int:
     """Validate configuration and deploy the Shiny app to Posit Connect."""
     environment_sources = load_deployment_environment()
 
-    print("NHP Capacity Conversion deployment\n")
+    print("OpenPlan Capacity Conversion Model deployment\n")
     deployment_type = choose_deployment_type()
     if deployment_type is None:
         print("Deployment cancelled.")
