@@ -281,8 +281,8 @@ def test_load_capacity_results(mocker):
             for activity_type in app.ACTIVITY_TYPES
         ]
     )
-    assert load_aggregation.call_count == 5
-    assert filter_aggregation.call_count == 5
+    assert load_aggregation.call_count == 6
+    assert filter_aggregation.call_count == 6
     process.assert_has_calls(
         [
             call(
@@ -325,9 +325,17 @@ def test_load_capacity_results(mocker):
                 data_to_save,
                 preprocess=app.preprocess_ip_wards_data,
             ),
+            call(
+                "ip_procedures_and_theatres",
+                aggregations,
+                app.calculate_ip_theatres_capacity,
+                assumptions,
+                data_to_save,
+                preprocess=app.preprocess_ip_theatres_data,
+            ),
         ]
     )
-    assert process.call_count == 5
+    assert process.call_count == 6
     runtime = data_to_save["metadata"].loc["capacity_conversion_runtime"]
     assert len(runtime) == 15
     assert runtime[8] == "_"

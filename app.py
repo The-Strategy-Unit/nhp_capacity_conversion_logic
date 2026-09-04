@@ -17,6 +17,10 @@ from nhp.capacity_conversion.ip_maternity import (
     calculate_maternity_capacity,
     preprocess_ip_maternity_data,
 )
+from nhp.capacity_conversion.ip_theatres import (
+    calculate_ip_theatres_capacity,
+    preprocess_ip_theatres_data,
+)
 from nhp.capacity_conversion.ip_wards import (
     calculate_ip_wards_capacity,
     preprocess_ip_wards_data,
@@ -37,13 +41,21 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "OpenPlan Capacity Conversion Model"
 CAPACITY_MODEL_VERSION = "dev"
-ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity", "ip_wards")
+ACTIVITY_TYPES = (
+    "op",
+    "aae",
+    "ip_daycase",
+    "ip_maternity",
+    "ip_wards",
+    "ip_procedures_and_theatres",
+)
 SITES = {
     "op": "ALL",
     "aae": "ALL",
     "ip_daycase": "ALL",
     "ip_maternity": "ALL",
     "ip_wards": "ALL",
+    "ip_procedures_and_theatres": "ALL",
 }
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
 PROVIDER_GROUP_PREFIX = "nhp_provider_"
@@ -67,12 +79,14 @@ CAPACITY_CALCULATIONS = {
     "aae": calculate_aae_capacity,
     "ip_daycase": calculate_daycase_capacity,
     "ip_maternity": calculate_maternity_capacity,
+    "ip_procedures_and_theatres": calculate_ip_theatres_capacity,
     "ip_wards": calculate_ip_wards_capacity,
     "op": calculate_op_capacity,
 }
 
 CAPACITY_PREPROCESSORS = {
     "ip_maternity": preprocess_ip_maternity_data,
+    "ip_procedures_and_theatres": preprocess_ip_theatres_data,
     "ip_wards": preprocess_ip_wards_data,
 }
 
