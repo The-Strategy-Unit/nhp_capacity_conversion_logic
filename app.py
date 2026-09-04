@@ -11,7 +11,7 @@ from htmltools import HTMLDependency
 from shiny import App, Inputs, Outputs, Session, reactive, render, req, ui
 
 from nhp.capacity_conversion.aae import calculate_aae_capacity
-from nhp.capacity_conversion.config import ASSUMPTIONS_URL
+from nhp.capacity_conversion.config import ACTIVITY_TYPES, ASSUMPTIONS_URL
 from nhp.capacity_conversion.ip_daycase import calculate_daycase_capacity
 from nhp.capacity_conversion.ip_maternity import (
     calculate_maternity_capacity,
@@ -37,14 +37,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "OpenPlan Capacity Conversion Model"
 CAPACITY_MODEL_VERSION = "dev"
-ACTIVITY_TYPES = ("op", "aae", "ip_daycase", "ip_maternity", "ip_wards")
-SITES = {
-    "op": "ALL",
-    "aae": "ALL",
-    "ip_daycase": "ALL",
-    "ip_maternity": "ALL",
-    "ip_wards": "ALL",
-}
+SITES = {activity_type: "ALL" for activity_type in ACTIVITY_TYPES}
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
 PROVIDER_GROUP_PREFIX = "nhp_provider_"
 CATALOGUE_COLUMNS = (
