@@ -36,7 +36,9 @@ BUNDLE_FILES = (
     "pyproject.toml",
     "requirements.txt",
     "src/nhp/__init__.py",
+    "www/app.css",
     "www/favicon.ico",
+    "www/strategy-unit-nhs-logo.png",
 )
 CAPACITY_SOURCE_GLOB = "src/nhp/capacity_conversion/*.py"
 DEPLOYMENT_ENV_VARS = (*CONNECT_ENV_VARS, *RUNTIME_ENV_VARS, "CONNECT_APP_ID")

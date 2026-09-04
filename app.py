@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from io import BytesIO
+from pathlib import Path
 from typing import cast
 from urllib.parse import urlparse
 
@@ -55,7 +56,7 @@ CATALOGUE_COLUMNS = (
 )
 
 FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
-STATIC_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "www")
+STATIC_ASSETS_DIR = Path(__file__).parent / "www"
 FAVICON_DEPENDENCY = HTMLDependency(
     name="strategy-unit-favicon",
     version="1.0.0",
@@ -272,24 +273,38 @@ def _require_capacity_results(
 
 app_ui = ui.page_fluid(
     FAVICON_DEPENDENCY,
+    ui.head_content(ui.include_css(STATIC_ASSETS_DIR / "app.css")),
     ui.tags.header(
         ui.div(
             ui.span(APP_TITLE, class_="fs-4 fw-semibold"),
+            ui.div(
+                ui.img(
+                    src="strategy-unit-nhs-logo.png",
+                    alt="The Strategy Unit and NHS",
+                    class_="brand-logo-image",
+                ),
+                class_="brand-logo-frame",
+            ),
+            class_=(
+                "container d-flex flex-column flex-sm-row align-items-start "
+                "align-items-sm-center justify-content-sm-between gap-2 py-3"
+            ),
+        ),
+        class_="border-bottom bg-white",
+    ),
+    ui.div(
+        ui.div(
+            ui.h1("Capacity estimates", class_="mb-0"),
             ui.input_action_button(
                 "feedback",
                 "Feedback",
                 class_="btn-primary btn-sm",
             ),
             class_=(
-                "container d-flex flex-column flex-sm-row align-items-start "
-                "align-items-sm-center justify-content-sm-between gap-2 py-3"
+                "d-flex flex-column flex-sm-row align-items-sm-center "
+                "justify-content-between gap-3 mb-3"
             ),
-            style="max-width: 920px;",
         ),
-        class_="border-bottom bg-light",
-    ),
-    ui.div(
-        ui.h1("Capacity estimates", class_="mb-3"),
         ui.card(
             ui.card_header("Select model run"),
             ui.layout_columns(
@@ -334,7 +349,6 @@ app_ui = ui.page_fluid(
             ),
         ),
         class_="container py-4",
-        style="max-width: 920px;",
     ),
     title=APP_TITLE,
     theme=ui.Theme.from_brand(__file__),
