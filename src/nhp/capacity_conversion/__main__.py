@@ -21,6 +21,7 @@ from nhp.capacity_conversion.ip_wards import (
     preprocess_ip_wards_data,
 )
 from nhp.capacity_conversion.op import calculate_op_capacity
+from nhp.capacity_conversion.results import process_and_save_results_to_excel
 from nhp.capacity_conversion.utils import (
     configure_logging,
     create_aggregations_path,
@@ -29,7 +30,6 @@ from nhp.capacity_conversion.utils import (
     load_assumptions,
     load_metadata_from_ats,
     process_activity_type,
-    process_and_save_results_to_excel,
     validate_required_env_vars,
 )
 
