@@ -1,8 +1,13 @@
+from collections import OrderedDict
+
 import pandas as pd
 import pytest
+from openpyxl.workbook.workbook import Workbook
 from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.results import (
+    add_coversheet,
+    apply_styling_to_coversheet,
     process_and_save_results_to_excel,
     summarise_model_runs,
     tidy_metadata,
@@ -63,6 +68,12 @@ def test_process_and_save_results_to_excel(mocker):
         "metadata": metadata,
         "results": df,
     }
+    mock_add_coversheet = mocker.patch(
+        "nhp.capacity_conversion.results.add_coversheet", return_value=data_to_save
+    )
+    mock_apply_styling_to_coversheet = mocker.patch(
+        "nhp.capacity_conversion.results.apply_styling_to_coversheet"
+    )
 
     # act
     process_and_save_results_to_excel(data_to_save)
@@ -70,6 +81,8 @@ def test_process_and_save_results_to_excel(mocker):
     # assert
     mock_makedirs.assert_called_once_with("results/123/456", exist_ok=True)
     mock_summarise.assert_called_once()
+    mock_add_coversheet.assert_called_once_with(data_to_save)
+    mock_apply_styling_to_coversheet.assert_called_once()
     mock_wb.remove.assert_called_once_with(mock_wb.active)
     assert mock_wb.create_sheet.call_count == len(data_to_save)
     assert mock_dataframe_to_rows.call_count == 2
@@ -182,3 +195,38 @@ def test_tidy_metadata_if_no_metadata():
     result = tidy_metadata(data_to_save)
     assert_frame_equal(result["results"], results)  # ty:ignore invalid-argument-type
     assert "results" in result
+
+
+def test_add_coversheet():
+    data_to_save = {
+        "metadata": pd.Series({"capacity_conversion_runtime": "20260101_111111"}),
+        "assumptions": pd.DataFrame({"value": [1, 2, 3]}),
+    }
+
+    result = add_coversheet(data_to_save)
+
+    assert isinstance(result, OrderedDict)
+    assert list(result.keys()) == ["coversheet", "metadata", "assumptions"]
+
+    coversheet = result["coversheet"]
+    assert isinstance(coversheet, pd.Series)
+    assert coversheet["Date Created"] == "01/01/2026"
+    assert coversheet["OpenPlan Capacity Conversion Results Workbook"] == ""
+    assert "OpenPlan capacity conversion model" in coversheet["Introduction"]
+
+
+def test_apply_styling_to_coversheet():
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "coversheet"
+
+    ws["A1"] = "OpenPlan Capacity Conversion Results Workbook"
+    ws["A2"] = "Date Created"
+    ws["A3"] = "Introduction"
+    ws["A4"] = "Contents"
+    ws["A5"] = "do_not_bold"
+
+    apply_styling_to_coversheet(workbook)
+
+    assert all(ws[f"A{row}"].font.bold for row in range(1, 5))
+    assert ws["A5"].font.bold is False
