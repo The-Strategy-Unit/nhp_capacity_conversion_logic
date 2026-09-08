@@ -1,16 +1,58 @@
 import logging
 import os
+from collections import OrderedDict
+from datetime import datetime
 
 import pandas as pd
 from openpyxl import Workbook
+from openpyxl.styles.fonts import Font
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 logger = logging.getLogger(__name__)
 
 
+def add_coversheet(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> OrderedDict[str, pd.DataFrame | pd.Series]:
+    """Adds coversheet to the output Excel file
+
+    Args:
+        data_to_save (dict): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included. At minimum should include "metadata" key and dataframe.
+
+    Returns:
+        OrderedDict: the data_to_save with an additional coversheet as the first key-value pair in the OrderedDict.
+    """
+    runtime = str(data_to_save["metadata"].get("capacity_conversion_runtime"))
+    creation_date = datetime.fromisoformat(runtime).strftime("%d/%m/%Y")
+    coversheet = {
+        "OpenPlan Capacity Conversion Results Workbook": "",
+        "Date Created": creation_date,
+        "Introduction": "This workbook contains the results of the OpenPlan capacity conversion model (https://the-strategy-unit.github.io/open-plan-docs/) on results of the OpenPlan demand model (https://connect.strategyunitwm.nhs.uk/nhp/project_information/).",
+        "Contents": "",
+        "metadata": "Information about the OpenPlan demand model scenario that has been converted to capacity estimates, and the version of the OpenPlan capacity conversion model that was used.",
+        "assumptions": "Descriptions and values of all default assumptions used in this conversion. Explanations can be found in this file: https://github.com/The-Strategy-Unit/open-plan-docs/blob/main/docs/data/assumptions_register.csv",
+        "baseline_year_activity_counts": "Small-count suppressed counts of activity in the baseline modelling year (for details on suppression documentation see https://the-strategy-unit.github.io/open-plan-docs/). Note: these will differ from baseline counts of activity in the OpenPlan demand model.",
+        "predicted_activity_volumes": "Mean and 80% confidence intervals (p10 and p90) of the distribution of predicted activity across functional areas.",
+        "estimated_capacity_needs": "Mean and 80% confidence intervals (p10 and p90) of estimated capacity needed to meet predicted activity demand.",
+    }
+    data_to_save_with_coversheet = OrderedDict({"coversheet": pd.Series(coversheet)})
+    data_to_save_with_coversheet.update(data_to_save)
+    return data_to_save_with_coversheet
+
+
 def tidy_metadata(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> dict[str, pd.DataFrame | pd.Series]:
+    """Tidies the 'metadata' worksheet to match agreed formatting and naming
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included. At minimum should include "metadata" key and dataframe.
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dictionary of data to save, with the "metadata" values renamed and reordered.
+    """
     if "metadata" in data_to_save:
         rename = {
             "app_version": "demand_model_version",
@@ -74,6 +116,25 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def apply_styling_to_coversheet(workbook: Workbook):
+    """Applies styling to the coversheet worksheet in the results Excel file, turning some cells bold
+
+    Args:
+        workbook (Workbook): Results Excel Workbook
+    """
+    bold_values = [
+        "OpenPlan Capacity Conversion Results Workbook",
+        "Date Created",
+        "Introduction",
+        "Contents",
+    ]
+    ws = workbook["coversheet"]
+    for row in range(1, ws.max_row + 1):
+        cell = ws[f"{'A'}{row}"]
+        if cell.value in bold_values:
+            cell.font = Font(bold=True)
+
+
 def process_and_save_results_to_excel(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> None:
@@ -95,6 +156,7 @@ def process_and_save_results_to_excel(
     assert default_sheet is not None
     wb.remove(default_sheet)
     data_to_save = tidy_metadata(data_to_save)
+    data_to_save = add_coversheet(data_to_save)
     for sheet_name, df in data_to_save.items():
         if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
             df = summarise_model_runs(df)
@@ -121,5 +183,6 @@ def process_and_save_results_to_excel(
         for col in ws.columns:
             max_len = max(len(str(cell.value or "")) for cell in col)
             ws.column_dimensions[col[0].column_letter].width = max_len + 2
+    apply_styling_to_coversheet(wb)
     wb.save(filepath)
     logger.info(f"💾 Results saved to {filepath}")
