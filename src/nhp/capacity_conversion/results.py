@@ -135,6 +135,69 @@ def apply_styling_to_coversheet(workbook: Workbook):
             cell.font = Font(bold=True)
 
 
+def add_care_setting_and_summarise(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> dict[str, pd.DataFrame | pd.Series]:
+    """Adds care setting to the dataframes and summarises model runs
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+    """
+    for key, df in data_to_save.items():
+        if isinstance(df, pd.DataFrame) and key.startswith(("ip_", "op_", "aae_")):
+            if "model_run" in df.index.names:
+                df = summarise_model_runs(df)
+            df["care_setting"] = key.split("_")[0]
+        data_to_save[key] = df
+    return data_to_save
+
+
+def combine_dataframes(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> dict[str, pd.DataFrame | pd.Series]:
+    """Combines dataframes together for the different care settings, for presentation in the Excel file
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+    """
+    groups = {
+        "baseline_year_activity_counts": [
+            key for key in data_to_save if key.endswith("_baseline")
+        ],
+        "predicted_activity_volumes": [
+            key for key in data_to_save if key.endswith("_fun_area_groupings")
+        ],
+        "estimated_capacity_needs": [
+            key for key in data_to_save if key.endswith("_capacity")
+        ],
+    }
+
+    combined_data = {
+        sheet_name: pd.concat(
+            [data_to_save[key] for key in keys],
+        )
+        for sheet_name, keys in groups.items()
+        if keys
+    }
+
+    keys_to_remove = [key for keys in groups.values() for key in keys]
+
+    for key in keys_to_remove:
+        data_to_save.pop(key, None)
+    data_to_save.update(combined_data)
+    return data_to_save
+
+
 def process_and_save_results_to_excel(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> None:
@@ -155,11 +218,11 @@ def process_and_save_results_to_excel(
     default_sheet = wb.active
     assert default_sheet is not None
     wb.remove(default_sheet)
+    data_to_save = add_care_setting_and_summarise(data_to_save)
+    data_to_save = combine_dataframes(data_to_save)
     data_to_save = tidy_metadata(data_to_save)
     data_to_save = add_coversheet(data_to_save)
     for sheet_name, df in data_to_save.items():
-        if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
-            df = summarise_model_runs(df)
         ws = wb.create_sheet(title=sheet_name[:31])
         if isinstance(df, pd.Series):
             rows = dataframe_to_rows(

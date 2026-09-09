@@ -6,8 +6,10 @@ from openpyxl.workbook.workbook import Workbook
 from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.results import (
+    add_care_setting_and_summarise,
     add_coversheet,
     apply_styling_to_coversheet,
+    combine_dataframes,
     process_and_save_results_to_excel,
     summarise_model_runs,
     tidy_metadata,
@@ -230,3 +232,96 @@ def test_apply_styling_to_coversheet():
 
     assert all(ws[f"A{row}"].font.bold for row in range(1, 5))
     assert ws["A5"].font.bold is False
+
+
+def test_add_care_setting_and_summarise(mocker):
+    input_df = pd.DataFrame(
+        {"value": [10, 20]},
+        index=pd.MultiIndex.from_tuples(
+            [
+                (1, "A"),
+                (2, "A"),
+            ],
+            names=["model_run", "activity"],
+        ),
+    )
+
+    summarised_df = pd.DataFrame(
+        {"value": [30]},
+        index=pd.Index(["A"], name="activity"),
+    )
+
+    mock_summarise = mocker.patch(
+        "nhp.capacity_conversion.results.summarise_model_runs",
+        return_value=summarised_df,
+    )
+
+    data_to_save = {
+        "ip_capacity": input_df,
+        "metadata": pd.Series({"guid": "test-guid"}),
+    }
+
+    result = add_care_setting_and_summarise(data_to_save)
+
+    mock_summarise.assert_called_once_with(input_df)
+
+    expected = pd.DataFrame(
+        {
+            "value": [30],
+            "care_setting": ["ip"],
+        },
+        index=pd.Index(["A"], name="activity"),
+    )
+
+    assert_frame_equal(result["ip_capacity"], expected)  # ty: ignore
+    assert result["metadata"].equals(data_to_save["metadata"])
+
+
+def test_combine_dataframes():
+    """Combines baseline, activity and capacity dataframes."""
+    baseline_a = pd.DataFrame({"value": [1, 2]})
+    baseline_b = pd.DataFrame({"value": [3, 4]})
+
+    activity_a = pd.DataFrame({"value": [5, 6]})
+    activity_b = pd.DataFrame({"value": [7, 8]})
+
+    capacity_a = pd.DataFrame({"value": [9, 10]})
+    capacity_b = pd.DataFrame({"value": [11, 12]})
+
+    metadata = pd.Series({"guid": "test-guid"})
+
+    data_to_save = {
+        "a_baseline": baseline_a,
+        "b_baseline": baseline_b,
+        "a_fun_area_groupings": activity_a,
+        "b_fun_area_groupings": activity_b,
+        "a_capacity": capacity_a,
+        "b_capacity": capacity_b,
+        "metadata": metadata,
+    }
+
+    result = combine_dataframes(data_to_save)
+
+    assert set(result) == {
+        "baseline_year_activity_counts",
+        "predicted_activity_volumes",
+        "estimated_capacity_needs",
+        "metadata",
+    }
+
+    assert_frame_equal(
+        result["baseline_year_activity_counts"],  # ty: ignore
+        pd.concat([baseline_a, baseline_b]),
+    )
+
+    assert_frame_equal(
+        result["predicted_activity_volumes"],  # ty: ignore
+        pd.concat([activity_a, activity_b]),
+    )
+
+    assert_frame_equal(
+        result["estimated_capacity_needs"],  # ty: ignore
+        pd.concat([capacity_a, capacity_b]),
+    )
+
+    assert result["metadata"].equals(metadata)
