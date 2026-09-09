@@ -1,0 +1,96 @@
+name: Deploy Shiny application
+run-name: Deploy ${{ github.ref_name }} to ${{ github.event_name == 'release' && 'prod' || 'dev' }}
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-shiny-${{ github.event_name == 'release' && 'prod' || 'dev' }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  verify:
+    name: Verify deployment commit
+    uses: ./.github/workflows/ci.yaml
+    with:
+      upload-coverage: ${{ github.event_name == 'push' }}
+      validate-release: ${{ github.event_name == 'release' }}
+      validate-main-tip: ${{ github.event_name == 'push' }}
+    secrets:
+      CODECOV_TOKEN: ${{ github.event_name == 'push' && secrets.CODECOV_TOKEN || '' }}
+
+  deploy:
+    name: Deploy to ${{ github.event_name == 'release' && 'prod' || 'dev' }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: ${{ github.event_name == 'release' && 'prod' || 'dev' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Reject a superseded development deployment
+        if: github.event_name == 'push'
+        run: |
+          if [[ "$GITHUB_SHA" != "$(git rev-parse origin/main)" ]]; then
+            echo "::error::A newer main commit superseded this development deployment."
+            exit 1
+          fi
+
+      - name: Reject a superseded production release
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          latest_release_tag="$(
+            git tag --merged origin/main |
+              sed -nE '/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/p' |
+              sort -V |
+              tail -n 1
+          )"
+          if [[ "$RELEASE_TAG" != "$latest_release_tag" ]]; then
+            echo "::error::Only the highest semantic version on main may deploy to production."
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.1"
+
+      - name: Install deployment dependencies
+        run: uv sync --locked --group dev
+
+      - name: Deploy application
+        env:
+          DEPLOYMENT_TARGET: ${{ github.event_name == 'release' && 'prod' || 'dev' }}
+          CONNECT_SERVER: ${{ secrets.CONNECT_SERVER }}
+          CONNECT_APP_ID: ${{ secrets.CONNECT_APP_ID }}
+          CONNECT_API_KEY: ${{ secrets.CONNECT_API_KEY }}
+          AZ_STORAGE_EP: ${{ secrets.AZ_STORAGE_EP }}
+          AZ_STORAGE_RESULTS: ${{ secrets.AZ_STORAGE_RESULTS }}
+          AZ_TABLE_ENDPOINT: ${{ secrets.AZ_TABLE_ENDPOINT }}
+          CAPACITY_MODEL_VERSION: ${{ secrets.CAPACITY_MODEL_VERSION }}
+          TABLE_NAME: ${{ secrets.TABLE_NAME }}
+          FEEDBACK_FORM_URL: ${{ secrets.FEEDBACK_FORM_URL }}
+        run: >
+          uv run --no-sync scripts/deploy_shiny.py
+          --deployment-type redeploy
+          --target "$DEPLOYMENT_TARGET"
+          --yes
+          --no-dotenv

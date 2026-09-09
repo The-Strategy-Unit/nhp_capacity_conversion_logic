@@ -9,7 +9,8 @@
 *       @yiwen-h @ai-mindset 
 
 # Shiny application
-/.github/workflows/app-requirements.yaml @The-Strategy-Unit/capcon-shiny-app
+/.github/workflows/ci.yaml @The-Strategy-Unit/capcon-shiny-app
+/.github/workflows/deploy-shiny.yaml @The-Strategy-Unit/capcon-shiny-app
 /_brand.yml @The-Strategy-Unit/capcon-shiny-app
 /app.py @The-Strategy-Unit/capcon-shiny-app
 /requirements.txt @The-Strategy-Unit/capcon-shiny-app
