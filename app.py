@@ -39,8 +39,16 @@ from nhp.capacity_conversion.utils import (
 
 logger = logging.getLogger(__name__)
 
+
+def _required_environment_variable(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
 APP_TITLE = "OpenPlan Capacity Conversion Model"
-CAPACITY_MODEL_VERSION = "dev"
+CAPACITY_MODEL_VERSION = _required_environment_variable("CAPACITY_MODEL_VERSION")
 SITES = {activity_type: "ALL" for activity_type in ACTIVITY_TYPES}
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
 PROVIDER_GROUP_PREFIX = "nhp_provider_"
@@ -74,13 +82,6 @@ CAPACITY_PREPROCESSORS = {
     "ip_procedures_and_theatres": preprocess_ip_theatres_data,
     "ip_wards": preprocess_ip_wards_data,
 }
-
-
-def _required_environment_variable(name: str) -> str:
-    value = os.getenv(name)
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
 
 
 def _catalogue_frame(entities: list[dict]) -> pd.DataFrame:

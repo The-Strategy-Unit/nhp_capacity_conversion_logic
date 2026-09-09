@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import call
+from unittest.mock import call, patch
 
 import pandas as pd
 import pytest
@@ -21,12 +21,14 @@ def _load_app_module() -> ModuleType:
     return module
 
 
-app = _load_app_module()
+with patch.dict(os.environ, {"CAPACITY_MODEL_VERSION": "dev"}):
+    app = _load_app_module()
 
 APP_ENVIRONMENT = {
     "AZ_STORAGE_EP": "https://storage.example.com",
     "AZ_STORAGE_RESULTS": "results",
     "AZ_TABLE_ENDPOINT": "https://table.example.com",
+    "CAPACITY_MODEL_VERSION": "dev",
     "TABLE_NAME": "metadata",
 }
 
@@ -49,6 +51,31 @@ def _functional_aggregation(**overrides) -> dict:
     }
     entity.update(overrides)
     return entity
+
+
+def test_capacity_model_version_is_loaded_from_environment(mocker):
+    mocker.patch.dict(
+        os.environ,
+        {"CAPACITY_MODEL_VERSION": "prod"},
+        clear=True,
+    )
+
+    configured_app = _load_app_module()
+
+    assert configured_app.CAPACITY_MODEL_VERSION == "prod"
+    assert not configured_app._catalogue_frame(
+        [_functional_aggregation(PartitionKey="prod")]
+    ).empty
+
+
+def test_app_requires_capacity_model_version(mocker):
+    mocker.patch.dict(os.environ, {}, clear=True)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Missing required environment variable: CAPACITY_MODEL_VERSION",
+    ):
+        _load_app_module()
 
 
 def test_catalogue_frame_validates_and_parses_entities():
