@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+    inputs:
+      upload-coverage:
+        description: Upload the unit-test coverage report to Codecov
+        type: boolean
+        default: false
+      validate-release:
+        description: Validate the triggering production release
+        type: boolean
+        default: false
+      validate-main-tip:
+        description: Stop superseded development runs before expensive CI
+        type: boolean
+        default: false
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Reject a superseded development run
+        if: inputs.validate-main-tip
+        run: |
+          if [[ "$GITHUB_SHA" != "$(git rev-parse origin/main)" ]]; then
+            echo "::error::A newer main commit superseded this development run."
+            exit 1
+          fi
+
+      - name: Validate production release
+        if: inputs.validate-release
+        env:
+          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$RELEASE_IS_PRERELEASE" == "true" ]]; then
+            echo "::error::Pre-releases cannot be deployed to production."
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Production release tags must use vMajor.Minor.Patch."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::The production release commit must belong to main."
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.1"
+
+      - name: Check lockfile and application requirements
+        run: |
+          uv lock --check
+          uv export --no-default-groups --group app --no-hashes --output-file requirements.txt
+          uv pip compile requirements.txt --output-file /tmp/nhp-capacity-connect-requirements.txt
+          git diff --exit-code -- requirements.txt
+
+      - name: Check formatting and lint
+        run: |
+          uv run --locked ruff format --check --diff .
+          uv run --locked ruff check .
+
+      - name: Type check
+        run: uv run --locked --group app ty check .
+
+      - name: Run unit tests
+        run: >
+          uv run --locked --group app python -m pytest
+          --cov=src/nhp/capacity_conversion
+          --cov-branch
+          --cov-fail-under=100
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          tests/unit
+
+      - name: Install Chromium
+        run: >
+          uv run --locked --group app
+          python -m playwright install --with-deps chromium
+
+      - name: Run end-to-end smoke tests
+        run: uv run --locked --group app python -m pytest tests/e2e
+
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'pull_request' || inputs.upload-coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

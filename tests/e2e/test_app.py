@@ -11,6 +11,7 @@ app = create_app_fixture(
         "AZ_STORAGE_EP": "https://storage.example.com",
         "AZ_STORAGE_RESULTS": "results",
         "AZ_TABLE_ENDPOINT": "https://table.example.com",
+        "CAPACITY_MODEL_VERSION": "dev",
         "FEEDBACK_FORM_URL": "",
         "SHINY_TESTMODE": "1",
         "TABLE_NAME": "catalogue",

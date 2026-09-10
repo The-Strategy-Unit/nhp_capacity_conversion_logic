@@ -1,30 +1,46 @@
-"""Interactive deployment helper for the Shiny application."""
+"""Deploy the Shiny application to Posit Connect."""
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import shutil
 import subprocess
-from collections.abc import Mapping
+import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from http.client import HTTPMessage
 from pathlib import Path
+from time import sleep
+from typing import IO
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from dotenv import dotenv_values, load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = PROJECT_ROOT / ".env"
-APP_TITLE = "OpenPlan Capacity Conversion Model (development)"
 
 CONNECT_ENV_VARS = (
     "CONNECT_SERVER",
     "CONNECT_API_KEY",
 )
+HTTPS_ENV_VARS = frozenset(
+    {
+        "AZ_STORAGE_EP",
+        "AZ_TABLE_ENDPOINT",
+        "CONNECT_SERVER",
+        "FEEDBACK_FORM_URL",
+    }
+)
 REQUIRED_RUNTIME_ENV_VARS = (
     "AZ_STORAGE_EP",
     "AZ_STORAGE_RESULTS",
     "AZ_TABLE_ENDPOINT",
+    "CAPACITY_MODEL_VERSION",
     "TABLE_NAME",
     "FEEDBACK_FORM_URL",
 )
@@ -51,6 +67,68 @@ class DeploymentType(StrEnum):
     REDEPLOY = "redeploy"
 
 
+class DeploymentTarget(StrEnum):
+    """Posit Connect environment targeted by a deployment."""
+
+    DEV = "dev"
+    PROD = "prod"
+
+
+def _https_origin(value: str) -> tuple[str, int] | None:
+    """Return a normalized HTTPS origin, rejecting ambiguous URLs."""
+    try:
+        parsed_url = urlparse(value)
+        hostname = parsed_url.hostname
+        port = parsed_url.port or 443
+    except ValueError:
+        return None
+
+    if (
+        parsed_url.scheme.casefold() != "https"
+        or hostname is None
+        or parsed_url.username is not None
+        or parsed_url.password is not None
+    ):
+        return None
+    return hostname.casefold(), port
+
+
+class _SameOriginRedirectHandler(HTTPRedirectHandler):
+    """Allow URL canonicalization without forwarding credentials off-origin."""
+
+    def __init__(self, trusted_origin: tuple[str, int]) -> None:
+        super().__init__()
+        self.trusted_origin = trusted_origin
+
+    def redirect_request(
+        self,
+        req: Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> Request | None:
+        if _https_origin(newurl) != self.trusted_origin:
+            return None
+        return super().redirect_request(
+            req,
+            fp,
+            code,
+            msg,
+            headers,
+            newurl,
+        )
+
+
+APP_TITLES = {
+    DeploymentTarget.DEV: "OpenPlan Capacity Conversion Model (development)",
+    DeploymentTarget.PROD: "OpenPlan Capacity Conversion Model",
+}
+SMOKE_CHECK_ATTEMPTS = 3
+SMOKE_CHECK_RETRY_SECONDS = 5
+
+
 class EnvironmentSource(StrEnum):
     """Where an effective deployment environment variable came from."""
 
@@ -71,11 +149,60 @@ class PreflightCheck:
     failure_status: str = "MISSING"
 
 
-def load_deployment_environment() -> dict[str, EnvironmentSource]:
-    """Load `.env` with precedence and record each effective value's source."""
+@dataclass(frozen=True)
+class DeploymentOptions:
+    """Command-line choices for interactive or automated deployment."""
+
+    deployment_type: DeploymentType | None
+    target: DeploymentTarget
+    assume_yes: bool
+    use_dotenv_file: bool
+
+
+def parse_deployment_options(arguments: Sequence[str]) -> DeploymentOptions:
+    """Parse deployment options without reading environment variables."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--deployment-type",
+        choices=DeploymentType,
+        type=DeploymentType,
+        help="skip the interactive new/redeploy prompt",
+    )
+    parser.add_argument(
+        "--target",
+        choices=DeploymentTarget,
+        default=DeploymentTarget.DEV,
+        type=DeploymentTarget,
+        help="deployment environment (default: dev)",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="deploy without an interactive confirmation prompt",
+    )
+    parser.add_argument(
+        "--no-dotenv",
+        action="store_true",
+        help="use only the current environment and do not read .env",
+    )
+    parsed = parser.parse_args(arguments)
+    return DeploymentOptions(
+        deployment_type=parsed.deployment_type,
+        target=parsed.target,
+        assume_yes=parsed.yes,
+        use_dotenv_file=not parsed.no_dotenv,
+    )
+
+
+def load_deployment_environment(
+    *,
+    use_dotenv_file: bool = True,
+) -> dict[str, EnvironmentSource]:
+    """Load deployment values and record each effective value's source."""
     inherited_environment = set(os.environ)
-    dotenv_environment = dotenv_values(dotenv_path=ENV_FILE)
-    load_dotenv(dotenv_path=ENV_FILE, override=True)
+    dotenv_environment = dotenv_values(dotenv_path=ENV_FILE) if use_dotenv_file else {}
+    if use_dotenv_file:
+        load_dotenv(dotenv_path=ENV_FILE, override=True)
 
     return {
         name: (
@@ -96,16 +223,14 @@ def _environment_preflight_check(
     """Validate one deployment environment variable."""
     value = os.getenv(name, "").strip()
     source = environment_sources.get(name, EnvironmentSource.UNSET)
-    if name == "FEEDBACK_FORM_URL" and value:
-        feedback_url = urlparse(value)
-        if feedback_url.scheme != "https" or not feedback_url.netloc:
-            return PreflightCheck(
-                label=name,
-                passed=False,
-                detail="must be a valid HTTPS URL",
-                source=source,
-                failure_status="INVALID",
-            )
+    if name in HTTPS_ENV_VARS and value and _https_origin(value) is None:
+        return PreflightCheck(
+            label=name,
+            passed=False,
+            detail="must be a valid HTTPS URL",
+            source=source,
+            failure_status="INVALID",
+        )
 
     return PreflightCheck(
         label=name,
@@ -217,6 +342,7 @@ def print_preflight_checks(checks: list[PreflightCheck]) -> None:
 def build_deploy_command(
     deployment_type: DeploymentType,
     rsconnect_executable: str,
+    target: DeploymentTarget = DeploymentTarget.DEV,
 ) -> list[str]:
     """Build the rsconnect argument list without invoking a shell."""
     command = [
@@ -224,7 +350,7 @@ def build_deploy_command(
         "deploy",
         "shiny",
         "--title",
-        APP_TITLE,
+        APP_TITLES[target],
         "--entrypoint",
         "app:app",
         "--requirements-file",
@@ -249,11 +375,15 @@ def build_deploy_command(
     return command
 
 
-def confirm_deployment(deployment_type: DeploymentType) -> bool:
+def confirm_deployment(
+    deployment_type: DeploymentType,
+    target: DeploymentTarget = DeploymentTarget.DEV,
+) -> bool:
     """Show a secret-free summary and request final confirmation."""
     print("\nDeployment summary:")
     print(f"  Operation: {deployment_type.value}")
-    print(f"  Title:     {APP_TITLE}")
+    print(f"  Target:    {target.value}")
+    print(f"  Title:     {APP_TITLES[target]}")
     print(f"  Server:    {os.environ['CONNECT_SERVER']}")
     if deployment_type is DeploymentType.REDEPLOY:
         print(f"  App GUID:  {os.environ['CONNECT_APP_ID']}")
@@ -276,12 +406,108 @@ def run_command(command: list[str]) -> int:
     return completed.returncode
 
 
-def main() -> int:
+def describe_deployment_target(
+    rsconnect_executable: str,
+    target: DeploymentTarget,
+) -> str | None:
+    """Validate the existing Connect content and return its HTTPS URL."""
+    try:
+        completed = subprocess.run(
+            [
+                rsconnect_executable,
+                "content",
+                "describe",
+                "--guid",
+                os.environ["CONNECT_APP_ID"],
+            ],
+            cwd=PROJECT_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as error:
+        print(f"Unable to start {Path(rsconnect_executable).name}: {error}")
+        return None
+
+    if completed.returncode != 0:
+        return None
+
+    try:
+        details = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        print("Connect returned an invalid content description.")
+        return None
+
+    if not isinstance(details, dict) or (
+        details.get("guid") != os.environ["CONNECT_APP_ID"]
+        or details.get("app_mode") != "python-shiny"
+        or details.get("title") != APP_TITLES[target]
+    ):
+        print(
+            f"Connect content does not match the expected {target.value} application."
+        )
+        return None
+
+    content_url = details.get("content_url")
+    if not isinstance(content_url, str):
+        print("Connect did not return an HTTPS content URL.")
+        return None
+
+    content_origin = _https_origin(content_url)
+    connect_origin = _https_origin(os.environ["CONNECT_SERVER"])
+    if content_origin is None or content_origin != connect_origin:
+        print("Connect returned a content URL outside the configured server origin.")
+        return None
+    return content_url
+
+
+def verify_deployed_application(content_url: str) -> bool:
+    """Make an authenticated request to the deployed application."""
+    trusted_origin = _https_origin(os.environ["CONNECT_SERVER"])
+    if trusted_origin is None:  # Guarded by the preflight checks.
+        return False
+
+    application_request = Request(
+        content_url,
+        headers={"Authorization": f"Key {os.environ['CONNECT_API_KEY']}"},
+    )
+    opener = build_opener(_SameOriginRedirectHandler(trusted_origin))
+
+    for attempt in range(1, SMOKE_CHECK_ATTEMPTS + 1):
+        try:
+            with opener.open(application_request, timeout=60) as response:
+                response.read(1)
+                status = response.status
+        except HTTPError as error:
+            retryable = error.code >= 500
+        except (URLError, TimeoutError, OSError):
+            retryable = True
+        else:
+            if status == 200:
+                print("The deployed application passed its authenticated smoke check.")
+                return True
+            print("The deployed application did not return HTTP 200.")
+            return False
+
+        if not retryable or attempt == SMOKE_CHECK_ATTEMPTS:
+            print(
+                "The deployed application did not pass its authenticated smoke check."
+            )
+            return False
+        sleep(SMOKE_CHECK_RETRY_SECONDS)
+
+    return False  # Unreachable, but keeps the return contract explicit.
+
+
+def main(arguments: Sequence[str] = ()) -> int:
     """Validate configuration and deploy the Shiny app to Posit Connect."""
-    environment_sources = load_deployment_environment()
+    options = parse_deployment_options(arguments)
+    environment_sources = load_deployment_environment(
+        use_dotenv_file=options.use_dotenv_file
+    )
 
     print("OpenPlan Capacity Conversion Model deployment\n")
-    deployment_type = choose_deployment_type()
+    deployment_type = options.deployment_type or choose_deployment_type()
     if deployment_type is None:
         print("Deployment cancelled.")
         return 0
@@ -292,7 +518,10 @@ def main() -> int:
         print("\nDeployment cannot continue.")
         return 1
 
-    if not confirm_deployment(deployment_type):
+    if not options.assume_yes and not confirm_deployment(
+        deployment_type,
+        options.target,
+    ):
         print("Deployment cancelled.")
         return 0
 
@@ -301,24 +530,47 @@ def main() -> int:
         print("rsconnect is no longer available.")
         return 1
 
-    print("\nChecking the Posit Connect connection...")
-    if (
-        run_command(
-            [
-                rsconnect_executable,
-                "details",
-                "--server",
-                os.environ["CONNECT_SERVER"],
-            ]
-        )
-        != 0
-    ):
-        print("Connection check failed; deployment was not started.")
-        return 1
+    content_url: str | None = None
+    if deployment_type is DeploymentType.REDEPLOY:
+        print("\nChecking the Posit Connect deployment target...")
+        content_url = describe_deployment_target(rsconnect_executable, options.target)
+        if content_url is None:
+            print("Connect pre-deployment check failed; deployment was not started.")
+            return 1
+    else:
+        print("\nChecking the Posit Connect connection...")
+        check_command = [
+            rsconnect_executable,
+            "details",
+            "--server",
+            os.environ["CONNECT_SERVER"],
+        ]
+
+        if run_command(check_command) != 0:
+            print("Connect pre-deployment check failed; deployment was not started.")
+            return 1
 
     print("\nStarting deployment...")
-    return run_command(build_deploy_command(deployment_type, rsconnect_executable))
+    deploy_status = run_command(
+        build_deploy_command(
+            deployment_type,
+            rsconnect_executable,
+            options.target,
+        )
+    )
+    if deploy_status != 0 or content_url is None:
+        return deploy_status
+
+    print("\nChecking the deployed application...")
+    if verify_deployed_application(content_url):
+        return 0
+
+    print(
+        "The deployment may already be active. Follow the rollback procedure in "
+        "README.md if the application is unhealthy."
+    )
+    return 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
