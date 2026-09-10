@@ -243,9 +243,13 @@ def combine_dataframes(
         if sheet_name == "baseline_year_activity_counts":
             combined_data[sheet_name] = create_and_format_baseline_df(dfs)
         if sheet_name == "predicted_activity_volumes":
-            combined_data[sheet_name] = create_and_format_predicted_vols_df(dfs)
+            combined_data[sheet_name] = create_and_format_predicted_vols_df(dfs).round(
+                2
+            )
         if sheet_name == "estimated_capacity_needs":
-            combined_data[sheet_name] = create_and_format_capacity_needs_df(dfs)
+            combined_data[sheet_name] = create_and_format_capacity_needs_df(dfs).round(
+                2
+            )
 
     keys_to_remove = [key for keys in groups.values() for key in keys]
 
