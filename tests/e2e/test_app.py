@@ -48,10 +48,18 @@ def test_app_displays_capacity_conversion_interface(
     estimates = controller.OutputDataFrame(page, "estimates")
     feedback = controller.InputActionButton(page, "feedback")
     download = controller.DownloadButton(page, "download_estimates")
+    results_card = page.locator(".card").filter(
+        has=page.locator(".card-header", has_text="Capacity estimates")
+    )
 
     expect(logo).to_be_visible()
     expect(logo).to_have_js_property("complete", True)
     expect(logo).to_have_js_property("naturalWidth", 2000)
+    expect(results_card).to_be_visible()
+    results_card_box = results_card.bounding_box()
+    assert results_card_box is not None
+    assert page.viewport_size is not None
+    assert results_card_box["width"] >= page.viewport_size["width"] * 0.95
     dataset.expect_choices(["", "RXX"])
     dataset.set("RXX")
     scenario.expect_choices(["", "Example scenario"])
