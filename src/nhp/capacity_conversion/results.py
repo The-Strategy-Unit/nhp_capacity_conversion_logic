@@ -157,6 +157,57 @@ def add_care_setting_and_summarise(
     return data_to_save
 
 
+def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    df = pd.concat(dfs)
+    df.index.name = "activity_group"
+    df = (
+        df.reset_index()
+        .melt(
+            id_vars=["activity_group", "care_setting"],
+            value_vars=[
+                "total",
+                "spells",
+                "beddays",
+                "total_theatre_time",
+            ],
+            var_name="measure",
+            value_name="value",
+        )
+        .dropna(subset=["value"])
+    )
+    mask = df["measure"].eq("total")
+
+    df.loc[mask, "measure"] = df.loc[mask, "activity_group"].str.split("_").str[-1]
+    return df.set_index(["activity_group", "measure"])
+
+
+def add_measure_index(df: pd.DataFrame) -> pd.DataFrame:
+    if "measure" not in df.index.names:
+        df = df.copy()
+        index_names = [str(name) for name in df.index.names if name != "model_run"]
+        df["measure"] = [
+            label.split("_")[-1] for label in df.index.get_level_values(index_names[0])
+        ]
+        df = df.set_index("measure", append=True)
+
+        # Ensure consistent ordering
+        df.index = df.index.reorder_levels(index_names + ["measure"])  # ty: ignore
+    return df
+
+
+def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    dfs = [add_measure_index(df) for df in dfs]
+    df = pd.concat(dfs)
+    df.index = df.index.set_names(["activity_group", "measure"])
+    return df
+
+
+def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    df = pd.concat(dfs)
+    df.index.name = "resource"
+    return df
+
+
 def combine_dataframes(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> dict[str, pd.DataFrame | pd.Series]:
@@ -182,13 +233,19 @@ def combine_dataframes(
         ],
     }
 
-    combined_data = {
-        sheet_name: pd.concat(
-            [data_to_save[key] for key in keys],
-        )
-        for sheet_name, keys in groups.items()
-        if keys
-    }
+    combined_data = {}
+    for sheet_name, keys in groups.items():
+        if not keys:
+            continue
+
+        dfs = [pd.DataFrame(data_to_save[key]) for key in keys]
+
+        if sheet_name == "baseline_year_activity_counts":
+            combined_data[sheet_name] = create_and_format_baseline_df(dfs)
+        if sheet_name == "predicted_activity_volumes":
+            combined_data[sheet_name] = create_and_format_predicted_vols_df(dfs)
+        if sheet_name == "estimated_capacity_needs":
+            combined_data[sheet_name] = create_and_format_capacity_needs_df(dfs)
 
     keys_to_remove = [key for keys in groups.values() for key in keys]
 
