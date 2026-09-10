@@ -76,21 +76,68 @@ jobs:
       - name: Install deployment dependencies
         run: uv sync --locked --group dev
 
-      - name: Deploy application
+      - name: Create Connect manifest
+        run: |
+          uv run --no-sync rsconnect write-manifest shiny \
+            --overwrite \
+            --entrypoint app:app \
+            --requirements-file requirements.txt \
+            --exclude '**' \
+            . \
+            app.py \
+            _brand.yml \
+            README.md \
+            pyproject.toml \
+            requirements.txt \
+            src/nhp/__init__.py \
+            src/nhp/capacity_conversion/*.py \
+            www/app.css \
+            www/favicon.ico \
+            www/strategy-unit-nhs-logo.png
+
+      - name: Publish Connect content
+        id: publish
+        uses: rstudio/actions/connect-publish@c9bbc708d764ada8da7a54e368f6e70e2892f657 # rsconnect-ts v0.9.0
         env:
-          DEPLOYMENT_TARGET: ${{ github.event_name == 'release' && 'prod' || 'dev' }}
-          CONNECT_SERVER: ${{ secrets.CONNECT_SERVER }}
-          CONNECT_APP_ID: ${{ secrets.CONNECT_APP_ID }}
+          CONNECT_ENV_SET_AZ_STORAGE_EP: ${{ secrets.AZ_STORAGE_EP }}
+          CONNECT_ENV_SET_AZ_STORAGE_RESULTS: ${{ secrets.AZ_STORAGE_RESULTS }}
+          CONNECT_ENV_SET_AZ_TABLE_ENDPOINT: ${{ secrets.AZ_TABLE_ENDPOINT }}
+          CONNECT_ENV_SET_CAPACITY_MODEL_VERSION: ${{ secrets.CAPACITY_MODEL_VERSION }}
+          CONNECT_ENV_SET_TABLE_NAME: ${{ secrets.TABLE_NAME }}
+          CONNECT_ENV_SET_FEEDBACK_FORM_URL: ${{ secrets.FEEDBACK_FORM_URL }}
+        with:
+          url: ${{ secrets.CONNECT_SERVER }}
+          api-key: ${{ secrets.CONNECT_API_KEY }}
+          access-type: logged_in
+          force: true
+          update-env: true
+          dir: .:${{ secrets.CONNECT_APP_ID }}
+
+      - name: Smoke test deployed application
+        env:
           CONNECT_API_KEY: ${{ secrets.CONNECT_API_KEY }}
-          AZ_STORAGE_EP: ${{ secrets.AZ_STORAGE_EP }}
-          AZ_STORAGE_RESULTS: ${{ secrets.AZ_STORAGE_RESULTS }}
-          AZ_TABLE_ENDPOINT: ${{ secrets.AZ_TABLE_ENDPOINT }}
-          CAPACITY_MODEL_VERSION: ${{ secrets.CAPACITY_MODEL_VERSION }}
-          TABLE_NAME: ${{ secrets.TABLE_NAME }}
-          FEEDBACK_FORM_URL: ${{ secrets.FEEDBACK_FORM_URL }}
-        run: >
-          uv run --no-sync scripts/deploy_shiny.py
-          --deployment-type redeploy
-          --target "$DEPLOYMENT_TARGET"
-          --yes
-          --no-dotenv
+          CONNECT_APP_URL: ${{ fromJSON(steps.publish.outputs.results)[0].url }}
+        run: |
+          set -euo pipefail
+
+          status="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --location \
+              --proto '=https' \
+              --proto-redir '=https' \
+              --retry 2 \
+              --retry-all-errors \
+              --retry-delay 5 \
+              --max-time 60 \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --header "Authorization: Key $CONNECT_API_KEY" \
+              "$CONNECT_APP_URL"
+          )"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::The deployed application returned HTTP $status."
+            exit 1
+          fi
