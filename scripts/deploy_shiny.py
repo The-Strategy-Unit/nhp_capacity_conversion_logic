@@ -433,12 +433,21 @@ def describe_deployment_target(
         return None
 
     try:
-        details = json.loads(completed.stdout)
+        descriptions = json.loads(completed.stdout)
     except json.JSONDecodeError:
         print("Connect returned an invalid content description.")
         return None
 
-    if not isinstance(details, dict) or (
+    if not isinstance(descriptions, list) or len(descriptions) != 1:
+        print("Connect returned an invalid content description.")
+        return None
+
+    details = descriptions[0]
+    if not isinstance(details, dict):
+        print("Connect returned an invalid content description.")
+        return None
+
+    if (
         details.get("guid") != os.environ["CONNECT_APP_ID"]
         or details.get("app_mode") != "python-shiny"
         or details.get("title") != APP_TITLES[target]

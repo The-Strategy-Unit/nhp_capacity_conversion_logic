@@ -143,11 +143,12 @@ the target's configuration and GitHub can mask their values in workflow logs:
 - `FEEDBACK_FORM_URL`
 
 The API key must be able to publish the content identified by that environment's
-`CONNECT_APP_ID`. The workflow passes the runtime secrets to Connect but does
-not pass the API key to the deployed application. It ignores `.env` during
-automated deployment so repository content cannot override GitHub secrets.
-Configure required reviewers and deployment protection rules on the `prod`
-GitHub Environment.
+`CONNECT_APP_ID`. The workflow creates a Python Shiny `manifest.json`, then uses
+Posit's `connect-publish` action to replace that GUID. Runtime secrets are
+passed through the action's `CONNECT_ENV_SET_*` interface; the API key is not
+passed to the deployed application. The explicit manifest excludes `.env`, so
+repository content cannot override GitHub secrets. Configure required reviewers
+and deployment protection rules on the `prod` GitHub Environment.
 
 Pull requests and deployments use the same reusable CI workflow for the
 lockfile, generated requirements, formatting, lint, type, unit and browser
@@ -159,21 +160,18 @@ does not guarantee queue order, so production accepts only the highest stable
 when a newer commit reaches `main`, then checks the tip again immediately before
 deployment.
 
-The deployment starts only after verification succeeds. It checks that
-`CONNECT_APP_ID` resolves to a Python Shiny application with the expected
-environment-specific title and a content URL on `CONNECT_SERVER` before
-replacing it. After deployment it permits only same-origin HTTPS redirects and
-requires HTTP 200, retrying transient failures three times.
+The deployment starts only after verification succeeds. The publish action
+targets the existing content by GUID and waits for Connect's deployment task to
+finish. A follow-up authenticated HTTPS request requires HTTP 200 and retries
+transient failures; `curl` does not forward the API-key header to another host
+when following redirects.
 
-This workflow requires Posit Connect 2025.06 or later. With rsconnect-python
-1.30, those releases verify a draft bundle before activating it, leaving the
-previous bundle active when built-in verification fails.
-
-Posit Connect applies supplied runtime environment variables before uploading
-the new bundle. Consequently, a failed deployment can leave the previous bundle
-running with newly supplied configuration. Test configuration changes in dev
-first and retain the previous production values securely until the production
-deployment succeeds; the workflow cannot make this Connect operation atomic.
+The action applies supplied runtime environment variables after the content
+deployment succeeds. The initial manual deployment must therefore configure
+the runtime environment. A later environment-update failure can leave the new
+bundle using the previous values even though the workflow reports failure, so
+test configuration changes in dev first and retain previous production values
+securely until the production workflow succeeds.
 
 Both Connect applications must be created manually before the workflow's first
 run. The local helper remains the supported way to create that initial content.

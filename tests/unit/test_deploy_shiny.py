@@ -515,12 +515,14 @@ def test_describe_deployment_target_returns_validated_content_url(
         args=[],
         returncode=0,
         stdout=deploy.json.dumps(
-            {
-                "guid": "app-guid",
-                "app_mode": "python-shiny",
-                "title": "OpenPlan Capacity Conversion Model",
-                "content_url": "https://connect.example.test/content/app-guid/",
-            }
+            [
+                {
+                    "guid": "app-guid",
+                    "app_mode": "python-shiny",
+                    "title": "OpenPlan Capacity Conversion Model",
+                    "content_url": "https://connect.example.test/content/app-guid/",
+                }
+            ]
         ),
     )
     run = mocker.patch.object(deploy.subprocess, "run", return_value=completed)
@@ -552,48 +554,60 @@ def test_describe_deployment_target_returns_validated_content_url(
     [
         (1, ""),
         (0, "not-json"),
+        (0, deploy.json.dumps({})),
+        (0, deploy.json.dumps([])),
+        (0, deploy.json.dumps([{}, {}])),
+        (0, deploy.json.dumps([None])),
         (
             0,
             deploy.json.dumps(
-                {
-                    "guid": "different-guid",
-                    "app_mode": "python-shiny",
-                    "title": "OpenPlan Capacity Conversion Model",
-                    "content_url": "https://connect.example.test/content/app-guid",
-                }
+                [
+                    {
+                        "guid": "different-guid",
+                        "app_mode": "python-shiny",
+                        "title": "OpenPlan Capacity Conversion Model",
+                        "content_url": "https://connect.example.test/content/app-guid",
+                    }
+                ]
             ),
         ),
         (
             0,
             deploy.json.dumps(
-                {
-                    "guid": "app-guid",
-                    "app_mode": "shiny",
-                    "title": "OpenPlan Capacity Conversion Model",
-                    "content_url": "https://connect.example.test/content/app-guid",
-                }
+                [
+                    {
+                        "guid": "app-guid",
+                        "app_mode": "shiny",
+                        "title": "OpenPlan Capacity Conversion Model",
+                        "content_url": "https://connect.example.test/content/app-guid",
+                    }
+                ]
             ),
         ),
         (
             0,
             deploy.json.dumps(
-                {
-                    "guid": "app-guid",
-                    "app_mode": "python-shiny",
-                    "title": "Unexpected application",
-                    "content_url": "https://connect.example.test/content/app-guid",
-                }
+                [
+                    {
+                        "guid": "app-guid",
+                        "app_mode": "python-shiny",
+                        "title": "Unexpected application",
+                        "content_url": "https://connect.example.test/content/app-guid",
+                    }
+                ]
             ),
         ),
         (
             0,
             deploy.json.dumps(
-                {
-                    "guid": "app-guid",
-                    "app_mode": "python-shiny",
-                    "title": "OpenPlan Capacity Conversion Model",
-                    "content_url": "https://other.example.test/content/app-guid",
-                }
+                [
+                    {
+                        "guid": "app-guid",
+                        "app_mode": "python-shiny",
+                        "title": "OpenPlan Capacity Conversion Model",
+                        "content_url": "https://other.example.test/content/app-guid",
+                    }
+                ]
             ),
         ),
     ],
