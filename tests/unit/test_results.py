@@ -9,8 +9,12 @@ from nhp.capacity_conversion.results import (
     add_care_setting_and_summarise,
     add_coversheet,
     apply_styling_to_coversheet,
-    combine_dataframes,
+    combine_and_format_dataframes,
+    create_and_format_baseline_df,
+    create_and_format_capacity_needs_df,
+    create_and_format_predicted_vols_df,
     process_and_save_results_to_excel,
+    process_data_to_save,
     summarise_model_runs,
     tidy_metadata,
 )
@@ -50,9 +54,6 @@ def test_process_and_save_results_to_excel(mocker):
         ],
     )
     mock_logger = mocker.patch("nhp.capacity_conversion.results.logger")
-    mock_summarise = mocker.patch(
-        "nhp.capacity_conversion.results.summarise_model_runs"
-    )
     metadata = pd.Series(
         {
             "guid": "123",
@@ -70,8 +71,9 @@ def test_process_and_save_results_to_excel(mocker):
         "metadata": metadata,
         "results": df,
     }
-    mock_add_coversheet = mocker.patch(
-        "nhp.capacity_conversion.results.add_coversheet", return_value=data_to_save
+    mock_process_data_to_save = mocker.patch(
+        "nhp.capacity_conversion.results.process_data_to_save",
+        return_value=data_to_save,
     )
     mock_apply_styling_to_coversheet = mocker.patch(
         "nhp.capacity_conversion.results.apply_styling_to_coversheet"
@@ -82,12 +84,10 @@ def test_process_and_save_results_to_excel(mocker):
 
     # assert
     mock_makedirs.assert_called_once_with("results/123/456", exist_ok=True)
-    mock_summarise.assert_called_once()
-    mock_add_coversheet.assert_called_once_with(data_to_save)
-    mock_apply_styling_to_coversheet.assert_called_once()
     mock_wb.remove.assert_called_once_with(mock_wb.active)
     assert mock_wb.create_sheet.call_count == len(data_to_save)
     assert mock_dataframe_to_rows.call_count == 2
+    mock_process_data_to_save.assert_called_once()
 
     # metadata is a Series, so it should be written without headers
     metadata_call = mock_dataframe_to_rows.call_args_list[0]
@@ -98,6 +98,8 @@ def test_process_and_save_results_to_excel(mocker):
     results_call = mock_dataframe_to_rows.call_args_list[1]
     assert results_call.kwargs["index"] is False
     assert results_call.kwargs["header"] is True
+
+    mock_apply_styling_to_coversheet.assert_called_once()
 
     mock_wb.save.assert_called_once_with(
         "results/123/456/capacity_conversion_results.xlsx"
@@ -277,31 +279,137 @@ def test_add_care_setting_and_summarise(mocker):
     assert result["metadata"].equals(data_to_save["metadata"])
 
 
-def test_combine_dataframes():
-    """Combines baseline, activity and capacity dataframes."""
-    baseline_a = pd.DataFrame({"value": [1, 2]})
-    baseline_b = pd.DataFrame({"value": [3, 4]})
+def test_create_and_format_baseline_df():
+    df = pd.DataFrame(
+        {
+            "care_setting": ["a"],
+            "total": [10],
+            "spells": [5],
+            "beddays": [20],
+            "total_theatre_time": [None],
+        },
+        index=pd.Index(["activity_group_measure"], name="activity_group"),
+    )
 
-    activity_a = pd.DataFrame({"value": [5, 6]})
-    activity_b = pd.DataFrame({"value": [7, 8]})
+    result = create_and_format_baseline_df([df])
 
-    capacity_a = pd.DataFrame({"value": [9, 10]})
-    capacity_b = pd.DataFrame({"value": [11, 12]})
+    expected = pd.DataFrame(
+        {
+            "care_setting": ["a", "a", "a"],
+            "value": [10, 5, 20],
+        },
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("activity_group_measure", "measure"),
+                ("activity_group_measure", "spells"),
+                ("activity_group_measure", "beddays"),
+            ],
+            names=["activity_group", "measure"],
+        ),
+    )
 
-    metadata = pd.Series({"guid": "test-guid"})
+    print(result)
+    print(expected)
+    assert_frame_equal(result, expected, check_dtype=False)
 
-    data_to_save = {
-        "a_baseline": baseline_a,
-        "b_baseline": baseline_b,
-        "a_fun_area_groupings": activity_a,
-        "b_fun_area_groupings": activity_b,
-        "a_capacity": capacity_a,
-        "b_capacity": capacity_b,
-        "metadata": metadata,
+
+def test_create_and_format_predicted_vols_df():
+    df1 = pd.DataFrame(
+        {"value": [1, 2]},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("activity_group_a", "measure_a"),
+                ("activity_group_a", "measure_b"),
+            ],
+            names=["index", "measure"],
+        ),
+    )
+    df2 = pd.DataFrame(
+        {"value": [1, 2]},
+        index=pd.Index(
+            [
+                "activity_group_attendances",
+                "activity_group_attendances",
+            ],
+            name="index",
+        ),
+    )
+
+    result = create_and_format_predicted_vols_df([df1, df2])
+
+    expected = pd.DataFrame(
+        {"value": [1, 2] * 2},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("activity_group_a", "measure_a"),
+                ("activity_group_a", "measure_b"),
+                ("activity_group_attendances", "attendances"),
+                ("activity_group_attendances", "attendances"),
+            ],
+            names=["activity_group", "measure"],
+        ),
+    )
+
+    assert_frame_equal(result, expected)
+
+
+def test_create_and_format_capacity_needs_df():
+    df1 = pd.DataFrame({"value": [1.5]}, index=pd.Index(["a"]))
+    df2 = pd.DataFrame({"value": [2.5]}, index=pd.Index(["b"]))
+
+    result = create_and_format_capacity_needs_df([df1, df2])
+
+    expected = pd.DataFrame(
+        {"value": [1.5, 2.5]},
+        index=pd.Index(["a", "b"], name="resource"),
+    )
+
+    assert_frame_equal(result, expected)
+
+
+def test_combine_and_format_dataframes(mocker):
+    baseline_result = pd.DataFrame({"value": [1, 1]})
+    predicted_result = pd.DataFrame({"value": [2, 2]})
+    capacity_result = pd.DataFrame({"value": [3, 3]})
+
+    mock_baseline = mocker.patch(
+        "nhp.capacity_conversion.results.create_and_format_baseline_df",
+        return_value=baseline_result,
+    )
+    mock_predicted = mocker.patch(
+        "nhp.capacity_conversion.results.create_and_format_predicted_vols_df",
+        return_value=predicted_result,
+    )
+    mock_capacity = mocker.patch(
+        "nhp.capacity_conversion.results.create_and_format_capacity_needs_df",
+        return_value=capacity_result,
+    )
+
+    data = {
+        "a_baseline": pd.DataFrame({"value": [1]}),
+        "b_baseline": pd.DataFrame({"value": [1]}),
+        "a_fun_area_groupings": pd.DataFrame({"value": [2]}),
+        "b_fun_area_groupings": pd.DataFrame({"value": [2]}),
+        "a_capacity": pd.DataFrame({"value": [3]}),
+        "b_capacity": pd.DataFrame({"value": [3]}),
+        "metadata": pd.DataFrame({"value": [4]}),
     }
 
-    result = combine_dataframes(data_to_save)
+    result = combine_and_format_dataframes(data)
 
+    mock_baseline.assert_called_once()
+    mock_predicted.assert_called_once()
+    mock_capacity.assert_called_once()
+
+    assert_frame_equal(result["baseline_year_activity_counts"], baseline_result)  # ty: ignore
+    assert_frame_equal(
+        result["predicted_activity_volumes"],  # ty: ignore
+        predicted_result.round(2),
+    )
+    assert_frame_equal(
+        result["estimated_capacity_needs"],  # ty: ignore
+        capacity_result.round(2),
+    )
     assert set(result) == {
         "baseline_year_activity_counts",
         "predicted_activity_volumes",
@@ -309,19 +417,56 @@ def test_combine_dataframes():
         "metadata",
     }
 
-    assert_frame_equal(
-        result["baseline_year_activity_counts"],  # ty: ignore
-        pd.concat([baseline_a, baseline_b]),
+
+def test_combine_and_format_dataframes_no_keys(mocker):
+
+    mock_baseline = mocker.patch(
+        "nhp.capacity_conversion.results.create_and_format_baseline_df",
+    )
+    mock_predicted = mocker.patch(
+        "nhp.capacity_conversion.results.create_and_format_predicted_vols_df",
+    )
+    mock_capacity = mocker.patch(
+        "nhp.capacity_conversion.results.create_and_format_capacity_needs_df",
     )
 
-    assert_frame_equal(
-        result["predicted_activity_volumes"],  # ty: ignore
-        pd.concat([activity_a, activity_b]),
+    data = {
+        "metadata": pd.DataFrame({"value": [4]}),
+    }
+
+    result = combine_and_format_dataframes(data)
+
+    mock_baseline.assert_not_called()
+    mock_predicted.assert_not_called()
+    mock_capacity.assert_not_called()
+
+    assert set(result) == {
+        "metadata",
+    }
+
+
+def test_process_data_to_save(mocker):
+    data_to_save = {"data_to_save": pd.DataFrame()}
+    mock_add_care_setting_and_summarise = mocker.patch(
+        "nhp.capacity_conversion.results.add_care_setting_and_summarise",
+        return_value=data_to_save,
+    )
+    mock_combine_and_format_dataframes = mocker.patch(
+        "nhp.capacity_conversion.results.combine_and_format_dataframes",
+        return_value=data_to_save,
+    )
+    mock_tidy_metadata = mocker.patch(
+        "nhp.capacity_conversion.results.tidy_metadata",
+        return_value=data_to_save,
+    )
+    mock_add_coversheet = mocker.patch(
+        "nhp.capacity_conversion.results.add_coversheet",
+        return_value=data_to_save,
     )
 
-    assert_frame_equal(
-        result["estimated_capacity_needs"],  # ty: ignore
-        pd.concat([capacity_a, capacity_b]),
-    )
+    process_data_to_save(data_to_save)
 
-    assert result["metadata"].equals(metadata)
+    mock_add_care_setting_and_summarise.assert_called_once()
+    mock_combine_and_format_dataframes.assert_called_once()
+    mock_tidy_metadata.assert_called_once()
+    mock_add_coversheet.assert_called_once()

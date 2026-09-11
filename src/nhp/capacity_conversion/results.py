@@ -158,6 +158,14 @@ def add_care_setting_and_summarise(
 
 
 def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combines and formats dataframes for baseline_year_activity_counts worksheet
+
+    Args:
+        dfs (list[pd.DataFrame]): list of dataframes with baseline_year_activity_counts
+
+    Returns:
+        pd.DataFrame: Formatted dataframe of baseline_year_activity_counts
+    """
     df = pd.concat(dfs)
     df.index.name = "activity_group"
     df = (
@@ -181,21 +189,30 @@ def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
     return df.set_index(["activity_group", "measure"])
 
 
-def add_measure_index(df: pd.DataFrame) -> pd.DataFrame:
-    if "measure" not in df.index.names:
-        df = df.copy()
-        index_names = [str(name) for name in df.index.names if name != "model_run"]
-        df["measure"] = [
-            label.split("_")[-1] for label in df.index.get_level_values(index_names[0])
-        ]
-        df = df.set_index("measure", append=True)
-
-        # Ensure consistent ordering
-        df.index = df.index.reorder_levels(index_names + ["measure"])  # ty: ignore
-    return df
-
-
 def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combines and formats dataframes for predicted_activity_volumes worksheet
+
+    Args:
+        dfs (list[pd.DataFrame]): list of dataframes with predicted activity volumes
+
+    Returns:
+        pd.DataFrame: Formatted dataframe of predicted_activity_volumes
+    """
+
+    def add_measure_index(df: pd.DataFrame) -> pd.DataFrame:
+        if "measure" not in df.index.names:
+            df = df.copy()
+            index_names = [str(name) for name in df.index.names if name != "model_run"]
+            df["measure"] = [
+                label.split("_")[-1]
+                for label in df.index.get_level_values(index_names[0])
+            ]
+            df = df.set_index("measure", append=True)
+
+            # Ensure consistent ordering
+            df.index = df.index.reorder_levels(index_names + ["measure"])  # ty: ignore
+        return df
+
     dfs = [add_measure_index(df) for df in dfs]
     df = pd.concat(dfs)
     df.index = df.index.set_names(["activity_group", "measure"])
@@ -203,12 +220,20 @@ def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
 
 
 def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combines and formats dataframes for estimated_capacity_needs worksheet
+
+    Args:
+        dfs (list[pd.DataFrame]): list of dataframes with estimated_capacity_needs
+
+    Returns:
+        pd.DataFrame: Formatted dataframe of estimated_capacity_needs
+    """
     df = pd.concat(dfs)
     df.index.name = "resource"
     return df
 
 
-def combine_dataframes(
+def combine_and_format_dataframes(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> dict[str, pd.DataFrame | pd.Series]:
     """Combines dataframes together for the different care settings, for presentation in the Excel file
@@ -259,6 +284,25 @@ def combine_dataframes(
     return data_to_save
 
 
+def process_data_to_save(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> OrderedDict[str, pd.DataFrame | pd.Series]:
+    """Chains together all the functions for processing the data_to_save into the required format for the Excel output
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Raw data for saving
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dict with data processed into the right format for saving into Excel. The keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+    """
+    data_to_save = add_care_setting_and_summarise(data_to_save)
+    data_to_save = combine_and_format_dataframes(data_to_save)
+    data_to_save = tidy_metadata(data_to_save)
+    data_to_save = add_coversheet(data_to_save)
+    return data_to_save
+
+
 def process_and_save_results_to_excel(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> None:
@@ -279,11 +323,8 @@ def process_and_save_results_to_excel(
     default_sheet = wb.active
     assert default_sheet is not None
     wb.remove(default_sheet)
-    data_to_save = add_care_setting_and_summarise(data_to_save)
-    data_to_save = combine_dataframes(data_to_save)
-    data_to_save = tidy_metadata(data_to_save)
-    data_to_save = add_coversheet(data_to_save)
-    for sheet_name, df in data_to_save.items():
+    processed_data_to_save = process_data_to_save(data_to_save)
+    for sheet_name, df in processed_data_to_save.items():
         ws = wb.create_sheet(title=sheet_name[:31])
         if isinstance(df, pd.Series):
             rows = dataframe_to_rows(
