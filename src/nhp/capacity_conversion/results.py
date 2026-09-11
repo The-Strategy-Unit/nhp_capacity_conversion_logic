@@ -135,6 +135,174 @@ def apply_styling_to_coversheet(workbook: Workbook):
             cell.font = Font(bold=True)
 
 
+def add_care_setting_and_summarise(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> dict[str, pd.DataFrame | pd.Series]:
+    """Adds care setting to the dataframes and summarises model runs
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+    """
+    for key, df in data_to_save.items():
+        if isinstance(df, pd.DataFrame) and key.startswith(("ip_", "op_", "aae_")):
+            if "model_run" in df.index.names:
+                df = summarise_model_runs(df)
+            df["care_setting"] = key.split("_")[0]
+        data_to_save[key] = df
+    return data_to_save
+
+
+def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combines and formats dataframes for baseline_year_activity_counts worksheet
+
+    Args:
+        dfs (list[pd.DataFrame]): list of dataframes with baseline_year_activity_counts
+
+    Returns:
+        pd.DataFrame: Formatted dataframe of baseline_year_activity_counts
+    """
+    df = pd.concat(dfs)
+    df.index.name = "activity_group"
+    df = (
+        df.reset_index()
+        .melt(
+            id_vars=["activity_group", "care_setting"],
+            value_vars=[
+                "total",
+                "spells",
+                "beddays",
+                "total_theatre_time",
+            ],
+            var_name="measure",
+            value_name="value",
+        )
+        .dropna(subset=["value"])
+    )
+    mask = df["measure"].eq("total")
+
+    df.loc[mask, "measure"] = df.loc[mask, "activity_group"].str.split("_").str[-1]
+    return df.set_index(["activity_group", "measure"])
+
+
+def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combines and formats dataframes for predicted_activity_volumes worksheet
+
+    Args:
+        dfs (list[pd.DataFrame]): list of dataframes with predicted activity volumes
+
+    Returns:
+        pd.DataFrame: Formatted dataframe of predicted_activity_volumes
+    """
+
+    def add_measure_index(df: pd.DataFrame) -> pd.DataFrame:
+        if "measure" not in df.index.names:
+            df = df.copy()
+            index_names = [str(name) for name in df.index.names if name != "model_run"]
+            df["measure"] = [
+                label.split("_")[-1]
+                for label in df.index.get_level_values(index_names[0])
+            ]
+            df = df.set_index("measure", append=True)
+
+            # Ensure consistent ordering
+            df.index = df.index.reorder_levels(index_names + ["measure"])  # ty: ignore
+        return df
+
+    dfs = [add_measure_index(df) for df in dfs]
+    df = pd.concat(dfs)
+    df.index = df.index.set_names(["activity_group", "measure"])
+    return df
+
+
+def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combines and formats dataframes for estimated_capacity_needs worksheet
+
+    Args:
+        dfs (list[pd.DataFrame]): list of dataframes with estimated_capacity_needs
+
+    Returns:
+        pd.DataFrame: Formatted dataframe of estimated_capacity_needs
+    """
+    df = pd.concat(dfs)
+    df.index.name = "resource"
+    return df
+
+
+def combine_and_format_dataframes(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> dict[str, pd.DataFrame | pd.Series]:
+    """Combines dataframes together for the different care settings, for presentation in the Excel file
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dictionary of data to save, where the keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+    """
+    groups = {
+        "baseline_year_activity_counts": [
+            key for key in data_to_save if key.endswith("_baseline")
+        ],
+        "predicted_activity_volumes": [
+            key for key in data_to_save if key.endswith("_fun_area_groupings")
+        ],
+        "estimated_capacity_needs": [
+            key for key in data_to_save if key.endswith("_capacity")
+        ],
+    }
+
+    combined_data = {}
+    for sheet_name, keys in groups.items():
+        if not keys:
+            continue
+
+        dfs = [pd.DataFrame(data_to_save[key]) for key in keys]
+
+        if sheet_name == "baseline_year_activity_counts":
+            combined_data[sheet_name] = create_and_format_baseline_df(dfs)
+        if sheet_name == "predicted_activity_volumes":
+            combined_data[sheet_name] = create_and_format_predicted_vols_df(dfs).round(
+                2
+            )
+        if sheet_name == "estimated_capacity_needs":
+            combined_data[sheet_name] = create_and_format_capacity_needs_df(dfs).round(
+                2
+            )
+
+    keys_to_remove = [key for keys in groups.values() for key in keys]
+
+    for key in keys_to_remove:
+        data_to_save.pop(key, None)
+    data_to_save.update(combined_data)
+    return data_to_save
+
+
+def process_data_to_save(
+    data_to_save: dict[str, pd.DataFrame | pd.Series],
+) -> OrderedDict[str, pd.DataFrame | pd.Series]:
+    """Chains together all the functions for processing the data_to_save into the required format for the Excel output
+
+    Args:
+        data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Raw data for saving
+
+    Returns:
+        dict[str, pd.DataFrame | pd.Series]: Dict with data processed into the right format for saving into Excel. The keys are the titles of the
+        worksheets and the values are the dataframes to be included.
+    """
+    data_to_save = add_care_setting_and_summarise(data_to_save)
+    data_to_save = combine_and_format_dataframes(data_to_save)
+    data_to_save = tidy_metadata(data_to_save)
+    data_to_save = add_coversheet(data_to_save)
+    return data_to_save
+
+
 def process_and_save_results_to_excel(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
 ) -> None:
@@ -155,11 +323,8 @@ def process_and_save_results_to_excel(
     default_sheet = wb.active
     assert default_sheet is not None
     wb.remove(default_sheet)
-    data_to_save = tidy_metadata(data_to_save)
-    data_to_save = add_coversheet(data_to_save)
-    for sheet_name, df in data_to_save.items():
-        if isinstance(df, pd.DataFrame) and "model_run" in df.index.names:
-            df = summarise_model_runs(df)
+    processed_data_to_save = process_data_to_save(data_to_save)
+    for sheet_name, df in processed_data_to_save.items():
         ws = wb.create_sheet(title=sheet_name[:31])
         if isinstance(df, pd.Series):
             rows = dataframe_to_rows(
