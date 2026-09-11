@@ -348,7 +348,7 @@ app_ui = ui.page_fluid(
                 class_="d-flex justify-content-end mt-3",
             ),
         ),
-        class_="container py-4",
+        class_="container-fluid py-4",
     ),
     title=APP_TITLE,
     theme=ui.Theme.from_brand(__file__),
