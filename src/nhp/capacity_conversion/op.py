@@ -71,6 +71,8 @@ def derive_op_workload(
     Returns:
         float: Calculated workload requirement
     """
+    if not 0 <= dna_rate < 1:
+        raise ValueError("dna_rate must be greater than or equal to 0 and less than 1")
     effective_time_mins = time + (dna_rate / (1 - dna_rate) * dna_time)
     workload_hours = (attendances * effective_time_mins) / 60
     return workload_hours
