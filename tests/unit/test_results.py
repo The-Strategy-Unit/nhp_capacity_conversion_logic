@@ -1,7 +1,9 @@
 from collections import OrderedDict
+from io import BytesIO
 
 import pandas as pd
 import pytest
+from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
 from pandas.testing import assert_frame_equal, assert_series_equal
 
@@ -88,6 +90,10 @@ def test_process_and_save_results_to_excel(mocker):
     assert mock_wb.create_sheet.call_count == len(data_to_save)
     assert mock_dataframe_to_rows.call_count == 2
     mock_process_data_to_save.assert_called_once()
+    processed_input = mock_process_data_to_save.call_args.args[0]
+    assert processed_input is not data_to_save
+    assert processed_input["metadata"] is not metadata
+    assert processed_input["results"] is not df
 
     # metadata is a Series, so it should be written without headers
     metadata_call = mock_dataframe_to_rows.call_args_list[0]
@@ -105,6 +111,87 @@ def test_process_and_save_results_to_excel(mocker):
         "results/123/456/capacity_conversion_results.xlsx"
     )
     mock_logger.info.assert_called_once()
+
+
+def test_process_and_save_results_to_excel_writes_reusable_input_to_stream(mocker):
+    metadata = pd.Series(
+        {
+            "guid": "guid-123",
+            "dataset": "RXX",
+            "capacity_model_version": "dev",
+            "ip_sites": "ALL",
+            "op_sites": "ALL",
+            "aae_sites": "ALL",
+            "capacity_conversion_runtime": "20260911_123456",
+        }
+    )
+    assumptions = pd.DataFrame(
+        {"Value": [1.5]},
+        index=pd.Index(["assumption"], name="Assumption ID"),
+    )
+    baseline = pd.DataFrame(
+        {
+            "total": [10.0],
+            "spells": [5.0],
+            "beddays": [20.0],
+            "total_theatre_time": [30.0],
+        },
+        index=pd.Index(["clinic_attendances"], name="grouping"),
+    )
+    functional_areas = pd.DataFrame(
+        {"value": [1.0, 3.0]},
+        index=pd.MultiIndex.from_tuples(
+            [("clinic_attendances", 1), ("clinic_attendances", 2)],
+            names=["grouping", "model_run"],
+        ),
+    )
+    capacity = pd.DataFrame(
+        {"value": [2.0, 4.0]},
+        index=pd.MultiIndex.from_tuples(
+            [("consulting_room", 1), ("consulting_room", 2)],
+            names=["output", "model_run"],
+        ),
+    )
+    data_to_save = {
+        "metadata": metadata,
+        "assumptions": assumptions,
+        "op_baseline": baseline,
+        "op_fun_area_groupings": functional_areas,
+        "op_capacity": capacity,
+    }
+    original_data = {
+        sheet_name: data.copy(deep=True) for sheet_name, data in data_to_save.items()
+    }
+    mock_logger = mocker.patch("nhp.capacity_conversion.results.logger")
+
+    workbooks = []
+    for _ in range(2):
+        destination = BytesIO()
+        process_and_save_results_to_excel(data_to_save, destination=destination)
+        workbooks.append(load_workbook(destination))
+
+    expected_sheet_names = [
+        "coversheet",
+        "metadata",
+        "assumptions",
+        "baseline_year_activity_counts",
+        "predicted_activity_volumes",
+        "estimated_capacity_needs",
+    ]
+    assert all(workbook.sheetnames == expected_sheet_names for workbook in workbooks)
+    assert workbooks[0]["coversheet"]["A1"].font.bold is True
+    assert list(workbooks[0]["estimated_capacity_needs"].values) == [
+        ("resource", "p10", "mean", "p90", "care_setting"),
+        ("consulting_room", 2.2, 3, 3.8, "op"),
+    ]
+    assert workbooks[0]["estimated_capacity_needs"].column_dimensions["A"].width > 0
+    assert list(data_to_save) == list(original_data)
+    for sheet_name, original in original_data.items():
+        if isinstance(original, pd.Series):
+            assert_series_equal(data_to_save[sheet_name], original)  # ty: ignore
+        else:
+            assert_frame_equal(data_to_save[sheet_name], original)  # ty: ignore
+    mock_logger.info.assert_not_called()
 
 
 def test_summarise_model_runs():
