@@ -71,7 +71,7 @@ def derive_op_workload(
     Returns:
         float: Calculated workload requirement
     """
-    effective_time_mins = time + (dna_rate * dna_time)
+    effective_time_mins = time + (dna_rate / (1 - dna_rate) * dna_time)
     workload_hours = (attendances * effective_time_mins) / 60
     return workload_hours
 

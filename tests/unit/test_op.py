@@ -12,10 +12,10 @@ from nhp.capacity_conversion.op import (
 def test_derive_op_workload():
     # arrange
     time = 20
-    dna_rate = 0.1
+    dna_rate = 0.2
     dna_time = 20
     attendances = 60
-    expected = 22
+    expected = 25
     # act
     actual = derive_op_workload(time, dna_rate, dna_time, attendances)
     # assert
