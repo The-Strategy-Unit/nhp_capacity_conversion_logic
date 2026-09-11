@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 from pandas.testing import assert_series_equal
 
 from nhp.capacity_conversion.op import (
@@ -20,6 +21,20 @@ def test_derive_op_workload():
     actual = derive_op_workload(time, dna_rate, dna_time, attendances)
     # assert
     assert actual == expected
+
+
+@pytest.mark.parametrize("dna_rate", [-0.01, 1.0, 1.01])
+def test_derive_op_workload_rejects_invalid_dna_rate(dna_rate):
+    with pytest.raises(
+        ValueError,
+        match="dna_rate must be greater than or equal to 0 and less than 1",
+    ):
+        derive_op_workload(
+            time=20,
+            dna_rate=dna_rate,
+            dna_time=20,
+            attendances=60,
+        )
 
 
 def test_convert_op_capacity():
