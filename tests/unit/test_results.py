@@ -253,6 +253,17 @@ def test_add_care_setting_and_summarise(mocker):
         index=pd.Index(["A"], name="activity"),
     )
 
+    input_no_model_run = pd.DataFrame(
+        {"value": [10, 20]},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("A", "B"),
+                ("A", "B"),
+            ],
+            names=["activity", "measure"],
+        ),
+    )
+
     mock_summarise = mocker.patch(
         "nhp.capacity_conversion.results.summarise_model_runs",
         return_value=summarised_df,
@@ -260,6 +271,7 @@ def test_add_care_setting_and_summarise(mocker):
 
     data_to_save = {
         "ip_capacity": input_df,
+        "ip_baseline": input_no_model_run,
         "metadata": pd.Series({"guid": "test-guid"}),
     }
 
@@ -267,15 +279,26 @@ def test_add_care_setting_and_summarise(mocker):
 
     mock_summarise.assert_called_once_with(input_df)
 
-    expected = pd.DataFrame(
+    expected_capacity = pd.DataFrame(
         {
             "value": [30],
             "care_setting": ["ip"],
         },
         index=pd.Index(["A"], name="activity"),
     )
+    output_no_model_run = pd.DataFrame(
+        {"value": [10, 20], "care_setting": "ip"},
+        index=pd.MultiIndex.from_tuples(
+            [
+                ("A", "B"),
+                ("A", "B"),
+            ],
+            names=["activity", "measure"],
+        ),
+    )
 
-    assert_frame_equal(result["ip_capacity"], expected)  # ty: ignore
+    assert_frame_equal(result["ip_capacity"], expected_capacity)  # ty: ignore
+    assert_frame_equal(result["ip_baseline"], output_no_model_run)  # ty:ignore
     assert result["metadata"].equals(data_to_save["metadata"])
 
 
