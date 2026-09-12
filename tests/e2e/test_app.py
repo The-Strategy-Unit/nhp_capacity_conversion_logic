@@ -1,5 +1,6 @@
 import re
 
+from openpyxl import load_workbook
 from playwright.sync_api import Page, expect
 from shiny.playwright import controller
 from shiny.pytest import create_app_fixture
@@ -77,6 +78,34 @@ def test_app_displays_capacity_conversion_interface(
     expect(download.loc).to_be_visible()
     expect(download.loc).to_have_class(re.compile(r"\bbtn-sm\b"))
     expect(download.loc).to_have_attribute("href", re.compile(r".+"))
+
+    with page.expect_download() as download_info:
+        download.click()
+    downloaded_workbook = download_info.value
+    assert downloaded_workbook.suggested_filename == "capacity_conversion_results.xlsx"
+    workbook_path = downloaded_workbook.path()
+    assert workbook_path is not None
+    with workbook_path.open("rb") as workbook_file:
+        workbook = load_workbook(workbook_file, read_only=True)
+        assert workbook.sheetnames == [
+            "coversheet",
+            "metadata",
+            "assumptions",
+            "baseline_year_activity_counts",
+            "predicted_activity_volumes",
+            "estimated_capacity_needs",
+        ]
+        metadata_keys = [
+            row[0] for row in workbook["metadata"].iter_rows(values_only=True)
+        ]
+        assert metadata_keys[:6] == [
+            "dataset",
+            "capacity_model_version",
+            "ip_sites",
+            "op_sites",
+            "aae_sites",
+            "capacity_conversion_runtime",
+        ]
 
     page_count = len(page.context.pages)
     feedback.click()

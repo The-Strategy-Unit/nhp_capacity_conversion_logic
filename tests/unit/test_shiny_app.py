@@ -1,14 +1,12 @@
 import importlib.util
 import os
 from datetime import UTC, datetime
-from io import BytesIO
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import call, patch
 
 import pandas as pd
 import pytest
-from openpyxl import load_workbook
 
 
 def _load_app_module() -> ModuleType:
@@ -367,7 +365,13 @@ def test_load_capacity_results(mocker):
     assert len(runtime) == 15
     assert runtime[8] == "_"
     assert runtime.replace("_", "").isdigit()
-    assert data_to_save["metadata"].loc[list(app.SITES)].to_dict() == app.SITES
+    assert data_to_save["metadata"].loc[
+        ["ip_sites", "op_sites", "aae_sites"]
+    ].to_dict() == {
+        "ip_sites": "ALL",
+        "op_sites": "ALL",
+        "aae_sites": "ALL",
+    }
 
 
 def test_load_capacity_results_requires_storage_configuration(mocker):
@@ -388,22 +392,23 @@ def test_load_capacity_results_requires_storage_configuration(mocker):
         app._load_capacity_results(_functional_aggregation())
 
 
-def test_create_workbook():
-    capacity = pd.DataFrame(
-        {
-            "output": ["room", "room"],
-            "model_run": [1, 2],
-            "value": [1.0, 3.0],
-        }
-    ).set_index(["output", "model_run"])
+def test_create_workbook_uses_shared_writer(mocker):
     data_to_save = {
         "metadata": pd.Series({"guid": "guid-123"}),
-        "op_capacity": capacity,
     }
+    workbook_bytes = b"shared workbook"
 
-    workbook = load_workbook(BytesIO(app._create_workbook(data_to_save)))
+    def write_workbook(data, *, destination):
+        assert data is data_to_save
+        destination.write(workbook_bytes)
 
-    assert workbook.sheetnames == ["metadata", "op_capacity"]
-    rows = list(workbook["op_capacity"].values)
-    assert rows[0] == ("output", "p10", "mean", "p90")
-    assert rows[1] == ("room", 1.2, 2, 2.8)
+    mock_write_workbook = mocker.patch.object(
+        app,
+        "process_and_save_results_to_excel",
+        side_effect=write_workbook,
+    )
+
+    result = app._create_workbook(data_to_save)
+
+    assert result == workbook_bytes
+    mock_write_workbook.assert_called_once()

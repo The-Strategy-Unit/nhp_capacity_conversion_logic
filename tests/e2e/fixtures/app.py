@@ -60,6 +60,22 @@ def _load_metadata_from_ats(
 
 def _load_capacity_results(model_run: dict) -> dict[str, pd.DataFrame | pd.Series]:
     assert model_run["RowKey"] == FUNCTIONAL_AGGREGATION["RowKey"]
+    functional_areas = pd.DataFrame(
+        {"activity": [100.0, 110.0, 120.0]},
+        index=pd.MultiIndex.from_product(
+            [["example_activity"], range(3)],
+            names=["grouping", "model_run"],
+        ),
+    )
+    baseline = pd.DataFrame(
+        {
+            "total": [100.0],
+            "spells": [50.0],
+            "beddays": [200.0],
+            "total_theatre_time": [300.0],
+        },
+        index=pd.Index(["example_activity"], name="grouping"),
+    )
     capacity = pd.DataFrame(
         {"capacity": [10.0, 12.0, 14.0]},
         index=pd.MultiIndex.from_product(
@@ -67,13 +83,28 @@ def _load_capacity_results(model_run: dict) -> dict[str, pd.DataFrame | pd.Serie
             names=["grouping", "model_run"],
         ),
     )
-    return {
-        "metadata": pd.Series({"guid": "test-guid"}),
-        **{
-            f"{activity_type}_capacity": capacity
-            for activity_type in capacity_conversion_app.ACTIVITY_TYPES
-        },
+    results: dict[str, pd.DataFrame | pd.Series] = {
+        "metadata": pd.Series(
+            {
+                "guid": "test-guid",
+                "dataset": "RXX",
+                "capacity_model_version": "dev",
+                "ip_sites": "ALL",
+                "op_sites": "ALL",
+                "aae_sites": "ALL",
+                "capacity_conversion_runtime": "20260911_123456",
+            }
+        ),
+        "assumptions": pd.DataFrame(
+            {"Value": [1.0]},
+            index=pd.Index(["example_assumption"], name="Assumption ID"),
+        ),
     }
+    for activity_type in capacity_conversion_app.ACTIVITY_TYPES:
+        results[f"{activity_type}_fun_area_groupings"] = functional_areas
+        results[f"{activity_type}_baseline"] = baseline
+        results[f"{activity_type}_capacity"] = capacity
+    return results
 
 
 capacity_conversion_app.load_functional_aggregations_from_ats = (

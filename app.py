@@ -26,7 +26,10 @@ from nhp.capacity_conversion.ip_wards import (
     preprocess_ip_wards_data,
 )
 from nhp.capacity_conversion.op import calculate_op_capacity
-from nhp.capacity_conversion.results import summarise_model_runs
+from nhp.capacity_conversion.results import (
+    process_and_save_results_to_excel,
+    summarise_model_runs,
+)
 from nhp.capacity_conversion.utils import (
     create_aggregations_path,
     filter_aggregations,
@@ -49,7 +52,8 @@ def _required_environment_variable(name: str) -> str:
 
 APP_TITLE = "OpenPlan Capacity Conversion Model"
 CAPACITY_MODEL_VERSION = _required_environment_variable("CAPACITY_MODEL_VERSION")
-SITES = {activity_type: "ALL" for activity_type in ACTIVITY_TYPES}
+ALL_SITES = "ALL"
+SITES = {activity_type: ALL_SITES for activity_type in ACTIVITY_TYPES}
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
 PROVIDER_GROUP_PREFIX = "nhp_provider_"
 CATALOGUE_COLUMNS = (
@@ -212,7 +216,13 @@ def _load_capacity_results(
     metadata["capacity_conversion_runtime"] = datetime.now(tz=UTC).strftime(
         "%Y%m%d_%H%M%S"
     )
-    metadata.update(SITES)
+    metadata.update(
+        {
+            "ip_sites": ALL_SITES,
+            "op_sites": ALL_SITES,
+            "aae_sites": ALL_SITES,
+        }
+    )
 
     for key, value in metadata.items():
         if isinstance(value, datetime) and value.tzinfo is not None:
@@ -249,15 +259,7 @@ def _load_capacity_results(
 
 def _create_workbook(data_to_save: dict[str, pd.DataFrame | pd.Series]) -> bytes:
     workbook = BytesIO()
-    with pd.ExcelWriter(workbook, engine="openpyxl") as writer:
-        for sheet_name, data in data_to_save.items():
-            if isinstance(data, pd.DataFrame) and "model_run" in data.index.names:
-                data = summarise_model_runs(data)
-            pd.DataFrame(data).reset_index().to_excel(
-                writer,
-                sheet_name=sheet_name,
-                index=False,
-            )
+    process_and_save_results_to_excel(data_to_save, destination=workbook)
     return workbook.getvalue()
 
 
