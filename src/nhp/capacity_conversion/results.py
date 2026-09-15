@@ -2,6 +2,7 @@ import logging
 import os
 from collections import OrderedDict
 from datetime import datetime
+from typing import BinaryIO
 
 import pandas as pd
 from openpyxl import Workbook
@@ -305,25 +306,36 @@ def process_data_to_save(
 
 def process_and_save_results_to_excel(
     data_to_save: dict[str, pd.DataFrame | pd.Series],
+    *,
+    destination: str | os.PathLike[str] | BinaryIO | None = None,
 ) -> None:
-    """Saves results of capacity conversion pipeline to Excel
+    """Save capacity conversion results to an Excel file or binary stream.
 
     Args:
         data_to_save (dict[str, pd.DataFrame  |  pd.Series]): Dictionary of data to save, where the keys are the titles of the
         worksheets and the values are the dataframes to be included. At minimum should include "metadata" key and dataframe.
+        destination (str | os.PathLike[str] | BinaryIO | None): Optional path or
+        binary stream to write to. When omitted, the CLI results path is used.
     """
-    directory = os.path.join(
-        "results",
-        str(data_to_save["metadata"].loc["guid"]),
-        str(data_to_save["metadata"].loc["capacity_conversion_runtime"]),
-    )
-    os.makedirs(directory, exist_ok=True)
-    filepath = os.path.join(directory, "capacity_conversion_results.xlsx")
+    filepath = None
+    if destination is None:
+        directory = os.path.join(
+            "results",
+            str(data_to_save["metadata"].loc["guid"]),
+            str(data_to_save["metadata"].loc["capacity_conversion_runtime"]),
+        )
+        os.makedirs(directory, exist_ok=True)
+        filepath = os.path.join(directory, "capacity_conversion_results.xlsx")
+        destination = filepath
+
+    data_to_process = {
+        sheet_name: data.copy(deep=True) for sheet_name, data in data_to_save.items()
+    }
     wb = Workbook()
     default_sheet = wb.active
     assert default_sheet is not None
     wb.remove(default_sheet)
-    processed_data_to_save = process_data_to_save(data_to_save)
+    processed_data_to_save = process_data_to_save(data_to_process)
     for sheet_name, df in processed_data_to_save.items():
         ws = wb.create_sheet(title=sheet_name[:31])
         if isinstance(df, pd.Series):
@@ -349,5 +361,6 @@ def process_and_save_results_to_excel(
             max_len = max(len(str(cell.value or "")) for cell in col)
             ws.column_dimensions[col[0].column_letter].width = max_len + 2
     apply_styling_to_coversheet(wb)
-    wb.save(filepath)
-    logger.info(f"💾 Results saved to {filepath}")
+    wb.save(destination)
+    if filepath is not None:
+        logger.info(f"💾 Results saved to {filepath}")
