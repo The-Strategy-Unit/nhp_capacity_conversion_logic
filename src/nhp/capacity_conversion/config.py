@@ -8,3 +8,12 @@ ACTIVITY_TYPES = (
     "ip_wards",
     "ip_procedures_and_theatres",
 )
+
+AGGREGATION_SUBSETS = {
+    "op": [
+        "op_procedures",
+        "op_first_attendances",
+        "op_follow_up_attendances",
+        "op_virtual_attendances",
+    ]
+}

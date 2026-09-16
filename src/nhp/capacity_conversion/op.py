@@ -124,8 +124,8 @@ def calculate_op_capacity(
     """
     logger.info("Calculating OP capacity")
     results_list = []
-    for subgroup in functional_areas.index.get_level_values("grouping").unique():
-        fa_df = functional_areas.xs(subgroup, level="grouping")
+    for subgroup in functional_areas.index.get_level_values("functional_area").unique():
+        fa_df = functional_areas.xs(subgroup, level="functional_area")
 
         time = cast(
             float,
@@ -150,13 +150,15 @@ def calculate_op_capacity(
             ],
         )
         output = ASSUMPTIONS_MAPPING[subgroup]["output"]
-        workload_hours = derive_op_workload(time, dna_rate, dna_time, fa_df["total"])
+        workload_hours = derive_op_workload(time, dna_rate, dna_time, fa_df["value"])
         results = convert_op_capacity(
             workload_hours, operational_hours, utilisation_rate
         )
         results_df = pd.DataFrame(results)
         results_df.loc[:, "output"] = output
-        results_list.append(results_df.reset_index().set_index(["output", "model_run"]))
+        results_list.append(
+            results_df.reset_index().set_index(["output", "model_run", "measure"])
+        )
     return pd.concat(results_list)
 
 

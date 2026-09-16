@@ -57,8 +57,10 @@ def tidy_metadata(
     if "metadata" in data_to_save:
         rename = {
             "app_version": "demand_model_version",
-            "scenario_name": "demand_model_scenario_name",
-            "scenario_runtime": "demand_model_scenario_runtime",
+            "scenario": "demand_model_scenario_name",
+            "create_datetime": "demand_model_scenario_runtime",
+            "start_year": "baseline_year",
+            "end_year": "horizon_year",
         }
 
         keep = [
@@ -92,22 +94,9 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Summarised DataFrame
     """
     group_col_names = [name for name in df.index.names if name != "model_run"]
-    if len(group_col_names) != 1:
-        raise ValueError("Expected exactly one index column.")
     value_cols = [c for c in df.columns if c != "model_run"]
     if len(value_cols) > 1:
-        df_list = []
-        for col in value_cols:
-            summary_df = pd.DataFrame(
-                df.groupby(level=group_col_names)[col].agg(
-                    p10=lambda s: s.quantile(0.10),
-                    mean="mean",
-                    p90=lambda s: s.quantile(0.90),
-                )
-            )
-            summary_df["measure"] = col
-            df_list.append(summary_df.reset_index())
-        return pd.concat(df_list).set_index(group_col_names + ["measure"]).sort_index()
+        raise ValueError("Expected 1 value column only")
     return pd.DataFrame(
         df.groupby(level=group_col_names)[value_cols[0]].agg(
             p10=lambda s: s.quantile(0.10),
@@ -168,26 +157,8 @@ def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
         pd.DataFrame: Formatted dataframe of baseline_year_activity_counts
     """
     df = pd.concat(dfs)
-    df.index.name = "activity_group"
-    df = (
-        df.reset_index()
-        .melt(
-            id_vars=["activity_group", "care_setting"],
-            value_vars=[
-                "total",
-                "spells",
-                "beddays",
-                "total_theatre_time",
-            ],
-            var_name="measure",
-            value_name="value",
-        )
-        .dropna(subset=["value"])
-    )
-    mask = df["measure"].eq("total")
-
-    df.loc[mask, "measure"] = df.loc[mask, "activity_group"].str.split("_").str[-1]
-    return df.set_index(["activity_group", "measure"])
+    df = df.rename(index={"functional_area": "activity_group"})
+    return df
 
 
 def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
@@ -216,7 +187,6 @@ def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
 
     dfs = [add_measure_index(df) for df in dfs]
     df = pd.concat(dfs)
-    df.index = df.index.set_names(["activity_group", "measure"])
     return df
 
 
