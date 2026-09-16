@@ -158,10 +158,10 @@ def test_load_assumptions(tmp_path):
 
 def test_load_metadata_from_ats(mocker):
     # arrange
+    dataset = "dataset"
     guid = "GUID123"
     endpoint = "https://example.table.core.windows.net"
     table_name = "demotable"
-    capacity_model_version = "dev"
 
     mock_credential = mocker.Mock()
     mock_table_client = mocker.Mock()
@@ -176,33 +176,45 @@ def test_load_metadata_from_ats(mocker):
         return_value=mock_table_client,
     )
 
-    mock_entity = {"some_field": "some_value"}
+    mock_entity = {
+        k: k
+        for k in [
+            "app_version",
+            "dataset",
+            "start_year",
+            "end_year",
+            "scenario",
+            "create_datetime",
+            "model_run_id",
+            "do_not_include",
+        ]
+    }
     mock_table_client.get_entity.return_value = mock_entity
 
     # act
     result = load_metadata_from_ats(
+        dataset=dataset,
         guid=guid,
         storage_endpoint=endpoint,
         table_name=table_name,
-        capacity_model_version=capacity_model_version,
     )
 
     # assert
     mock_table_client.get_entity.assert_called_once_with(
-        partition_key=capacity_model_version,
+        partition_key=dataset,
         row_key=guid,
     )
 
-    assert result["some_field"] == "some_value"
-    assert result["guid"] == guid
-    assert result["capacity_model_version"] == capacity_model_version
+    assert "do_not_include" not in result
+    assert len(result) == 9
+    assert result["capacity_model_version"] == "dev"
 
 
 def test_load_metadata_from_ats_not_found(mocker):
     guid = "missing-guid"
     endpoint = "https://example.table.core.windows.net"
     table_name = "demotable"
-    capacity_model_version = "dev"
+    dataset = "dataset"
 
     mocker.patch("nhp.capacity_conversion.utils.DefaultAzureCredential")
     mock_table_client = mocker.Mock()
@@ -216,10 +228,10 @@ def test_load_metadata_from_ats_not_found(mocker):
 
     with pytest.raises(ResourceNotFoundError):
         load_metadata_from_ats(
+            dataset=dataset,
             guid=guid,
             storage_endpoint=endpoint,
             table_name=table_name,
-            capacity_model_version=capacity_model_version,
         )
 
 
@@ -280,6 +292,7 @@ def test_validate_required_env_vars_success(mocker):
         "AZ_STORAGE_RESULTS": "results",
         "TABLE_NAME": "table",
         "AZ_TABLE_ENDPOINT": "table_endpoint",
+        "CAPACITY_MODEL_VERSION": "capacity_model_version",
     }
 
     mocker.patch(
