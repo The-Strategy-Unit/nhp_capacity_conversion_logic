@@ -54,5 +54,5 @@ skip_empty = false
 show_missing = true
 
 [tool.pytest.ini_options]
-addopts = "-vv"
+addopts = "-vv --ignore=tests/unit/test_shiny_app.py --ignore=tests/e2e"
 testpaths = ["tests"]

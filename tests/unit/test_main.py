@@ -42,9 +42,6 @@ def test_main(mocker):
         f"{main_path}.load_metadata_from_ats",
         return_value=metadata_dict,
     )
-    mocker.patch(
-        f"{main_path}.create_aggregations_path", return_value="aggregations_path"
-    )
 
     mock_assumptions = pd.DataFrame()
     mocker.patch(f"{main_path}.load_assumptions", return_value=mock_assumptions)

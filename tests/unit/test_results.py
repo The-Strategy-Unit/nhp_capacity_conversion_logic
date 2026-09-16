@@ -218,25 +218,30 @@ def test_summarise_model_runs_with_multiple_cols():
             "value_2": list(range(11)),
         }
     ).set_index(["model_run", "grouping"])
-    actual = summarise_model_runs(df)
-    assert actual.index.names == ["grouping", "measure"]
-    assert list(actual.index.get_level_values("measure").unique()) == [
-        "value",
-        "value_2",
-    ]
+    with pytest.raises(ValueError, match="Expected 1 value column only"):
+        summarise_model_runs(df)
 
 
 def test_summarise_model_runs_with_multiple_indexes():
     df = pd.DataFrame(
         {
-            "model_run": list(range(11)),
-            "group": ["group"] * 11,
-            "value": list(range(11)),
-            "index_2": list(range(11)),
+            "model_run": list(range(11)) + list(range(11)),
+            "group": ["group"] * 11 + ["group_2"] * 11,
+            "index_2": ["index_1"] * 11 + ["index_2"] * 11,
+            "value": list(range(11)) + list(range(11)),
         }
     ).set_index(["model_run", "group", "index_2"])
-    with pytest.raises(ValueError, match="Expected exactly one index column."):
-        summarise_model_runs(df)
+    expected = pd.DataFrame(
+        {
+            "group": ["group", "group_2"],
+            "index_2": ["index_1", "index_2"],
+            "p10": [1.0, 1.0],
+            "mean": [5.0, 5.0],
+            "p90": [9.0, 9.0],
+        }
+    ).set_index(["group", "index_2"])
+    actual = summarise_model_runs(df)
+    assert_frame_equal(actual, expected)
 
 
 def test_tidy_metadata():
@@ -249,9 +254,11 @@ def test_tidy_metadata():
             "aae_sites": "ALL",
             "capacity_conversion_runtime": "capacity_conversion_runtime",
             "app_version": "4.5.6",
-            "scenario_name": "scenario_name",
-            "scenario_runtime": "scenario_runtime",
+            "scenario": "scenario_name",
+            "create_datetime": "scenario_runtime",
             "unwanted_metadata": "remove me",
+            "start_year": "start_year",
+            "end_year": "end_year",
         }
     )
     results = pd.DataFrame({"value": [1, 2, 3]})
@@ -271,6 +278,8 @@ def test_tidy_metadata():
             "demand_model_version": "4.5.6",
             "demand_model_scenario_name": "scenario_name",
             "demand_model_scenario_runtime": "scenario_runtime",
+            "baseline_year": "start_year",
+            "horizon_year": "end_year",
         }
     )
 
@@ -392,34 +401,31 @@ def test_add_care_setting_and_summarise(mocker):
 def test_create_and_format_baseline_df():
     df = pd.DataFrame(
         {
-            "care_setting": ["a"],
-            "total": [10],
-            "spells": [5],
-            "beddays": [20],
-            "total_theatre_time": [None],
-        },
-        index=pd.Index(["activity_group_measure"], name="activity_group"),
-    )
+            "care_setting": ["a"] * 2,
+            "measure": ["measure_1", "measure_2"],
+            "value": [1, 2],
+            "functional_area": ["fa"] * 2,
+        }
+    ).set_index(["functional_area", "measure"])
 
-    result = create_and_format_baseline_df([df])
+    result = create_and_format_baseline_df([df] * 2)
 
     expected = pd.DataFrame(
         {
-            "care_setting": ["a", "a", "a"],
-            "value": [10, 5, 20],
+            "care_setting": ["a"] * 4,
+            "value": [1, 2, 1, 2],
         },
         index=pd.MultiIndex.from_tuples(
             [
-                ("activity_group_measure", "measure"),
-                ("activity_group_measure", "spells"),
-                ("activity_group_measure", "beddays"),
+                ("fa", "measure_1"),
+                ("fa", "measure_2"),
+                ("fa", "measure_1"),
+                ("fa", "measure_2"),
             ],
             names=["activity_group", "measure"],
         ),
     )
 
-    print(result)
-    print(expected)
     assert_frame_equal(result, expected, check_dtype=False)
 
 
@@ -431,7 +437,7 @@ def test_create_and_format_predicted_vols_df():
                 ("activity_group_a", "measure_a"),
                 ("activity_group_a", "measure_b"),
             ],
-            names=["index", "measure"],
+            names=["activity_group", "measure"],
         ),
     )
     df2 = pd.DataFrame(
@@ -441,7 +447,7 @@ def test_create_and_format_predicted_vols_df():
                 "activity_group_attendances",
                 "activity_group_attendances",
             ],
-            name="index",
+            name="activity_group",
         ),
     )
 
@@ -459,7 +465,8 @@ def test_create_and_format_predicted_vols_df():
             names=["activity_group", "measure"],
         ),
     )
-
+    print(result)
+    print(expected)
     assert_frame_equal(result, expected)
 
 

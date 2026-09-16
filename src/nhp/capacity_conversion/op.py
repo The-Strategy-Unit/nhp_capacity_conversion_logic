@@ -156,9 +156,7 @@ def calculate_op_capacity(
         )
         results_df = pd.DataFrame(results)
         results_df.loc[:, "output"] = output
-        results_list.append(
-            results_df.reset_index().set_index(["output", "model_run", "measure"])
-        )
+        results_list.append(results_df.set_index("output", append=True))
     return pd.concat(results_list)
 
 
