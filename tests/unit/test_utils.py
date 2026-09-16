@@ -9,7 +9,6 @@ from nhp.capacity_conversion.utils import (
     calculate_prediction_intervals_and_mean,
     configure_logging,
     connect_to_container,
-    create_aggregations_path,
     filter_aggregations,
     get_baseline_activity,
     load_aggregations,
@@ -186,6 +185,7 @@ def test_load_metadata_from_ats(mocker):
             "scenario",
             "create_datetime",
             "model_run_id",
+            "aggregated_results_path",
             "do_not_include",
         ]
     }
@@ -206,7 +206,7 @@ def test_load_metadata_from_ats(mocker):
     )
 
     assert "do_not_include" not in result
-    assert len(result) == 9
+    assert len(result) == 10
     assert result["capacity_model_version"] == "dev"
 
 
@@ -269,18 +269,6 @@ def test_load_functional_aggregations_from_ats(mocker):
     )
     assert result == entities
     assert result[0] is not entities[0]
-
-
-def test_create_aggregations_path():
-    # arrange
-    metadata = {"capacity_model_version": "test", "guid": "GUID123"}
-
-    # act
-    actual = create_aggregations_path(metadata)
-    expected = "functional-aggregations/test/GUID123/"
-
-    # assert
-    assert actual == expected
 
 
 def test_validate_required_env_vars_success(mocker):
