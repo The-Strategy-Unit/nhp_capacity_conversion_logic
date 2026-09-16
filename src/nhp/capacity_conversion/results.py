@@ -157,7 +157,12 @@ def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
         pd.DataFrame: Formatted dataframe of baseline_year_activity_counts
     """
     df = pd.concat(dfs)
-    df = df.rename(index={"functional_area": "activity_group"})
+    df.index = df.index.set_names(
+        [
+            "activity_group" if name == "functional_area" else name
+            for name in df.index.names
+        ]
+    )
     return df
 
 
