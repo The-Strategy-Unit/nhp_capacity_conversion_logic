@@ -124,19 +124,19 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
 
 
 def load_metadata_from_ats(
+    dataset: str,
     guid: str,
     storage_endpoint: str,
     table_name: str,
-    capacity_model_version: str,
 ) -> dict:
     """Loads metadata for scenario converted to functional area aggregations
     from Azure Table Storage
 
     Args:
+        dataset (str): Dataset, used as the PartitionKey in the table
         guid (str): GUID for functional area aggregation
         storage_endpoint (str): Azure Table Storage endpoint, in format "https://{storage_account_name}.table.core.windows.net"
         table_name (str): Table name containing metadata for Functional Area Aggregations
-        capacity_model_version (str): Version of capacity model.
 
     Returns:
         dict: Dictionary with metadata for given Functional Area aggregation
@@ -145,10 +145,20 @@ def load_metadata_from_ats(
     table_client = TableClient(
         endpoint=storage_endpoint, table_name=table_name, credential=credential
     )
-    entity = table_client.get_entity(partition_key=capacity_model_version, row_key=guid)
-    metadata = dict(entity)
+    entity = table_client.get_entity(partition_key=dataset, row_key=guid)
+
+    keys_to_keep = [
+        "app_version",
+        "dataset",
+        "start_year",
+        "end_year",
+        "scenario",
+        "create_datetime",
+        "model_run_id",
+    ]
+    metadata = {k: v for k, v in entity.items() if k in keys_to_keep}
     metadata["guid"] = guid
-    metadata["capacity_model_version"] = capacity_model_version
+    metadata["capacity_model_version"] = os.getenv("CAPACITY_MODEL_VERSION", "dev")
     return metadata
 
 
@@ -197,6 +207,7 @@ def validate_required_env_vars() -> dict:
         "AZ_STORAGE_RESULTS",
         "TABLE_NAME",
         "AZ_TABLE_ENDPOINT",
+        "CAPACITY_MODEL_VERSION",
     ]
 
     values = {}

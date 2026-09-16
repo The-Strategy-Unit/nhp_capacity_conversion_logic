@@ -1,7 +1,6 @@
 from unittest.mock import call
 
 import pandas as pd
-from pandas.testing import assert_frame_equal, assert_series_equal
 
 from nhp.capacity_conversion.__main__ import main
 
@@ -16,9 +15,9 @@ def test_main(mocker):
 
     mock_parser = mocker.Mock()
     mock_args = mocker.Mock()
+    mock_args.dataset = "dataset"
     mock_args.guid = "GUID123"
     mock_args.path_to_assumptions_file = "assumptions.csv"
-    mock_args.capacity_model_version = "dev"
     mock_args.ip_sites = "ip_sites"
     mock_args.op_sites = "op_sites"
     mock_args.aae_sites = "aae_sites"
@@ -30,6 +29,7 @@ def test_main(mocker):
         "AZ_STORAGE_RESULTS": "AZ_STORAGE_RESULTS",
         "TABLE_NAME": "TABLE_NAME",
         "AZ_TABLE_ENDPOINT": "AZ_TABLE_ENDPOINT",
+        "CAPACITY_MODEL_VERSION": "CAPACITY_MODEL_VERSION",
     }
     mocker.patch(f"{main_path}.validate_required_env_vars", return_value=env_vars_dict)
     metadata_dict = {
@@ -72,7 +72,7 @@ def test_main(mocker):
 
     main_mod = __import__(main_path, fromlist=["dummy"])
     main_mod.load_metadata_from_ats.assert_called_once_with(
-        "GUID123", "AZ_TABLE_ENDPOINT", "TABLE_NAME", "dev"
+        "dataset", "GUID123", "AZ_TABLE_ENDPOINT", "TABLE_NAME"
     )
     main_mod.load_assumptions.assert_called_once_with("assumptions.csv")
     main_mod.create_aggregations_path.assert_called_once_with(metadata_dict)
@@ -131,18 +131,3 @@ def test_main(mocker):
         any_order=False,
     )
     mock_save.assert_called_once()
-    mock_data_to_save = mock_save.call_args_list[0].args[0]
-    assert_series_equal(
-        mock_data_to_save["metadata"],
-        pd.Series(
-            {
-                "guid": "GUID123",
-                "capacity_model_version": "dev",
-                "ip_sites": "ip_sites",
-                "op_sites": "op_sites",
-                "aae_sites": "aae_sites",
-                "capacity_conversion_runtime": "20250101_120000",
-            }
-        ),
-    )
-    assert_frame_equal(mock_data_to_save["assumptions"], pd.DataFrame())

@@ -3,8 +3,6 @@ import datetime
 import sys
 from logging import INFO
 
-import pandas as pd
-
 from nhp.capacity_conversion.aae import calculate_aae_capacity
 from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.ip_daycase import calculate_daycase_capacity
@@ -50,6 +48,10 @@ def main():
         description="Generate capacity outputs for all available activity types"
     )
     parser.add_argument(
+        "dataset",
+        help="Dataset of functional area aggregation to convert into capacity",
+    )
+    parser.add_argument(
         "guid",
         help="GUID of functional area aggregation to convert into capacity",
     )
@@ -84,16 +86,15 @@ def main():
     data_to_save = {}
 
     metadata = load_metadata_from_ats(
+        args.dataset,
         args.guid,
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
-        args.capacity_model_version,
     )
     metadata["ip_sites"] = args.ip_sites
     metadata["op_sites"] = args.op_sites
     metadata["aae_sites"] = args.aae_sites
     metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
-    data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
