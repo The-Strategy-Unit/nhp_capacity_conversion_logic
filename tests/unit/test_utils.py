@@ -27,10 +27,11 @@ from nhp.capacity_conversion.utils import (
 def filter_agg_df():
     return pd.DataFrame(
         {
-            "model_run": [0] * 4,
-            "sitetret": ["A", "B"] * 2,
-            "group": ["X", "X", "Y", "Y"],
-            "value": [1] * 4,
+            "model_run": [0] * 6,
+            "sitetret": ["A", "B"] * 3,
+            "functional_area": ["X", "X", "Y", "Y", "X", "X"],
+            "measure": ["measure_1"] * 4 + ["measure_2"] * 2,
+            "value": [1] * 6,
         }
     ).set_index("model_run")
 
@@ -206,8 +207,7 @@ def test_load_metadata_from_ats(mocker):
     )
 
     assert "do_not_include" not in result
-    assert len(result) == 10
-    assert result["capacity_model_version"] == "dev"
+    assert len(result) == 9
 
 
 def test_load_metadata_from_ats_not_found(mocker):
@@ -335,11 +335,11 @@ def test_load_aggregations(mocker, caplog):
     )
 
     # act
-    load_aggregations("url", "container", "path", "type")
+    load_aggregations("url", "container", "path")
 
     # assert
-    assert "Loading type data from path..." in caplog.text
-    mock_load_parquet_file.assert_called_once_with(mock_connection, "path/type.parquet")
+    assert "Loading data from path..." in caplog.text
+    mock_load_parquet_file.assert_called_once_with(mock_connection, "path")
 
 
 def test_process_activity_type_with_ip_wards_preprocess(mocker):
@@ -501,8 +501,8 @@ def test_run_single_activity_type(mocker):
     preprocess = mocker.Mock()
 
     mock_args = mocker.Mock(
+        dataset="dataset",
         guid="test-guid",
-        capacity_model_version="v1",
         path_to_assumptions_file="assumptions.csv",
         sites="sites",
     )
@@ -522,6 +522,7 @@ def test_run_single_activity_type(mocker):
             "TABLE_NAME": "table-name",
             "AZ_STORAGE_EP": "storage-endpoint",
             "AZ_STORAGE_RESULTS": "storage-results",
+            "CAPACITY_MODEL_VERSION": "capacity-model-version",
         },
     )
 
@@ -529,6 +530,7 @@ def test_run_single_activity_type(mocker):
         "PartitionKey": "pk",
         "RowKey": "rk",
         "foo": "bar",
+        "aggregated_results_path": "aggregated_results_path",
     }
     load_metadata = mocker.patch(
         "nhp.capacity_conversion.utils.load_metadata_from_ats",
@@ -541,13 +543,8 @@ def test_run_single_activity_type(mocker):
         return_value=assumptions,
     )
 
-    mocker.patch(
-        "nhp.capacity_conversion.utils.create_aggregations_path",
-        return_value="agg/path",
-    )
-
     aggregations = pd.DataFrame({"b": [2]})
-    mocker.patch(
+    mock_load = mocker.patch(
         "nhp.capacity_conversion.utils.load_aggregations",
         return_value=aggregations,
     )
@@ -576,12 +573,16 @@ def test_run_single_activity_type(mocker):
     assert result == 0
 
     load_metadata.assert_called_once_with(
+        "dataset",
         "test-guid",
         "table-endpoint",
         "table-name",
-        "v1",
     )
-
+    mock_load.assert_called_once_with(
+        "storage-endpoint",
+        "storage-results",
+        "aggregated_results_path/functional_areas.parquet",
+    )
     process_activity.assert_called_once()
 
     _, kwargs = process_activity.call_args
@@ -592,7 +593,7 @@ def test_run_single_activity_type(mocker):
     assert kwargs["assumptions"] is assumptions
     assert kwargs["preprocess"] is preprocess
     assert kwargs["include_baseline"] is True
-    mock_filter.assert_called_once_with(aggregations, "sites")
+    mock_filter.assert_called_once_with(aggregations, "sites", "activity_type")
 
     # Metadata should have been augmented with the runtime
     data_to_save = kwargs["data_to_save"]
@@ -611,31 +612,38 @@ def test_validate_sites_valid(filter_agg_df):
     validate_sites(filter_agg_df, ["A"])
 
 
-def test_filter_aggregations_all(filter_agg_df):
+def test_filter_aggregations_all(filter_agg_df, mocker):
+    mocker.patch(
+        "nhp.capacity_conversion.utils.AGGREGATION_SUBSETS",
+        {"activity_type": ["X"]},
+    )
     expected = pd.DataFrame(
         {
-            "model_run": [0] * 2,
-            "group": [
-                "X",
-                "Y",
-            ],
+            "model_run": [0, 0],
+            "functional_area": ["X", "X"],
+            "measure": ["measure_1", "measure_2"],
             "value": [2, 2],
         }
-    ).set_index(["model_run", "group"])
-    actual = filter_aggregations(filter_agg_df, "ALL")
+    ).set_index(["model_run", "functional_area", "measure"])
+    actual = filter_aggregations(filter_agg_df, "ALL", "activity_type")
     assert_frame_equal(actual, expected)
 
 
-def test_filter_aggregations(filter_agg_df):
+def test_filter_aggregations(filter_agg_df, mocker):
+    mocker.patch(
+        "nhp.capacity_conversion.utils.AGGREGATION_SUBSETS",
+        {"activity_type": ["X"]},
+    )
     expected = pd.DataFrame(
         {
             "model_run": [0] * 2,
-            "group": [
+            "functional_area": [
                 "X",
-                "Y",
+                "X",
             ],
+            "measure": ["measure_1", "measure_2"],
             "value": [1, 1],
         }
-    ).set_index(["model_run", "group"])
-    actual = filter_aggregations(filter_agg_df, "A")
+    ).set_index(["model_run", "functional_area", "measure"])
+    actual = filter_aggregations(filter_agg_df, "A", "activity_type")
     assert_frame_equal(actual, expected)
