@@ -2,7 +2,7 @@
 
 <!-- badges: start -->
 
-[![codecov](https://codecov.io/gh/The-Strategy-Unit/nhp_capacity_conversion_logic/graph/badge.svg?token=D46wl0Y3vO)](https://codecov.io/gh/The-Strategy-Unit/nhp_capacity_conversion_logic)
+[![codecov](https://codecov.io/gh/The-Strategy-Unit/nhp_capacity_conversion_logic/graph/badge.svg)](https://codecov.io/gh/The-Strategy-Unit/nhp_capacity_conversion_logic)
 
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
@@ -79,6 +79,21 @@ permits all available aggregations.
 
 The Shiny dependencies are in the `app` dependency group. `requirements.txt` is
 generated for Posit Connect and must not be edited manually.
+
+### Access synchronisation
+
+The access-sync job grants application viewership to individual Connect users
+whose Azure `scenario` or `run_stage` value contains a configured keyword. Set
+`ACCESS_SYNC_KEYWORDS` to one or more comma-separated, case-insensitive values,
+for example `test,other`. Set `ACCESS_SYNC_MODE=dry-run` to preview the
+permission changes or `ACCESS_SYNC_MODE=apply` to apply them.
+
+Run a local preview with:
+
+```console
+uv run --env-file .env --locked python -c \
+'from nhp.capacity_conversion.access_sync import run_access_sync_from_environment; print(run_access_sync_from_environment())'
+```
 
 Regenerate and validate the Connect requirements after changing dependencies:
 
