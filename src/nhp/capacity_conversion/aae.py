@@ -22,13 +22,13 @@ ASSUMPTIONS_MAPPING = {
         "hours": "AE_BAYS_ANNUAL_OPERATIONAL_HOURS",
         "output": "ADULT_MINOR_AE_BAYS",
     },
-    "child_major_attendances": {
+    "paediatric_major_attendances": {
         "los": "AE_CHILD_MAJOR_LOS",
         "util": "AE_CHILD_MAJOR_UTIL",
         "hours": "AE_BEDS_ANNUAL_OPERATIONAL_HOURS",
         "output": "CHILD_MAJOR_AE_BEDS",
     },
-    "child_minor_attendances": {
+    "paediatric_minor_attendances": {
         "los": "AE_CHILD_MINOR_LOS",
         "util": "AE_CHILD_MINOR_UTIL",
         "hours": "AE_BAYS_ANNUAL_OPERATIONAL_HOURS",
@@ -40,7 +40,7 @@ ASSUMPTIONS_MAPPING = {
         "hours": "AE_BEDS_ANNUAL_OPERATIONAL_HOURS",
         "output": "RESUS_AE_BEDS",
     },
-    "sdec_attendances": {
+    "sdec_procedures": {
         "los": "SDEC_SPACES_LOS",
         "util": "SDEC_SPACES_UTIL",
         "hours": "SDEC_SPACES_ANNUAL_OPERATIONAL_HOURS",
@@ -122,8 +122,8 @@ def calculate_aae_capacity(
     """
     logger.info("Calculating A&E capacity")
     results_list = []
-    for subgroup in functional_areas.index.get_level_values("grouping").unique():
-        fa_df = functional_areas.xs(key=subgroup, level="grouping")
+    for subgroup in functional_areas.index.get_level_values("functional_area").unique():
+        fa_df = functional_areas.xs(key=subgroup, level="functional_area")
         assumed_los_mins = cast(
             float,
             assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["los"], "Value"],
@@ -137,7 +137,7 @@ def calculate_aae_capacity(
             assumptions_df.at[ASSUMPTIONS_MAPPING[subgroup]["util"], "Value"],
         )
 
-        occupancy_hours = derive_aae_workload(fa_df["total"], assumed_los_mins)
+        occupancy_hours = derive_aae_workload(fa_df["value"], assumed_los_mins)
         results = convert_aae_capacity(
             occupancy_hours,
             annual_operational_hours=annual_operational_hours,
@@ -145,7 +145,7 @@ def calculate_aae_capacity(
         )
         results_df = pd.DataFrame(results)
         results_df.loc[:, "output"] = ASSUMPTIONS_MAPPING[subgroup]["output"]
-        results_list.append(results_df.reset_index().set_index(["output", "model_run"]))
+        results_list.append(results_df.set_index("output", append=True))
     return pd.concat(results_list)
 
 
