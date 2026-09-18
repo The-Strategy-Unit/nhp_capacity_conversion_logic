@@ -94,7 +94,7 @@ def summarise_model_runs(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Summarised DataFrame
     """
     group_col_names = [name for name in df.index.names if name != "model_run"]
-    value_cols = [c for c in df.columns if c != "model_run"]
+    value_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
     if len(value_cols) > 1:
         raise ValueError("Expected 1 value column only")
     return pd.DataFrame(
@@ -205,6 +205,7 @@ def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
         pd.DataFrame: Formatted dataframe of estimated_capacity_needs
     """
     df = pd.concat(dfs)
+    df = df.reset_index("measure").drop(columns=["measure"])
     df.index.name = "resource"
     return df
 

@@ -5,6 +5,7 @@ from logging import INFO
 
 import pandas as pd
 
+from nhp.capacity_conversion.aae import calculate_aae_capacity
 from nhp.capacity_conversion.config import ASSUMPTIONS_URL
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.results import process_and_save_results_to_excel
@@ -95,13 +96,10 @@ def main():
         "op", op_aggregations, calculate_op_capacity, assumptions, data_to_save
     )
 
-    # aae_aggregations = load_aggregations(
-    #     config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path, "aae"
-    # )
-    # aae_aggregations = filter_aggregations(aae_aggregations, args.aae_sites)
-    # process_activity_type(
-    #     "aae", aae_aggregations, calculate_aae_capacity, assumptions, data_to_save
-    # )
+    aae_aggregations = filter_aggregations(aggregations, args.aae_sites, "aae")
+    process_activity_type(
+        "aae", aae_aggregations, calculate_aae_capacity, assumptions, data_to_save
+    )
 
     # ip_daycase_aggregations = load_aggregations(
     #     config["AZ_STORAGE_EP"],
