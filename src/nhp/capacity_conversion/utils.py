@@ -379,7 +379,7 @@ def filter_aggregations(
     available_functional_areas = set(aggregations["functional_area"])
     missing_functional_areas = set(functional_areas) - available_functional_areas
     if missing_functional_areas:
-        raise ValueError(
+        logger.info(
             f"Functional areas not found in aggregations: "
             f"{sorted(missing_functional_areas)}"
         )
