@@ -1,4 +1,5 @@
 import logging
+from unittest.mock import call
 
 import pandas as pd
 import pytest
@@ -647,3 +648,29 @@ def test_filter_aggregations(filter_agg_df, mocker):
     ).set_index(["model_run", "functional_area", "measure"])
     actual = filter_aggregations(filter_agg_df, "A", "activity_type")
     assert_frame_equal(actual, expected)
+
+
+def test_filter_aggregations_missing_functional_area(filter_agg_df, mocker):
+    mocker.patch(
+        "nhp.capacity_conversion.utils.AGGREGATION_SUBSETS",
+        {"activity_type": ["X", "Z"]},
+    )
+    mock_logger = mocker.patch("nhp.capacity_conversion.utils.logger")
+    expected = pd.DataFrame(
+        {
+            "model_run": [0] * 2,
+            "functional_area": [
+                "X",
+                "X",
+            ],
+            "measure": ["measure_1", "measure_2"],
+            "value": [1, 1],
+        }
+    ).set_index(["model_run", "functional_area", "measure"])
+    actual = filter_aggregations(filter_agg_df, "A", "activity_type")
+    assert_frame_equal(actual, expected)
+    assert mock_logger.info.call_args_list == [
+        call("Filtering to activity_type"),
+        call("Functional areas not found in aggregations: ['Z']"),
+        call("Filtering by sites: A"),
+    ]
