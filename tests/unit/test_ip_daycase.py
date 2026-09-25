@@ -42,11 +42,16 @@ def test_calculate_daycase_frm_time_util(mocker):
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_time_util_capacity",
-        return_value=pd.Series([1], name="total").rename_axis("model_run"),
+        return_value=pd.Series([1], name="value").rename_axis("model_run"),
     )
     expected = pd.DataFrame(
-        {"model_run": [0], "total": [1], "output": ["output_frm_time_util"]}
-    ).set_index(["output", "model_run"])
+        {"model_run": [0], "value": [1], "output": ["output_frm_time_util"]}
+    ).set_index(
+        [
+            "model_run",
+            "output",
+        ]
+    )
     actual = calculate_daycase_frm_time_util(
         subgroup,
         assumptions,
@@ -91,11 +96,11 @@ def test_calculate_daycase_frm_recovery_occupancy(mocker):
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_recovery_capacity",
-        return_value=pd.Series([1], name="total").rename_axis("model_run"),
+        return_value=pd.Series([1], name="value").rename_axis("model_run"),
     )
     expected = pd.DataFrame(
-        {"model_run": [0], "total": [1], "output": ["output_frm_recovery_occupancy"]}
-    ).set_index(["output", "model_run"])
+        {"model_run": [0], "value": [1], "output": ["output_frm_recovery_occupancy"]}
+    ).set_index(["model_run", "output"])
     actual = calculate_daycase_frm_recovery_occupancy(
         subgroup, assumptions, functional_area_subgroup, assumptions_df
     )
@@ -128,11 +133,11 @@ def test_calculate_daycase_frm_session_capacity(mocker):
 
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_beds_from_session_capacity",
-        return_value=pd.Series([1], name="total").rename_axis("model_run"),
+        return_value=pd.Series([1], name="value").rename_axis("model_run"),
     )
     expected = pd.DataFrame(
-        {"model_run": [0], "total": [1], "output": ["output_frm_session_capacity"]}
-    ).set_index(["output", "model_run"])
+        {"model_run": [0], "value": [1], "output": ["output_frm_session_capacity"]}
+    ).set_index(["model_run", "output"])
     actual = calculate_daycase_frm_session_capacity(
         subgroup, assumptions, functional_area_subgroup, assumptions_df
     )
@@ -167,8 +172,12 @@ def test_calculate_daycase_capacity():
     }
 
     functional_areas = pd.DataFrame(
-        {"model_run": [1] * 2, "grouping": ["subgroup", "subgroup_2"], "total": [0] * 2}
-    ).set_index(["model_run", "grouping"])
+        {
+            "model_run": [1] * 2,
+            "functional_area": ["subgroup", "subgroup_2"],
+            "value": [0] * 2,
+        }
+    ).set_index(["model_run", "functional_area"])
 
     assumptions_df = pd.DataFrame({"Value": {"some": 10}})
     expected = pd.DataFrame({"output": ["subgroup", "subgroup_2"]}).set_index("output")
