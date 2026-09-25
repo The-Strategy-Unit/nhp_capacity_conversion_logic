@@ -136,20 +136,20 @@ def test_process_and_save_results_to_excel_writes_reusable_input_to_stream(mocke
             "beddays": [20.0],
             "total_theatre_time": [30.0],
         },
-        index=pd.Index(["clinic_attendances"], name="grouping"),
+        index=pd.Index(["clinic_attendances"], name="functional_area"),
     )
     functional_areas = pd.DataFrame(
-        {"value": [1.0, 3.0]},
+        {"total": [1.0, 3.0]},
         index=pd.MultiIndex.from_tuples(
             [("clinic_attendances", 1), ("clinic_attendances", 2)],
-            names=["grouping", "model_run"],
+            names=["functional_area", "model_run"],
         ),
     )
     capacity = pd.DataFrame(
-        {"value": [2.0, 4.0]},
+        {"total": [2.0, 4.0]},
         index=pd.MultiIndex.from_tuples(
-            [("consulting_room", 1), ("consulting_room", 2)],
-            names=["output", "model_run"],
+            [("consulting_room", 1, "measure"), ("consulting_room", 2, "measure")],
+            names=["output", "model_run", "measure"],
         ),
     )
     data_to_save = {
@@ -471,8 +471,18 @@ def test_create_and_format_predicted_vols_df():
 
 
 def test_create_and_format_capacity_needs_df():
-    df1 = pd.DataFrame({"value": [1.5]}, index=pd.Index(["a"]))
-    df2 = pd.DataFrame({"value": [2.5]}, index=pd.Index(["b"]))
+    df1 = pd.DataFrame(
+        {"value": [1.5]},
+        index=pd.MultiIndex.from_tuples(
+            [("measure", "a")], names=["measure", "output"]
+        ),
+    )
+    df2 = pd.DataFrame(
+        {"value": [2.5]},
+        index=pd.MultiIndex.from_tuples(
+            [("measure", "b")], names=["measure", "output"]
+        ),
+    )
 
     result = create_and_format_capacity_needs_df([df1, df2])
 
