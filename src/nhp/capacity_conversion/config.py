@@ -24,4 +24,13 @@ AGGREGATION_SUBSETS = {
         "resus_attendances",
         "sdec_procedures",
     ],
+    "ip_daycase": [
+        "adult_daycase_medical",
+        "adult_daycase_surgical",
+        "daycase_endoscopy",
+        "daycase_haem_onc",
+        "daycase_renal",
+        "paediatric_daycase_medical",
+        "paediatric_daycase_surgical",
+    ],
 }
