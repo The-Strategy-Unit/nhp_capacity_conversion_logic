@@ -380,8 +380,7 @@ def filter_aggregations(
     missing_functional_areas = set(functional_areas) - available_functional_areas
     if missing_functional_areas:
         logger.info(
-            f"Functional areas not found in aggregations: "
-            f"{sorted(missing_functional_areas)}"
+            f"Functional areas not found in aggregations: {sorted(missing_functional_areas)}"
         )
     aggregations = aggregations[aggregations["functional_area"].isin(functional_areas)]
     logger.info(f"Filtering by sites: {sites}")
