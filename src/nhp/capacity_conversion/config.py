@@ -38,6 +38,7 @@ AGGREGATION_SUBSETS = {
         "maternity_assisted_delivery_nonzerolos",
         "maternity_assisted_delivery_zerolos",
         "maternity_elective_csection_nonzerolos",
+        "maternity_elective_csection_zerolos",
         "maternity_nonelective_csection_nonzerolos",
         "maternity_nonelective_csection_zerolos",
         "maternity_normal_delivery_nonzerolos",

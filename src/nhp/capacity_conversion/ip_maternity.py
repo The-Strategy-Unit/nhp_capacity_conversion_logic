@@ -2,7 +2,7 @@ import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
 import pandas as pd
 from numpy import float64
@@ -33,7 +33,7 @@ def derive_birth_related_ward_beddays(
     functional_areas_processed: pd.DataFrame,
     assumptions_df: pd.DataFrame,
     assumptions: dict[str, str],
-) -> pd.Series:
+) -> pd.Series | Literal[0]:
     """Calculate birth related maternity ward beddays
 
     Args:
@@ -44,7 +44,7 @@ def derive_birth_related_ward_beddays(
         assumptions (dict[str, str]): Assumptions dictionary for the specific grouping
 
     Returns:
-        pd.Series: Calculated birth related ward beddays
+        pd.Series | Literal[0]: Calculated birth related ward beddays
     """
     zero_day_los = cast(
         float,
@@ -77,10 +77,16 @@ def derive_birth_related_ward_beddays(
     else:
         # elective csections do not spend any time in the birth room
         birth_room_beddays = 0
-    birth_spell_overnight_beddays = functional_areas_processed.xs(
-        key=(functional_area + "_nonzerolos", "duration_days"),
-        level=["functional_area", "measure"],
-    )["value"]
+    if (
+        functional_area + "_nonzerolos"
+        in functional_areas_processed.index.get_level_values("functional_area")
+    ):
+        birth_spell_overnight_beddays = functional_areas_processed.xs(
+            key=(functional_area + "_nonzerolos", "duration_days"),
+            level=["functional_area", "measure"],
+        )["value"]
+    else:
+        birth_spell_overnight_beddays = 0
     return birth_spell_overnight_beddays + zero_day_beddays - birth_room_beddays
 
 
@@ -116,10 +122,16 @@ def derive_total_maternity_ward_beddays(
             ),
             fill_value=0,
         )
-    no_birth_ward_beddays = functional_areas_processed.xs(
-        key=("maternity_overnight_no_birth", "duration_days"),
-        level=["functional_area", "measure"],
-    )["value"]
+    if (
+        "maternity_overnight_no_birth"
+        in functional_areas_processed.index.get_level_values("functional_area")
+    ):
+        no_birth_ward_beddays = functional_areas_processed.xs(
+            key=("maternity_overnight_no_birth", "duration_days"),
+            level=["functional_area", "measure"],
+        )["value"]
+    else:
+        no_birth_ward_beddays = 0
     return birth_related_ward_beddays + no_birth_ward_beddays
 
 
@@ -464,17 +476,21 @@ def calculate_maternity_capacity(
     logger.info("Calculating IP maternity capacity")
     results_list = []
     for subgroup_config in config.values():
-        functional_area_subgroup = functional_areas_processed.xs(
-            key=(subgroup_config.subgroup, subgroup_config.measure),
-            level=["functional_area", "measure"],
-        )["value"]
-        results_list.append(
-            subgroup_config.formula(
-                assumptions=subgroup_config.assumptions,
-                functional_area_subgroup=functional_area_subgroup,
-                assumptions_df=assumptions_df,
+        if (
+            subgroup_config.subgroup
+            in functional_areas_processed.index.get_level_values("functional_area")
+        ):
+            functional_area_subgroup = functional_areas_processed.xs(
+                key=(subgroup_config.subgroup, subgroup_config.measure),
+                level=["functional_area", "measure"],
+            )["value"]
+            results_list.append(
+                subgroup_config.formula(
+                    assumptions=subgroup_config.assumptions,
+                    functional_area_subgroup=functional_area_subgroup,
+                    assumptions_df=assumptions_df,
+                )
             )
-        )
     results_list.append(
         calculate_maternity_ward_beds(
             functional_areas_processed, assumptions_df, maternity_ward_assumptions_dict
