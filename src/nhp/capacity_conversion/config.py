@@ -33,4 +33,15 @@ AGGREGATION_SUBSETS = {
         "paediatric_daycase_medical",
         "paediatric_daycase_surgical",
     ],
+    "ip_maternity": [
+        "maternity_assessment",
+        "maternity_assisted_delivery_nonzerolos",
+        "maternity_assisted_delivery_zerolos",
+        "maternity_elective_csection_nonzerolos",
+        "maternity_nonelective_csection_nonzerolos",
+        "maternity_nonelective_csection_zerolos",
+        "maternity_normal_delivery_nonzerolos",
+        "maternity_normal_delivery_zerolos",
+        "maternity_overnight_no_birth",
+    ],
 }

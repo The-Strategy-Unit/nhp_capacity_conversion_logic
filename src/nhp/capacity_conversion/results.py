@@ -205,7 +205,8 @@ def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
         pd.DataFrame: Formatted dataframe of estimated_capacity_needs
     """
     df = pd.concat(dfs)
-    df = df.reset_index("measure").drop(columns=["measure"])
+    if "measure" in df.index.names:
+        df = df.reset_index("measure").drop(columns=["measure"])
     df.index.name = "resource"
     return df
 

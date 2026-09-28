@@ -373,8 +373,6 @@ def filter_aggregations(
         pd.DataFrame: Filtered aggregations, with sitetret column removed
     """
     logger.info(f"Filtering to {subset}")
-    if subset not in AGGREGATION_SUBSETS:
-        raise ValueError(f"Unknown aggregation subset: {subset}")
     functional_areas = AGGREGATION_SUBSETS[subset]
     available_functional_areas = set(aggregations["functional_area"])
     missing_functional_areas = set(functional_areas) - available_functional_areas

@@ -23,13 +23,13 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class MaternityConfig:
     subgroup: str
-    col_to_use: str
+    measure: str
     formula: Callable
     assumptions: dict[str, str]
 
 
 def derive_birth_related_ward_beddays(
-    grouping: str,
+    functional_area: str,
     functional_areas_processed: pd.DataFrame,
     assumptions_df: pd.DataFrame,
     assumptions: dict[str, str],
@@ -37,7 +37,7 @@ def derive_birth_related_ward_beddays(
     """Calculate birth related maternity ward beddays
 
     Args:
-        grouping (str): Name of functional area grouping
+        functional_area (str): Name of functional area
         functional_areas_processed (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
         Functional areas should first be processed with preprocess_ip_maternity_data
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating capacity
@@ -50,27 +50,37 @@ def derive_birth_related_ward_beddays(
         float,
         assumptions_df.at[assumptions["zero_day_los"], "Value"],
     )
-    zero_day_beddays = derive_beddays_from_spells(
-        functional_areas_processed.xs(key=grouping + "_zerolos", level="grouping")[
-            "spells"
-        ],
-        zero_day_los,
-    )
-    if grouping != "maternity_elective_csection":
+    if (
+        functional_area + "_zerolos"
+        in functional_areas_processed.index.get_level_values("functional_area")
+    ):
+        zero_day_beddays = derive_beddays_from_spells(
+            functional_areas_processed.xs(
+                key=(functional_area + "_zerolos", "count"),
+                level=["functional_area", "measure"],
+            )["value"],
+            zero_day_los,
+        )
+    else:
+        zero_day_beddays = 0
+    if functional_area != "maternity_elective_csection":
         birthroom_los = cast(
             float,
             assumptions_df.at[assumptions["birthroom_los"], "Value"],
         )
         birth_room_beddays = derive_beddays_from_spells(
-            functional_areas_processed.xs(key=grouping, level="grouping")["spells"],
+            functional_areas_processed.xs(
+                key=(functional_area, "count"), level=["functional_area", "measure"]
+            )["value"],
             birthroom_los,
         )
     else:
         # elective csections do not spend any time in the birth room
         birth_room_beddays = 0
     birth_spell_overnight_beddays = functional_areas_processed.xs(
-        key=grouping + "_nonzerolos", level="grouping"
-    )["beddays"]
+        key=(functional_area + "_nonzerolos", "duration_days"),
+        level=["functional_area", "measure"],
+    )["value"]
     return birth_spell_overnight_beddays + zero_day_beddays - birth_room_beddays
 
 
@@ -91,7 +101,7 @@ def derive_total_maternity_ward_beddays(
         pd.Series: Calculated total maternity ward beddays
     """
     birth_related_ward_beddays = pd.Series(dtype=float64)
-    for grouping in [
+    for functional_area in [
         "maternity_normal_delivery",
         "maternity_assisted_delivery",
         "maternity_elective_csection",
@@ -99,16 +109,17 @@ def derive_total_maternity_ward_beddays(
     ]:
         birth_related_ward_beddays = birth_related_ward_beddays.add(
             derive_birth_related_ward_beddays(
-                grouping,
+                functional_area,
                 functional_areas_processed,
                 assumptions_df,
-                assumptions_dict[grouping],
+                assumptions_dict[functional_area],
             ),
             fill_value=0,
         )
     no_birth_ward_beddays = functional_areas_processed.xs(
-        key="maternity_overnight_no_birth", level="grouping"
-    )["beddays"]
+        key=("maternity_overnight_no_birth", "duration_days"),
+        level=["functional_area", "measure"],
+    )["value"]
     return birth_related_ward_beddays + no_birth_ward_beddays
 
 
@@ -141,7 +152,7 @@ def calculate_maternity_ward_beds(
     )
     maternity_ward_beds = calculate_beds(
         total_ward_beddays, maternity_ward_operational_days, maternity_ward_occupancy
-    ).to_frame(name="total")
+    ).to_frame(name="value")
     maternity_ward_beds.loc[:, "output"] = "MATERNITY_WARD_BEDS"
     results = maternity_ward_beds.reset_index().set_index(["output", "model_run"])
     return results
@@ -178,10 +189,10 @@ def process_theatres_obstetric_proc_data(
     Returns:
         pd.DataFrame: IP maternity functional areas with new grouping obstetric_theatre_procedures
     """
-    functional_areas = functional_areas.reset_index("grouping")
+    functional_areas = functional_areas.reset_index("functional_area")
     obstetric_theatre_procedures = (
         functional_areas[
-            functional_areas["grouping"].isin(
+            functional_areas["functional_area"].isin(
                 [
                     "maternity_elective_csection_nonzerolos",
                     "maternity_nonelective_csection_nonzerolos",
@@ -190,13 +201,13 @@ def process_theatres_obstetric_proc_data(
                 ]
             )
         ]
-        .groupby(level=0)
-        .sum()
-        .assign(grouping="obstetric_theatre_procedures")
+        .groupby(functional_areas.index.names)
+        .sum(numeric_only=True)
+        .assign(functional_area="obstetric_theatre_procedures")
     )
     result = (
         pd.concat([functional_areas, obstetric_theatre_procedures])
-        .set_index("grouping", append=True)
+        .set_index("functional_area", append=True)
         .sort_index()
     )
     return result
@@ -214,7 +225,7 @@ def process_maternity_birth_data(
     Returns:
         pd.DataFrame: IP maternity functional areas with new groupings
     """
-    functional_areas = functional_areas.reset_index("grouping")
+    functional_areas = functional_areas.reset_index("functional_area")
     df_list = []
     groups_list = [
         ["maternity_normal_delivery_zerolos", "maternity_normal_delivery_nonzerolos"],
@@ -229,14 +240,14 @@ def process_maternity_birth_data(
     ]
     for groups in groups_list:
         df_list.append(
-            functional_areas[functional_areas["grouping"].isin(groups)]
-            .groupby(level=0)
-            .sum()
-            .assign(grouping="_".join(groups[0].split("_")[:-1]))
+            functional_areas[functional_areas["functional_area"].isin(groups)]
+            .groupby(functional_areas.index.names)
+            .sum(numeric_only=True)
+            .assign(functional_area="_".join(groups[0].split("_")[:-1]))
         )
     result = (
         pd.concat([functional_areas] + df_list)
-        .set_index("grouping", append=True)
+        .set_index("functional_area", append=True)
         .sort_index()
     )
     return result
@@ -381,7 +392,7 @@ def calculate_maternity_assessment_beds(
 MATERNITY_CONFIG = {
     "MATERNITY_ASSESSMENT_BEDS": MaternityConfig(
         subgroup="maternity_assessment",
-        col_to_use="spells",
+        measure="count",
         formula=calculate_maternity_assessment_beds,
         assumptions={
             "recovery_time": "MATERNITY_ASSESSMENT_ZERO_DAY_LOS",
@@ -391,7 +402,7 @@ MATERNITY_CONFIG = {
     ),
     "OBSTETRIC_PROC_THEATRES": MaternityConfig(
         subgroup="obstetric_theatre_procedures",
-        col_to_use="spells",
+        measure="count",
         formula=calculate_theatres_obstetric_proc,
         assumptions={
             "procedure_time": "OBSTETRIC_THEATRE_PROC_TIME",
@@ -401,7 +412,7 @@ MATERNITY_CONFIG = {
     ),
     "NORMAL_DELIVERY_MATERNITY_BIRTH_ROOMS": MaternityConfig(
         subgroup="maternity_normal_delivery",
-        col_to_use="spells",
+        measure="count",
         formula=calculate_maternity_birth_rooms,
         assumptions={
             "birthroom_los": "MATERNITY_NORMAL_DELIVERY_BIRTH_ROOM_LOS",
@@ -412,7 +423,7 @@ MATERNITY_CONFIG = {
     ),
     "ASSISTED_DELIVERY_MATERNITY_BIRTH_ROOMS": MaternityConfig(
         subgroup="maternity_assisted_delivery",
-        col_to_use="spells",
+        measure="count",
         formula=calculate_maternity_birth_rooms,
         assumptions={
             "birthroom_los": "MATERNITY_ASSISTED_DELIVERY_BIRTH_ROOM_LOS",
@@ -423,7 +434,7 @@ MATERNITY_CONFIG = {
     ),
     "NON_ELECTIVE_C_SECTION_MATERNITY_BIRTH_ROOMS": MaternityConfig(
         subgroup="maternity_nonelective_csection",
-        col_to_use="spells",
+        measure="count",
         formula=calculate_maternity_birth_rooms,
         assumptions={
             "birthroom_los": "MATERNITY_NON_ELECTIVE_C_SECTION_BIRTH_ROOM_LOS",
@@ -454,14 +465,15 @@ def calculate_maternity_capacity(
     results_list = []
     for subgroup_config in config.values():
         functional_area_subgroup = functional_areas_processed.xs(
-            key=subgroup_config.subgroup, level="grouping"
-        )[subgroup_config.col_to_use]
+            key=(subgroup_config.subgroup, subgroup_config.measure),
+            level=["functional_area", "measure"],
+        )["value"]
         results_list.append(
             subgroup_config.formula(
                 assumptions=subgroup_config.assumptions,
                 functional_area_subgroup=functional_area_subgroup,
                 assumptions_df=assumptions_df,
-            ).rename(columns={subgroup_config.col_to_use: "total"})
+            )
         )
     results_list.append(
         calculate_maternity_ward_beds(
