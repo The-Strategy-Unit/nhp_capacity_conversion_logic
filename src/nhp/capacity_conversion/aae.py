@@ -145,6 +145,7 @@ def calculate_aae_capacity(
         )
         results_df = pd.DataFrame(results)
         results_df.loc[:, "output"] = ASSUMPTIONS_MAPPING[subgroup]["output"]
+        results_df.index = results_df.index.droplevel("measure")
         results_list.append(results_df.set_index("output", append=True))
     return pd.concat(results_list)
 

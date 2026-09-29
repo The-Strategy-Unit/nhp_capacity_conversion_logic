@@ -68,6 +68,7 @@ def calculate_daycase_frm_time_util(
     )
     results.loc[:, "output"] = output
     results = results.set_index("output", append=True)
+    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -110,6 +111,7 @@ def calculate_daycase_frm_recovery_occupancy(
     )
     results.loc[:, "output"] = output
     results = results.set_index("output", append=True)
+    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -143,6 +145,7 @@ def calculate_daycase_frm_session_capacity(
     )
     results.loc[:, "output"] = output
     results = results.set_index("output", append=True)
+    results.index = results.index.droplevel("measure")
     return results
 
 

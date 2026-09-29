@@ -204,16 +204,7 @@ def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
     Returns:
         pd.DataFrame: Formatted dataframe of estimated_capacity_needs
     """
-
-    def remove_measure_index(df: pd.DataFrame) -> pd.DataFrame:
-        not_required = [i for i in df.index.names if i != "output"]
-        if len(not_required) > 0:
-            df = df.reset_index(not_required).drop(columns=not_required)
-        return df
-
-    dfs_tidied = [remove_measure_index(df) for df in dfs]
-    df = pd.concat(dfs_tidied)
-
+    df = pd.concat(dfs)
     df.index.name = "resource"
     return df
 
