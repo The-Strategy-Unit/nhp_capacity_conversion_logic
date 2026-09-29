@@ -222,6 +222,7 @@ def combine_and_format_dataframes(
         dict[str, pd.DataFrame | pd.Series]: Dictionary of data to save, where the keys are the titles of the
         worksheets and the values are the dataframes to be included.
     """
+    logger.info("Processing results...")
     groups = {
         "baseline_year_activity_counts": [
             key for key in data_to_save if key.endswith("_baseline")

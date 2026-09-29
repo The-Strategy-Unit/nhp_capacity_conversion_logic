@@ -63,4 +63,14 @@ AGGREGATION_SUBSETS = {
         "paediatric_nonelective_surgical_nonzerolos",
         "paediatric_nonelective_surgical_zerolos",
     ],
+    "ip_procedures_and_theatres": [
+        "adult_elective_surgical_procedures",
+        "adult_nonelective_surgical_procedures",
+        "adult_surgical_daycase_procedures",
+        "cardiac_catheter_procedure",
+        "interventional_radiology_procedure",
+        "paediatric_daycase_procedures",
+        "paediatric_elective_procedures",
+        "paediatric_nonelective_procedures",
+    ],
 }

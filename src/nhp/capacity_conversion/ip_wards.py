@@ -276,8 +276,6 @@ def preprocess_ip_wards_data(
     Returns:
         pd.DataFrame: Preprocessed IP maternity data for conversion to capacity
     """
-
-    logger.info("Calculating IP wards bedday pools...")
     bedday_pools_list: list[pd.DataFrame] = []
     for grouping, assumptions_dict in WARD_WORKLOAD_ASSUMPTIONS_DICT.items():
         bedday_pools = derive_ward_beddays(

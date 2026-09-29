@@ -12,66 +12,51 @@ from nhp.capacity_conversion.utils import run_single_activity_type
 
 logger = logging.getLogger(__name__)
 
-THEATRES_WORKLOAD_ASSUMPTIONS_DICT = {
-    "adult_elective_surgical_procedures_unknown_time": {
-        "procedure_time": "INPATIENT_THEATRE_ADULT_ELECTIVE_SURGICAL_PROC_TIME"
-    },
-    "adult_nonelective_surgical_procedures_unknown_time": {
-        "procedure_time": "INPATIENT_THEATRE_ADULT_NON_ELECTIVE_SURGICAL_PROC_TIME"
-    },
-    "paediatric_elective_procedures_unknown_time": {
-        "procedure_time": "INPATIENT_THEATRE_PAEDIATRIC_ELECTIVE_SURGICAL_PROC_TIME"
-    },
-    "paediatric_nonelective_procedures_unknown_time": {
-        "procedure_time": "INPATIENT_THEATRE_PAEDIATRIC_NON_ELECTIVE_SURGICAL_PROC_TIME"
-    },
-    "adult_surgical_daycase_procedures_unknown_time": {
-        "procedure_time": "DAYCASE_THEATRE_ADULT_SURGICAL_PROC_TIME"
-    },
-    "paediatric_daycase_procedures_unknown_time": {
-        "procedure_time": "DAYCASE_THEATRE_PAEDIATRIC_PROC_TIME"
-    },
-    "cardiac_catheter_procedure": {"procedure_time": "LABS_CARDIAC_CATH_PROC_TIME"},
-    "interventional_radiology_procedure": {"procedure_time": "INT_RADIOLOGY_PROC_TIME"},
-}
-
-THEATRES_CAPACITY_ASSUMPTIONS_DICT = {
+THEATRES_ASSUMPTIONS_DICT = {
     "adult_elective_surgical_procedures": {
+        "procedure_time": "INPATIENT_THEATRE_ADULT_ELECTIVE_SURGICAL_PROC_TIME",
         "annual_operational_hours": "INPATIENT_THEATRE_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "INPATIENT_THEATRE_UTIL",
         "output": "ADULT_ELECTIVE_SURGICAL_INPATIENT_PROC_THEATRES",
     },
     "adult_nonelective_surgical_procedures": {
+        "procedure_time": "INPATIENT_THEATRE_ADULT_NON_ELECTIVE_SURGICAL_PROC_TIME",
         "annual_operational_hours": "INPATIENT_THEATRE_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "INPATIENT_THEATRE_UTIL",
         "output": "ADULT_NON_ELECTIVE_SURGICAL_INPATIENT_PROC_THEATRES",
     },
     "adult_surgical_daycase_procedures": {
+        "procedure_time": "DAYCASE_THEATRE_ADULT_SURGICAL_PROC_TIME",
         "annual_operational_hours": "DAYCASE_THEATRE_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "DAYCASE_THEATRE_UTIL",
         "output": "ADULT_SURGICAL_DAYCASE_PROC_THEATRES",
     },
     "cardiac_catheter_procedure": {
+        "procedure_time": "LABS_CARDIAC_CATH_PROC_TIME",
         "annual_operational_hours": "LABS_CARDIAC_CATH_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "LABS_CARDIAC_CATH_UTIL",
         "output": "CARDIAC_CATH_PROC_LABS",
     },
     "interventional_radiology_procedure": {
+        "procedure_time": "INT_RADIOLOGY_PROC_TIME",
         "annual_operational_hours": "INT_RADIOLOGY_PROC_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "INT_RADIOLOGY_PROC_UTIL",
         "output": "INT_RADIOLOGY_PROC_ROOMS",
     },
     "paediatric_daycase_procedures": {
+        "procedure_time": "DAYCASE_THEATRE_PAEDIATRIC_PROC_TIME",
         "annual_operational_hours": "DAYCASE_THEATRE_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "DAYCASE_THEATRE_UTIL",
         "output": "PAEDIATRIC_DAYCASE_PROC_THEATRES",
     },
     "paediatric_elective_procedures": {
+        "procedure_time": "INPATIENT_THEATRE_PAEDIATRIC_ELECTIVE_SURGICAL_PROC_TIME",
         "annual_operational_hours": "INPATIENT_THEATRE_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "INPATIENT_THEATRE_UTIL",
         "output": "PAEDIATRIC_ELECTIVE_INPATIENT_PROC_THEATRES",
     },
     "paediatric_nonelective_procedures": {
+        "procedure_time": "INPATIENT_THEATRE_PAEDIATRIC_NON_ELECTIVE_SURGICAL_PROC_TIME",
         "annual_operational_hours": "INPATIENT_THEATRE_ANNUAL_OPERATIONAL_HOURS",
         "utilisation": "INPATIENT_THEATRE_UTIL",
         "output": "PAEDIATRIC_NON_ELECTIVE_INPATIENT_PROC_THEATRES",
@@ -91,63 +76,31 @@ def calculate_procedure_time(
     Returns:
         pd.DataFrame: Functional areas with added procedure time for activity with unknown time
     """
-    for grouping, assumptions_dict in THEATRES_WORKLOAD_ASSUMPTIONS_DICT.items():
-        procedure_time = cast(
-            float,
-            assumptions_df.at[
-                assumptions_dict["procedure_time"],
-                "Value",
-            ],
-        )
-
-        mask = functional_areas.index.get_level_values("procedure_grouping") == grouping
-        functional_areas.loc[mask, "total_theatre_time"] = derive_treatment_hours(
-            procedure_time, functional_areas.loc[mask, "spells"]
-        )
-    return functional_areas
-
-
-def convert_procedure_time_to_hours(functional_areas: pd.DataFrame) -> pd.DataFrame:
-    """Converts procedure times for procedures with a known time from minutes to hours
-
-    Args:
-        functional_areas (pd.DataFrame): Functional areas from Azure for IP procedures and theatres
-
-    Returns:
-        pd.DataFrame: Functional areas from Azure for IP procedures and theatres, with total_theatre_time converted from minutes to hours
-    """
-    for grouping in functional_areas.index.get_level_values(
-        "procedure_grouping"
-    ).unique():
-        if grouping not in THEATRES_WORKLOAD_ASSUMPTIONS_DICT:
-            functional_areas.loc[(slice(None), grouping), "total_theatre_time"] = (
-                functional_areas.loc[(slice(None), grouping), "total_theatre_time"] / 60
+    for grouping, assumptions_dict in THEATRES_ASSUMPTIONS_DICT.items():
+        if grouping in functional_areas.index.get_level_values("functional_area"):
+            procedure_time = cast(
+                float,
+                assumptions_df.at[
+                    assumptions_dict["procedure_time"],
+                    "Value",
+                ],
             )
+            treatment_hours = pd.DataFrame(
+                derive_treatment_hours(
+                    procedure_time,
+                    functional_areas.xs(
+                        key=(grouping, "procedures"),
+                        level=["functional_area", "measure"],
+                    )["value"],
+                )
+            )
+            treatment_hours["functional_area"] = grouping
+            treatment_hours["measure"] = "total_time_hours"
+            treatment_hours = treatment_hours.set_index(
+                ["functional_area", "measure"], append=True
+            ).reorder_levels(["model_run", "measure", "functional_area"])
+            functional_areas = pd.concat([functional_areas, treatment_hours])
     return functional_areas
-
-
-def combine_procedure_groupings(functional_areas: pd.DataFrame) -> pd.DataFrame:
-    """Groups together activity_unknown_time with activity, because following calculate_procedure_time
-    all activity including activity_unknown_time should have values in the "total_theatre_time" column,
-    expressed in treatment hours
-
-    Args:
-        functional_areas (pd.DataFrame): Functional areas from Azure for IP procedures and theatres which have
-        been processed with convert_procedure_time_to_hours and calculate_procedure_time
-
-    Returns:
-        pd.DataFrame: Functional areas with activity_unknown_time and activity combined
-    """
-    functional_areas = functional_areas.reset_index(level="procedure_grouping")
-    functional_areas.loc[:, "procedure_grouping"] = functional_areas[
-        "procedure_grouping"
-    ].str.removesuffix("_unknown_time")
-    functional_areas_grouped = (
-        functional_areas.groupby(["model_run", "procedure_grouping"])
-        .sum(numeric_only=True)
-        .sort_index()
-    )
-    return functional_areas_grouped
 
 
 def preprocess_ip_theatres_data(
@@ -162,16 +115,8 @@ def preprocess_ip_theatres_data(
     Returns:
         pd.DataFrame: Preprocessed IP procedures and theatres data for conversion to capacity
     """
-    # Drop unknown procedures
-    functional_areas = functional_areas.loc[
-        functional_areas.index.get_level_values("procedure_grouping")
-        != "unknown_procedure",
-        :,
-    ]
-    functional_areas = convert_procedure_time_to_hours(functional_areas)
     functional_areas = calculate_procedure_time(functional_areas, assumptions_df)
-    functional_areas_grouped = combine_procedure_groupings(functional_areas)
-    return functional_areas_grouped
+    return functional_areas
 
 
 def calculate_ip_theatres_capacity(
@@ -190,10 +135,13 @@ def calculate_ip_theatres_capacity(
     """
     logger.info("Calculating IP theatres capacity")
     results_list = []
-    for grouping, assumptions_dict in THEATRES_CAPACITY_ASSUMPTIONS_DICT.items():
+    for grouping in functional_areas_processed.index.get_level_values(
+        "functional_area"
+    ).unique():
+        assumptions_dict = THEATRES_ASSUMPTIONS_DICT[grouping]
         treatment_hours = functional_areas_processed.xs(
-            key=grouping, level="procedure_grouping"
-        )["total_theatre_time"]
+            key=(grouping, "total_time_hours"), level=["functional_area", "measure"]
+        )["value"]
         annual_operational_hours = cast(
             float,
             assumptions_df.at[assumptions_dict["annual_operational_hours"], "Value"],
@@ -207,11 +155,7 @@ def calculate_ip_theatres_capacity(
             )
         )
         capacity_df.loc[:, "output"] = assumptions_dict["output"]
-        capacity_df = (
-            capacity_df.reset_index()
-            .set_index(["output", "model_run"])
-            .rename(columns={"total_theatre_time": "total"})
-        )
+        capacity_df = capacity_df.set_index("output", append=True)
         results_list.append(capacity_df)
     return pd.concat(results_list)
 
