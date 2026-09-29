@@ -42,7 +42,14 @@ def test_calculate_daycase_frm_time_util(mocker):
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_time_util_capacity",
-        return_value=pd.Series([1], name="value").rename_axis("model_run"),
+        return_value=pd.Series(
+            [1],
+            name="value",
+            index=pd.MultiIndex.from_tuples(
+                [(0, "measure")],
+                names=["model_run", "measure"],
+            ),
+        ),
     )
     expected = pd.DataFrame(
         {"model_run": [0], "value": [1], "output": ["output_frm_time_util"]}
@@ -96,7 +103,14 @@ def test_calculate_daycase_frm_recovery_occupancy(mocker):
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_recovery_capacity",
-        return_value=pd.Series([1], name="value").rename_axis("model_run"),
+        return_value=pd.Series(
+            [1],
+            name="value",
+            index=pd.MultiIndex.from_tuples(
+                [(0, "measure")],
+                names=["model_run", "measure"],
+            ),
+        ),
     )
     expected = pd.DataFrame(
         {"model_run": [0], "value": [1], "output": ["output_frm_recovery_occupancy"]}
@@ -133,7 +147,14 @@ def test_calculate_daycase_frm_session_capacity(mocker):
 
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_beds_from_session_capacity",
-        return_value=pd.Series([1], name="value").rename_axis("model_run"),
+        return_value=pd.Series(
+            [1],
+            name="value",
+            index=pd.MultiIndex.from_tuples(
+                [(0, "measure")],
+                names=["model_run", "measure"],
+            ),
+        ),
     )
     expected = pd.DataFrame(
         {"model_run": [0], "value": [1], "output": ["output_frm_session_capacity"]}

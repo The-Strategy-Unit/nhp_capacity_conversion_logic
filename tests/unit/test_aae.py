@@ -56,8 +56,8 @@ def test_calculate_aae_capacity(mocker, caplog):
     functional_areas = pd.DataFrame(
         {"value": [0]},
         index=pd.MultiIndex.from_tuples(
-            [("test_subgroup", 1)],
-            names=["functional_area", "model_run"],
+            [(1, "test_subgroup", "measure")],
+            names=["model_run", "functional_area", "measure"],
         ),
     )
     mock_workload = mocker.patch(
@@ -66,7 +66,10 @@ def test_calculate_aae_capacity(mocker, caplog):
     )
     returned_capacity = pd.DataFrame(
         {"value": [0]},
-        index=pd.Index([1], name="model_run"),
+        index=pd.MultiIndex.from_tuples(
+            [(1, "measure")],
+            names=["model_run", "measure"],
+        ),
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.aae.convert_aae_capacity",

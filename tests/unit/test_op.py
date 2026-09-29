@@ -73,7 +73,10 @@ def test_calculate_op_capacity(mocker, caplog):
     )
     returned_capacity = pd.DataFrame(
         {"value": [0]},
-        index=pd.Index([1], name="model_run"),
+        index=pd.MultiIndex.from_tuples(
+            [(1, "measure")],
+            names=["model_run", "measure"],
+        ),
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.op.convert_op_capacity",

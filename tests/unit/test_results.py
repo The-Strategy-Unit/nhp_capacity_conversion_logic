@@ -148,8 +148,8 @@ def test_process_and_save_results_to_excel_writes_reusable_input_to_stream(mocke
     capacity = pd.DataFrame(
         {"total": [2.0, 4.0]},
         index=pd.MultiIndex.from_tuples(
-            [("consulting_room", 1, "measure"), ("consulting_room", 2, "measure")],
-            names=["output", "model_run", "measure"],
+            [("consulting_room", 1), ("consulting_room", 2)],
+            names=["output", "model_run"],
         ),
     )
     data_to_save = {
@@ -471,18 +471,8 @@ def test_create_and_format_predicted_vols_df():
 
 
 def test_create_and_format_capacity_needs_df():
-    df1 = pd.DataFrame(
-        {"value": [1.5]},
-        index=pd.MultiIndex.from_tuples(
-            [("measure", "a")], names=["measure", "output"]
-        ),
-    )
-    df2 = pd.DataFrame(
-        {"value": [2.5]},
-        index=pd.MultiIndex.from_tuples(
-            [("measure", "b")], names=["measure", "output"]
-        ),
-    )
+    df1 = pd.DataFrame({"value": [1.5]}, index=pd.Index(["a"], name="output"))
+    df2 = pd.DataFrame({"value": [2.5]}, index=pd.Index(["b"], name="output"))
 
     result = create_and_format_capacity_needs_df([df1, df2])
 
