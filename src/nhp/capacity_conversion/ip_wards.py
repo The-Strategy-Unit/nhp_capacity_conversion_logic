@@ -158,7 +158,7 @@ def derive_ward_beddays(
 
     Args:
         grouping (str): Name of functional area grouping
-        functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping and model_run.
+        functional_areas (pd.DataFrame): Functional area groupings in a MultiIndex dataframe, with the index names grouping, measure and model_run.
         assumptions_df (pd.DataFrame): DataFrame with required assumptions for calculating beddays
 
 
@@ -174,7 +174,9 @@ def derive_ward_beddays(
         ],
     )
     zero_day_beddays = derive_beddays_from_spells(
-        functional_areas.xs(key=grouping + "_zerolos", level="grouping")["spells"],
+        functional_areas.xs(
+            key=(grouping + "_zerolos", "count"), level=["functional_area", "measure"]
+        )["value"],
         zero_day_los,
     )
 
@@ -184,7 +186,10 @@ def derive_ward_beddays(
     )
     critical_care_beddays = (
         critical_care_percentage
-        * functional_areas.xs(key=grouping + "_nonzerolos", level="grouping")["beddays"]
+        * functional_areas.xs(
+            key=(grouping + "_nonzerolos", "duration_days"),
+            level=["functional_area", "measure"],
+        )["value"]
     )
     # Assessment beddays are always 0 for elective activity
     assessment_beddays = pd.Series(0, index=critical_care_beddays.index.copy())
@@ -197,16 +202,23 @@ def derive_ward_beddays(
             ],
         )
         assessment_spells = (
-            functional_areas.xs(key=grouping + "_nonzerolos", level="grouping")[
-                "spells"
-            ]
-            + functional_areas.xs(key=grouping + "_zerolos", level="grouping")["spells"]
+            functional_areas.xs(
+                key=(grouping + "_nonzerolos", "count"),
+                level=["functional_area", "measure"],
+            )["value"]
+            + functional_areas.xs(
+                key=(grouping + "_zerolos", "count"),
+                level=["functional_area", "measure"],
+            )["value"]
         )
         assessment_beddays = derive_beddays_from_spells(
             assessment_spells, assessment_los
         )
     ward_beddays = (
-        functional_areas.xs(key=grouping + "_nonzerolos", level="grouping")["beddays"]
+        functional_areas.xs(
+            key=(grouping + "_nonzerolos", "duration_days"),
+            level=["functional_area", "measure"],
+        )["value"]
         + zero_day_beddays
         - assessment_beddays
         - critical_care_beddays
@@ -231,18 +243,24 @@ def group_ip_wards_beddays(ip_wards_bedday_pools: pd.DataFrame) -> pd.DataFrame:
     grouped = pd.concat(
         [
             ip_wards_bedday_pools.loc[
-                ip_wards_bedday_pools.index.get_level_values("grouping").isin(groups),
+                ip_wards_bedday_pools.index.get_level_values("functional_area").isin(
+                    groups
+                ),
                 column,
             ]
             .groupby(level="model_run")
-            .sum()
+            .sum(numeric_only=True)
             .rename(new_group)
             for new_group, (groups, column) in WARD_GROUP_DEFINITIONS.items()
         ],
         axis=1,
     )
-    grouped = pd.Series(grouped.stack()).rename("total").to_frame()
-    grouped.index.names = ["model_run", "grouping"]
+    grouped = pd.Series(grouped.stack()).rename("value").to_frame()
+    grouped.index.names = ["model_run", "functional_area"]
+    grouped["measure"] = "calculated_beddays"
+    grouped = grouped.set_index("measure", append=True).reorder_levels(
+        ["model_run", "measure", "functional_area"]
+    )
     return grouped
 
 
@@ -270,8 +288,8 @@ def preprocess_ip_wards_data(
         )
         bedday_pools_list.append(
             pd.DataFrame(bedday_pools)
-            .assign(grouping=grouping)
-            .set_index("grouping", append=True)
+            .assign(functional_area=grouping)
+            .set_index("functional_area", append=True)
         )
     ip_wards_bedday_pools = pd.concat(bedday_pools_list)
     grouped_bedday_pools = group_ip_wards_beddays(ip_wards_bedday_pools)
@@ -296,8 +314,8 @@ def calculate_ip_wards_capacity(
     results_list = []
     for grouping, assumptions_dict in WARD_CAPACITY_ASSUMPTIONS_DICT.items():
         functional_area_subgroup = functional_areas_processed.xs(
-            key=grouping, level="grouping"
-        )["total"]
+            key=grouping, level="functional_area"
+        )["value"]
         operational_days = cast(
             float, assumptions_df.at[assumptions_dict["operational_days"], "Value"]
         )
@@ -308,7 +326,8 @@ def calculate_ip_wards_capacity(
             calculate_beds(functional_area_subgroup, operational_days, occupancy)
         )
         capacity_df.loc[:, "output"] = assumptions_dict["output"]
-        capacity_df = capacity_df.reset_index().set_index(["output", "model_run"])
+        capacity_df = capacity_df.set_index("output", append=True)
+        capacity_df.index = capacity_df.index.droplevel("measure")
         results_list.append(capacity_df)
     return pd.concat(results_list)
 
