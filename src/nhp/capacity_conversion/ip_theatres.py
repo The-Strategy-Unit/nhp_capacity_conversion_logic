@@ -76,30 +76,31 @@ def calculate_procedure_time(
     Returns:
         pd.DataFrame: Functional areas with added procedure time for activity with unknown time
     """
-    for grouping, assumptions_dict in THEATRES_ASSUMPTIONS_DICT.items():
-        if grouping in functional_areas.index.get_level_values("functional_area"):
-            procedure_time = cast(
-                float,
-                assumptions_df.at[
-                    assumptions_dict["procedure_time"],
-                    "Value",
-                ],
+    for grouping in functional_areas.index.get_level_values("functional_area").unique():
+        assumptions_dict = THEATRES_ASSUMPTIONS_DICT[grouping]
+
+        procedure_time = cast(
+            float,
+            assumptions_df.at[
+                assumptions_dict["procedure_time"],
+                "Value",
+            ],
+        )
+        treatment_hours = pd.DataFrame(
+            derive_treatment_hours(
+                procedure_time,
+                functional_areas.xs(
+                    key=(grouping, "procedures"),
+                    level=["functional_area", "measure"],
+                )["value"],
             )
-            treatment_hours = pd.DataFrame(
-                derive_treatment_hours(
-                    procedure_time,
-                    functional_areas.xs(
-                        key=(grouping, "procedures"),
-                        level=["functional_area", "measure"],
-                    )["value"],
-                )
-            )
-            treatment_hours["functional_area"] = grouping
-            treatment_hours["measure"] = "total_time_hours"
-            treatment_hours = treatment_hours.set_index(
-                ["functional_area", "measure"], append=True
-            ).reorder_levels(["model_run", "measure", "functional_area"])
-            functional_areas = pd.concat([functional_areas, treatment_hours])
+        )
+        treatment_hours["functional_area"] = grouping
+        treatment_hours["measure"] = "total_time_hours"
+        treatment_hours = treatment_hours.set_index(
+            ["functional_area", "measure"], append=True
+        ).reorder_levels(["model_run", "measure", "functional_area"])
+        functional_areas = pd.concat([functional_areas, treatment_hours])
     return functional_areas
 
 

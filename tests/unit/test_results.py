@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from io import BytesIO
+from unittest.mock import call
 
 import pandas as pd
 import pytest
@@ -191,7 +192,8 @@ def test_process_and_save_results_to_excel_writes_reusable_input_to_stream(mocke
             assert_series_equal(data_to_save[sheet_name], original)  # ty: ignore
         else:
             assert_frame_equal(data_to_save[sheet_name], original)  # ty: ignore
-    mock_logger.info.assert_not_called()
+
+    mock_logger.info.assert_has_calls([call("Processing results...")])
 
 
 def test_summarise_model_runs():
