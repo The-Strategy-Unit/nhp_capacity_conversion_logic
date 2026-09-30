@@ -2,7 +2,8 @@ import argparse
 import datetime
 import logging
 import os
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Iterable, Mapping
 from io import BytesIO
 from typing import cast
 
@@ -12,7 +13,16 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import ContainerClient
 from dotenv import load_dotenv
 
-from nhp.capacity_conversion.config import AGGREGATION_SUBSETS, ASSUMPTIONS_URL
+from nhp.capacity_conversion.config import (
+    AGGREGATION_SUBSETS,
+    ASSUMPTIONS_URL,
+    CATALOGUE_FIELDS,
+    METADATA_FIELDS,
+    MINIMUM_APP_VERSION,
+    REQUIRED_METADATA_FIELDS,
+    RESULTS_FILE_NAME,
+    RUNTIME_FORMAT,
+)
 from nhp.capacity_conversion.results import process_and_save_results_to_excel
 
 logger = logging.getLogger(__name__)
@@ -123,6 +133,89 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
     return pd.read_csv(path_to_csv).set_index("Assumption ID")[["Value"]].sort_index()
 
 
+_APP_VERSION_PATTERN = re.compile(r"v?(\d+(?:\.\d+)*)", re.IGNORECASE)
+
+
+def parse_app_version(value: object) -> tuple[int, ...] | None:
+    """Parse an app version such as "v6.0" into a tuple of integers.
+
+    Returns None for anything that is not a numeric version, such as "dev".
+    """
+    match = _APP_VERSION_PATTERN.fullmatch(str(value).strip())
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def is_supported_app_version(value: object) -> bool:
+    """Return whether an app version is numeric and at least MINIMUM_APP_VERSION.
+
+    Versions are compared numerically, so "v10.0" is newer than "v6.0". Values
+    that cannot be parsed (e.g. "dev") are not supported.
+    """
+    parsed = parse_app_version(value)
+    if parsed is None:
+        return False
+    width = max(len(parsed), len(MINIMUM_APP_VERSION))
+
+    def pad(version: tuple[int, ...]) -> tuple[int, ...]:
+        return version + (0,) * (width - len(version))
+
+    return pad(parsed) >= pad(MINIMUM_APP_VERSION)
+
+
+def connect_to_table(storage_endpoint: str, table_name: str) -> TableClient:
+    """Create an authenticated Azure Table Storage client."""
+    return TableClient(
+        endpoint=storage_endpoint,
+        table_name=table_name,
+        credential=DefaultAzureCredential(),
+    )
+
+
+def entity_to_metadata(entity: Mapping) -> dict[str, str]:
+    """Convert an Azure Table Storage entity into a metadata dictionary.
+
+    Keeps only the fields in METADATA_FIELDS and converts every value to a string
+    (datetimes become ISO 8601). The entity's RowKey is stored as "guid".
+    """
+    metadata = {}
+    for key in METADATA_FIELDS:
+        if key not in entity:
+            continue
+        value = entity[key]
+        if isinstance(value, datetime.datetime):
+            metadata[key] = value.isoformat()
+        else:
+            metadata[key] = str(value)
+    metadata["guid"] = str(entity["RowKey"])
+    return metadata
+
+
+def metadata_problem(
+    entity: Mapping,
+    metadata: Mapping[str, str],
+    dataset: str,
+    required_fields: Iterable[str],
+) -> str | None:
+    """Describe why a model run cannot be used, or return None if it is valid."""
+    missing = [
+        field for field in required_fields if not str(metadata.get(field, "")).strip()
+    ]
+    if missing:
+        return f"missing values for {', '.join(missing)}"
+    if entity.get("PartitionKey") != dataset or metadata["dataset"] != dataset:
+        return "dataset does not match the table partition"
+    if not is_supported_app_version(metadata["app_version"]):
+        return f"unsupported app_version {metadata['app_version']!r}"
+    created = pd.to_datetime(
+        metadata["create_datetime"], format="ISO8601", utc=True, errors="coerce"
+    )
+    if pd.isna(created):
+        return f"invalid create_datetime {metadata['create_datetime']!r}"
+    return None
+
+
 def load_metadata_from_ats(
     dataset: str,
     guid: str,
@@ -140,45 +233,98 @@ def load_metadata_from_ats(
 
     Returns:
         dict: Dictionary with metadata for given Functional Area aggregation
-    """
-    credential = DefaultAzureCredential()
-    table_client = TableClient(
-        endpoint=storage_endpoint, table_name=table_name, credential=credential
-    )
-    entity = table_client.get_entity(partition_key=dataset, row_key=guid)
 
-    keys_to_keep = [
-        "app_version",
-        "dataset",
-        "start_year",
-        "end_year",
-        "scenario",
-        "create_datetime",
-        "model_run_id",
-        "aggregated_results_path",
-    ]
-    metadata = {k: str(v) for k, v in entity.items() if k in keys_to_keep}
-    metadata["guid"] = guid
+    Raises:
+        ValueError: If the run is incomplete, belongs to a different dataset, or was
+            produced by an unsupported app version (see MINIMUM_APP_VERSION)
+    """
+    table_client = connect_to_table(storage_endpoint, table_name)
+    entity = table_client.get_entity(partition_key=dataset, row_key=guid)
+    metadata = entity_to_metadata(entity)
+    problem = metadata_problem(entity, metadata, dataset, REQUIRED_METADATA_FIELDS)
+    if problem:
+        raise ValueError(
+            f"Model run {guid} in dataset {dataset} is not usable: {problem}"
+        )
     return metadata
 
 
 def load_functional_aggregations_from_ats(
+    dataset: str,
     storage_endpoint: str,
     table_name: str,
-    capacity_model_version: str,
 ) -> list[dict]:
-    """Load available functional aggregations for one capacity model version."""
-    credential = DefaultAzureCredential()
-    table_client = TableClient(
-        endpoint=storage_endpoint,
-        table_name=table_name,
-        credential=credential,
-    )
+    """Load the available functional aggregations for one dataset.
+
+    Only the fields needed to select a model run are fetched. Runs that are
+    incomplete or produced by an unsupported app version are left out.
+
+    Args:
+        dataset (str): Dataset, used as the PartitionKey in the table
+        storage_endpoint (str): Azure Table Storage endpoint
+        table_name (str): Table name containing metadata for Functional Area Aggregations
+
+    Returns:
+        list[dict]: Metadata (as strings, including "guid") for each usable run
+    """
+    table_client = connect_to_table(storage_endpoint, table_name)
     entities = table_client.query_entities(
-        query_filter="PartitionKey eq @capacity_model_version",
-        parameters={"capacity_model_version": capacity_model_version},
+        query_filter="PartitionKey eq @dataset",
+        parameters={"dataset": dataset},
+        select=["PartitionKey", "RowKey", *CATALOGUE_FIELDS],
     )
-    return [dict(entity) for entity in entities]
+    runs = []
+    ignored = 0
+    for entity in entities:
+        metadata = entity_to_metadata(entity)
+        if metadata_problem(entity, metadata, dataset, CATALOGUE_FIELDS + ("guid",)):
+            ignored += 1
+        else:
+            runs.append(metadata)
+    if ignored:
+        logger.info(
+            "Ignored %d model runs in dataset %s that are incomplete or use an "
+            "unsupported app version.",
+            ignored,
+            dataset,
+        )
+    return runs
+
+
+def load_datasets_from_ats(storage_endpoint: str, table_name: str) -> list[str]:
+    """List datasets that have at least one model run from a supported app version.
+
+    Scans the table, but fetches only the partition key and app version columns.
+    """
+    table_client = connect_to_table(storage_endpoint, table_name)
+    entities = table_client.list_entities(select=["PartitionKey", "app_version"])
+    return sorted(
+        {
+            str(entity["PartitionKey"])
+            for entity in entities
+            if is_supported_app_version(entity.get("app_version"))
+        }
+    )
+
+
+def create_aggregations_path(metadata: Mapping[str, str]) -> str:
+    """Return the path to the functional area aggregations file for a model run."""
+    return f"{metadata['aggregated_results_path'].rstrip('/')}/{RESULTS_FILE_NAME}"
+
+
+def add_run_details(
+    metadata: Mapping[str, str],
+    capacity_model_version: str,
+    **extra_details: str,
+) -> dict[str, str]:
+    """Return a copy of the metadata stamped with details of this conversion run."""
+    run_metadata = dict(metadata)
+    run_metadata["capacity_conversion_runtime"] = datetime.datetime.now(
+        tz=datetime.UTC
+    ).strftime(RUNTIME_FORMAT)
+    run_metadata["capacity_model_version"] = capacity_model_version
+    run_metadata.update(extra_details)
+    return run_metadata
 
 
 def validate_required_env_vars() -> dict:
@@ -275,9 +421,6 @@ def run_single_activity_type(
     optional preprocessing, capacity calculation, and Excel saving.
     """
     configure_logging(logging.INFO)
-    capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
-        "%Y%m%d_%H%M%S"
-    )
 
     parser = argparse.ArgumentParser(
         description=f"Generate {activity_type.upper()} capacity outputs given functional area aggregations of {activity_type.upper()} activity"
@@ -311,18 +454,17 @@ def run_single_activity_type(
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
     )
-    metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
-    metadata["sites"] = args.sites
-    metadata["capacity_model_version"] = config["CAPACITY_MODEL_VERSION"]
-    data_to_save["metadata"] = pd.Series(metadata)
+    run_metadata = add_run_details(
+        metadata, config["CAPACITY_MODEL_VERSION"], sites=args.sites
+    )
+    data_to_save["metadata"] = pd.Series(run_metadata)
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
-    aggregations_path = (
-        metadata["aggregated_results_path"] + "/functional_areas.parquet"
-    )
     aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path
+        config["AZ_STORAGE_EP"],
+        config["AZ_STORAGE_RESULTS"],
+        create_aggregations_path(metadata),
     )
     aggregations = filter_aggregations(aggregations, args.sites, activity_type)
 

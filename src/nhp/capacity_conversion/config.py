@@ -1,5 +1,39 @@
 ASSUMPTIONS_URL = "https://raw.githubusercontent.com/The-Strategy-Unit/open-plan-docs/refs/heads/main/docs/data/assumptions_register.csv"
 
+# Name of the parquet file holding functional area aggregations, stored inside
+# the "aggregated_results_path" folder recorded against each model run
+RESULTS_FILE_NAME = "functional_areas.parquet"
+
+# Format used for the capacity conversion runtime stamped into result metadata
+RUNTIME_FORMAT = "%Y%m%d_%H%M%S"
+
+# Only model runs produced by demand model app versions at or above this can be
+# converted (app_version values look like "v6.0"; "dev" runs are excluded)
+MINIMUM_APP_VERSION = (6, 0)
+
+# Fields needed to list and select model runs. The RowKey is the run's GUID.
+CATALOGUE_FIELDS = (
+    "dataset",
+    "scenario",
+    "create_datetime",
+    "app_version",
+)
+
+# Fields kept from the Azure Table Storage entity when loading a single run
+METADATA_FIELDS = (
+    "app_version",
+    "dataset",
+    "start_year",
+    "end_year",
+    "scenario",
+    "create_datetime",
+    "model_run_id",
+    "aggregated_results_path",
+)
+
+# Fields that must be present and non-empty when loading a single run
+REQUIRED_METADATA_FIELDS = (*CATALOGUE_FIELDS, "guid", "aggregated_results_path")
+
 ACTIVITY_TYPES = (
     "op",
     "aae",
