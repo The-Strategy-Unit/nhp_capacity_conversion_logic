@@ -111,6 +111,106 @@ def test_derive_birth_related_ward_beddays_elective_csection(mocker):
     assert_series_equal(actual, expected)  # ty: ignore
 
 
+def test_derive_birth_related_ward_beddays_no_zero_day_los(mocker):
+    """Should return 0 for zero-day beddays when *_zerolos is absent."""
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        return_value=pd.Series([3, 4], index=pd.Index([1, 2], name="model_run")),
+    )
+
+    functional_areas_processed = pd.DataFrame(
+        {
+            "functional_area": [
+                "maternity",
+                "maternity",
+                "maternity_nonzerolos",
+                "maternity_nonzerolos",
+            ],
+            "model_run": [1, 2, 1, 2],
+            "value": [50, 60, 30, 40],
+            "measure": ["count", "count", "duration_days", "duration_days"],
+        }
+    ).set_index(["functional_area", "model_run", "measure"])
+
+    assumptions_df = pd.DataFrame(
+        {"Value": [0.5, 1.0]},
+        index=["zero_day_los", "birthroom_los"],
+    )
+
+    assumptions = {
+        "zero_day_los": "zero_day_los",
+        "birthroom_los": "birthroom_los",
+    }
+
+    actual = derive_birth_related_ward_beddays(
+        functional_area="maternity",
+        functional_areas_processed=functional_areas_processed,
+        assumptions_df=assumptions_df,
+        assumptions=assumptions,
+    )
+
+    # No zero-day calculation; only birth-room calculation
+    mock_derive.assert_called_once()
+
+    # 30 - 3, 40 - 4 (birth_spell_overnight_beddays - birth_room_beddays)
+    expected = pd.Series([27, 36], index=pd.Index([1, 2], name="model_run"))
+    assert_series_equal(actual, expected)  # ty: ignore
+
+
+def test_derive_birth_related_ward_beddays_no_nonzero_day_los(mocker):
+    """Should return 0 for overnight beddays when *_nonzerolos is absent."""
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        side_effect=[
+            pd.Series(
+                [10, 20], index=pd.Index([1, 2], name="model_run")
+            ),  # zero_day_beddays
+            pd.Series(
+                [3, 4], index=pd.Index([1, 2], name="model_run")
+            ),  # birth_room_beddays
+        ],
+    )
+
+    functional_areas_processed = pd.DataFrame(
+        {
+            "functional_area": [
+                "maternity",
+                "maternity",
+                "maternity_zerolos",
+                "maternity_zerolos",
+            ],
+            "model_run": [1, 2, 1, 2],
+            "value": [50, 60, 30, 40],
+            "measure": ["count", "count", "duration_days", "duration_days"],
+        }
+    ).set_index(["functional_area", "model_run", "measure"])
+
+    assumptions_df = pd.DataFrame(
+        {"Value": [0.5, 1.0]},
+        index=["zero_day_los", "birthroom_los"],
+    )
+
+    assumptions = {
+        "zero_day_los": "zero_day_los",
+        "birthroom_los": "birthroom_los",
+    }
+
+    actual = derive_birth_related_ward_beddays(
+        functional_area="maternity",
+        functional_areas_processed=functional_areas_processed,
+        assumptions_df=assumptions_df,
+        assumptions=assumptions,
+    )
+
+    # Zero-day and birth room calculations
+    assert mock_derive.call_count == 2
+
+    # birth_spell_overnight_beddays = 0
+    # 10 - 3, 20 - 4 (zero_day_beddays - birth_room_beddays)
+    expected = pd.Series([7, 16], index=pd.Index([1, 2], name="model_run"))
+    assert_series_equal(actual, expected)  # ty: ignore
+
+
 def test_derive_total_maternity_ward_beddays(mocker):
     functional_areas_processed = pd.DataFrame(
         {
@@ -125,6 +225,37 @@ def test_derive_total_maternity_ward_beddays(mocker):
         return_value=pd.Series([1], index=pd.Index([1], name="model_run")),
     )
     expected = pd.Series([5.0], index=pd.Index([1], name="model_run"))
+    actual = derive_total_maternity_ward_beddays(
+        functional_areas_processed,
+        assumptions_df=pd.DataFrame(),
+        assumptions_dict={
+            grouping: {"assumption": "assumption_name"}
+            for grouping in [
+                "maternity_normal_delivery",
+                "maternity_assisted_delivery",
+                "maternity_elective_csection",
+                "maternity_nonelective_csection",
+            ]
+        },
+    )
+    assert mock_derive.call_count == 4
+    assert_series_equal(actual, expected)
+
+
+def test_derive_total_maternity_ward_beddays_no_maternity_overnight_no_birth(mocker):
+    functional_areas_processed = pd.DataFrame(
+        {
+            "model_run": [1],
+            "functional_area": ["maternity"],
+            "measure": ["duration_days"],
+            "value": [1],
+        }
+    ).set_index(["model_run", "functional_area", "measure"])
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_birth_related_ward_beddays",
+        return_value=pd.Series([1], index=pd.Index([1], name="model_run")),
+    )
+    expected = pd.Series([4.0], index=pd.Index([1], name="model_run"))
     actual = derive_total_maternity_ward_beddays(
         functional_areas_processed,
         assumptions_df=pd.DataFrame(),
