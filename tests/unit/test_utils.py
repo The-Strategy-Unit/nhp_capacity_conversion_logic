@@ -1,3 +1,4 @@
+import datetime
 import logging
 from unittest.mock import call
 
@@ -6,17 +7,29 @@ import pytest
 from azure.core.exceptions import ResourceNotFoundError
 from pandas.testing import assert_frame_equal
 
+from nhp.capacity_conversion.config import (
+    CATALOGUE_FIELDS,
+    REQUIRED_METADATA_FIELDS,
+)
 from nhp.capacity_conversion.utils import (
+    add_run_details,
     calculate_prediction_intervals_and_mean,
     configure_logging,
     connect_to_container,
+    connect_to_table,
+    create_aggregations_path,
+    entity_to_metadata,
     filter_aggregations,
     get_baseline_activity,
+    is_supported_app_version,
     load_aggregations,
     load_assumptions,
+    load_datasets_from_ats,
     load_functional_aggregations_from_ats,
     load_metadata_from_ats,
     load_parquet_file,
+    metadata_problem,
+    parse_app_version,
     process_activity_type,
     run_single_activity_type,
     validate_required_env_vars,
@@ -157,92 +170,66 @@ def test_load_assumptions(tmp_path):
     assert_frame_equal(expected, result)
 
 
-def test_load_metadata_from_ats(mocker):
-    # arrange
-    dataset = "dataset"
-    guid = "GUID123"
-    endpoint = "https://example.table.core.windows.net"
-    table_name = "demotable"
-
-    mock_credential = mocker.Mock()
-    mock_table_client = mocker.Mock()
-
-    mocker.patch(
-        "nhp.capacity_conversion.utils.DefaultAzureCredential",
-        return_value=mock_credential,
-    )
-
-    mocker.patch(
-        "nhp.capacity_conversion.utils.TableClient",
-        return_value=mock_table_client,
-    )
-
-    mock_entity = {
-        k: k
-        for k in [
-            "app_version",
-            "dataset",
-            "start_year",
-            "end_year",
-            "scenario",
-            "create_datetime",
-            "model_run_id",
-            "aggregated_results_path",
-            "do_not_include",
-        ]
+def make_entity(**overrides):
+    """A valid Azure Table Storage entity for a supported model run."""
+    entity = {
+        "PartitionKey": "RXX",
+        "RowKey": "GUID123",
+        "app_version": "v6.0",
+        "dataset": "RXX",
+        "start_year": 2023,
+        "end_year": 2041,
+        "scenario": "Example scenario",
+        "create_datetime": datetime.datetime(
+            2026, 9, 25, 13, 31, 16, 442097, tzinfo=datetime.UTC
+        ),
+        "model_run_id": "run-1",
+        "aggregated_results_path": "aggregated/results",
+        "do_not_include": "ignored",
     }
-    mock_table_client.get_entity.return_value = mock_entity
-
-    # act
-    result = load_metadata_from_ats(
-        dataset=dataset,
-        guid=guid,
-        storage_endpoint=endpoint,
-        table_name=table_name,
-    )
-
-    # assert
-    mock_table_client.get_entity.assert_called_once_with(
-        partition_key=dataset,
-        row_key=guid,
-    )
-
-    assert "do_not_include" not in result
-    assert len(result) == 9
+    entity.update(overrides)
+    return entity
 
 
-def test_load_metadata_from_ats_not_found(mocker):
-    guid = "missing-guid"
-    endpoint = "https://example.table.core.windows.net"
-    table_name = "demotable"
-    dataset = "dataset"
-
-    mocker.patch("nhp.capacity_conversion.utils.DefaultAzureCredential")
-    mock_table_client = mocker.Mock()
-
-    mocker.patch(
-        "nhp.capacity_conversion.utils.TableClient",
-        return_value=mock_table_client,
-    )
-
-    mock_table_client.get_entity.side_effect = ResourceNotFoundError
-
-    with pytest.raises(ResourceNotFoundError):
-        load_metadata_from_ats(
-            dataset=dataset,
-            guid=guid,
-            storage_endpoint=endpoint,
-            table_name=table_name,
-        )
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("v6.0", (6, 0)),
+        ("V5.2", (5, 2)),
+        (" v10.1.3 ", (10, 1, 3)),
+        ("6", (6,)),
+        ("dev", None),
+        ("", None),
+        ("v6.0-rc1", None),
+        (None, None),
+    ],
+)
+def test_parse_app_version(value, expected):
+    assert parse_app_version(value) == expected
 
 
-def test_load_functional_aggregations_from_ats(mocker):
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("v6.0", True),
+        ("v6", True),  # padded to 6.0
+        ("v6.0.1", True),
+        ("v6.1", True),
+        ("v10.0", True),  # numeric, not lexical, comparison
+        ("v5.2", False),
+        ("v5.9.9", False),
+        ("dev", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_is_supported_app_version(value, expected):
+    assert is_supported_app_version(value) is expected
+
+
+def test_connect_to_table(mocker):
     credential = mocker.Mock()
     table_client = mocker.Mock()
-    entities = [
-        {"PartitionKey": "dev", "RowKey": "guid-1"},
-        {"PartitionKey": "dev", "RowKey": "guid-2"},
-    ]
     mocker.patch(
         "nhp.capacity_conversion.utils.DefaultAzureCredential",
         return_value=credential,
@@ -251,25 +238,253 @@ def test_load_functional_aggregations_from_ats(mocker):
         "nhp.capacity_conversion.utils.TableClient",
         return_value=table_client,
     )
-    table_client.query_entities.return_value = iter(entities)
 
-    result = load_functional_aggregations_from_ats(
-        "https://example.table.core.windows.net",
-        "catalogue",
-        "dev",
-    )
+    result = connect_to_table("https://example.table.core.windows.net", "catalogue")
 
+    assert result is table_client
     table_client_class.assert_called_once_with(
         endpoint="https://example.table.core.windows.net",
         table_name="catalogue",
         credential=credential,
     )
-    table_client.query_entities.assert_called_once_with(
-        query_filter="PartitionKey eq @capacity_model_version",
-        parameters={"capacity_model_version": "dev"},
+
+
+def test_entity_to_metadata():
+    result = entity_to_metadata(make_entity())
+
+    assert result == {
+        "app_version": "v6.0",
+        "dataset": "RXX",
+        "start_year": "2023",
+        "end_year": "2041",
+        "scenario": "Example scenario",
+        "create_datetime": "2026-09-25T13:31:16.442097+00:00",
+        "model_run_id": "run-1",
+        "aggregated_results_path": "aggregated/results",
+        "guid": "GUID123",
+    }
+
+
+def test_entity_to_metadata_ignores_absent_fields():
+    entity = {"PartitionKey": "RXX", "RowKey": "GUID123", "dataset": "RXX"}
+
+    assert entity_to_metadata(entity) == {"dataset": "RXX", "guid": "GUID123"}
+
+
+def test_metadata_problem_valid():
+    entity = make_entity()
+    metadata = entity_to_metadata(entity)
+
+    assert metadata_problem(entity, metadata, "RXX", REQUIRED_METADATA_FIELDS) is None
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        ({"scenario": "  "}, "missing values for scenario"),
+        ({"aggregated_results_path": ""}, "missing values for aggregated_results_path"),
+        ({"PartitionKey": "RYY"}, "dataset does not match the table partition"),
+        ({"dataset": "RYY"}, "dataset does not match the table partition"),
+        ({"app_version": "v5.2"}, "unsupported app_version 'v5.2'"),
+        ({"app_version": "dev"}, "unsupported app_version 'dev'"),
+        ({"create_datetime": "not a date"}, "invalid create_datetime 'not a date'"),
+    ],
+)
+def test_metadata_problem_invalid(overrides, expected):
+    entity = make_entity(**overrides)
+    metadata = entity_to_metadata(entity)
+
+    problem = metadata_problem(entity, metadata, "RXX", REQUIRED_METADATA_FIELDS)
+
+    assert problem == expected
+
+
+def test_metadata_problem_only_checks_required_fields():
+    entity = make_entity(aggregated_results_path="")
+    metadata = entity_to_metadata(entity)
+
+    assert (
+        metadata_problem(entity, metadata, "RXX", CATALOGUE_FIELDS + ("guid",)) is None
     )
-    assert result == entities
-    assert result[0] is not entities[0]
+
+
+def test_load_metadata_from_ats(mocker):
+    # arrange
+    mock_table_client = mocker.Mock()
+    mock_connect = mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_table",
+        return_value=mock_table_client,
+    )
+    mock_table_client.get_entity.return_value = make_entity()
+
+    # act
+    result = load_metadata_from_ats(
+        dataset="RXX",
+        guid="GUID123",
+        storage_endpoint="https://example.table.core.windows.net",
+        table_name="demotable",
+    )
+
+    # assert
+    mock_connect.assert_called_once_with(
+        "https://example.table.core.windows.net", "demotable"
+    )
+    mock_table_client.get_entity.assert_called_once_with(
+        partition_key="RXX",
+        row_key="GUID123",
+    )
+    assert "do_not_include" not in result
+    assert len(result) == 9
+    assert result["guid"] == "GUID123"
+    assert result["create_datetime"] == "2026-09-25T13:31:16.442097+00:00"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"app_version": "dev"}, "unsupported app_version 'dev'"),
+        ({"app_version": "v5.2"}, "unsupported app_version 'v5.2'"),
+        ({"aggregated_results_path": ""}, "missing values for aggregated_results_path"),
+        ({"PartitionKey": "RYY"}, "dataset does not match the table partition"),
+    ],
+)
+def test_load_metadata_from_ats_unusable_run(mocker, overrides, message):
+    mock_table_client = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_table",
+        return_value=mock_table_client,
+    )
+    mock_table_client.get_entity.return_value = make_entity(**overrides)
+
+    with pytest.raises(ValueError, match=message):
+        load_metadata_from_ats("RXX", "GUID123", "endpoint", "demotable")
+
+
+def test_load_metadata_from_ats_not_found(mocker):
+    mock_table_client = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_table",
+        return_value=mock_table_client,
+    )
+    mock_table_client.get_entity.side_effect = ResourceNotFoundError
+
+    with pytest.raises(ResourceNotFoundError):
+        load_metadata_from_ats(
+            dataset="RXX",
+            guid="missing-guid",
+            storage_endpoint="https://example.table.core.windows.net",
+            table_name="demotable",
+        )
+
+
+def test_load_functional_aggregations_from_ats(mocker, caplog):
+    caplog.set_level(logging.INFO)
+    table_client = mocker.Mock()
+    mock_connect = mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_table",
+        return_value=table_client,
+    )
+    table_client.query_entities.return_value = iter(
+        [
+            make_entity(RowKey="guid-1"),
+            make_entity(RowKey="guid-2", scenario="Another scenario"),
+            make_entity(RowKey="guid-old", app_version="v5.2"),
+            make_entity(RowKey="guid-dev", app_version="dev"),
+            make_entity(RowKey="guid-blank", scenario=""),
+        ]
+    )
+
+    result = load_functional_aggregations_from_ats(
+        "RXX",
+        "https://example.table.core.windows.net",
+        "catalogue",
+    )
+
+    mock_connect.assert_called_once_with(
+        "https://example.table.core.windows.net", "catalogue"
+    )
+    table_client.query_entities.assert_called_once_with(
+        query_filter="PartitionKey eq @dataset",
+        parameters={"dataset": "RXX"},
+        select=["PartitionKey", "RowKey", *CATALOGUE_FIELDS],
+    )
+    assert [run["guid"] for run in result] == ["guid-1", "guid-2"]
+    assert result[1]["scenario"] == "Another scenario"
+    assert "Ignored 3 model runs in dataset RXX" in caplog.text
+
+
+def test_load_functional_aggregations_from_ats_nothing_ignored(mocker, caplog):
+    caplog.set_level(logging.INFO)
+    table_client = mocker.Mock()
+    mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_table",
+        return_value=table_client,
+    )
+    table_client.query_entities.return_value = iter([make_entity()])
+
+    result = load_functional_aggregations_from_ats("RXX", "endpoint", "catalogue")
+
+    assert len(result) == 1
+    assert "Ignored" not in caplog.text
+
+
+def test_load_datasets_from_ats(mocker):
+    table_client = mocker.Mock()
+    mock_connect = mocker.patch(
+        "nhp.capacity_conversion.utils.connect_to_table",
+        return_value=table_client,
+    )
+    table_client.list_entities.return_value = iter(
+        [
+            {"PartitionKey": "RYY", "app_version": "v6.0"},
+            {"PartitionKey": "RXX", "app_version": "v6.1"},
+            {"PartitionKey": "RXX", "app_version": "v6.0"},  # duplicate dataset
+            {"PartitionKey": "RZZ", "app_version": "v5.2"},  # too old
+            {"PartitionKey": "RWW", "app_version": "dev"},  # dev run
+            {"PartitionKey": "RVV"},  # no app_version
+        ]
+    )
+
+    result = load_datasets_from_ats(
+        "https://example.table.core.windows.net", "catalogue"
+    )
+
+    mock_connect.assert_called_once_with(
+        "https://example.table.core.windows.net", "catalogue"
+    )
+    table_client.list_entities.assert_called_once_with(
+        select=["PartitionKey", "app_version"]
+    )
+    assert result == ["RXX", "RYY"]
+
+
+@pytest.mark.parametrize("path", ["aggregated/results", "aggregated/results/"])
+def test_create_aggregations_path(path):
+    result = create_aggregations_path({"aggregated_results_path": path})
+
+    assert result == "aggregated/results/functional_areas.parquet"
+
+
+def test_add_run_details(mocker):
+    mock_now = mocker.Mock()
+    mock_now.strftime.return_value = "20250101_120000"
+    mock_datetime = mocker.patch("nhp.capacity_conversion.utils.datetime.datetime")
+    mock_datetime.now.return_value = mock_now
+    metadata = {"dataset": "RXX", "guid": "GUID123"}
+
+    result = add_run_details(metadata, "dev", ip_sites="ALL", op_sites="A,B")
+
+    assert result == {
+        "dataset": "RXX",
+        "guid": "GUID123",
+        "capacity_conversion_runtime": "20250101_120000",
+        "capacity_model_version": "dev",
+        "ip_sites": "ALL",
+        "op_sites": "A,B",
+    }
+    mock_datetime.now.assert_called_once_with(tz=datetime.UTC)
+    mock_now.strftime.assert_called_once_with("%Y%m%d_%H%M%S")
+    assert metadata == {"dataset": "RXX", "guid": "GUID123"}  # input not modified
 
 
 def test_validate_required_env_vars_success(mocker):
@@ -528,8 +743,7 @@ def test_run_single_activity_type(mocker):
     )
 
     metadata = {
-        "PartitionKey": "pk",
-        "RowKey": "rk",
+        "guid": "test-guid",
         "foo": "bar",
         "aggregated_results_path": "aggregated_results_path",
     }
@@ -600,6 +814,11 @@ def test_run_single_activity_type(mocker):
     data_to_save = kwargs["data_to_save"]
     assert "metadata" in data_to_save
     assert "capacity_conversion_runtime" in data_to_save["metadata"].index
+    assert data_to_save["metadata"]["sites"] == "sites"
+    assert (
+        data_to_save["metadata"]["capacity_model_version"] == "capacity-model-version"
+    )
+    assert data_to_save["metadata"]["foo"] == "bar"
 
     save_results.assert_called_once_with(data_to_save)
 
