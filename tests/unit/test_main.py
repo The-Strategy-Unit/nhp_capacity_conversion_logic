@@ -9,10 +9,6 @@ def test_main(mocker):
     # arrange
     main_path = "nhp.capacity_conversion.__main__"
 
-    mock_now = mocker.Mock()
-    mock_now.strftime.return_value = "20250101_120000"
-    mocker.patch(f"{main_path}.datetime.datetime").now.return_value = mock_now
-
     mock_parser = mocker.Mock()
     mock_args = mocker.Mock()
     mock_args.dataset = "dataset"
@@ -43,6 +39,8 @@ def test_main(mocker):
         f"{main_path}.load_metadata_from_ats",
         return_value=metadata_dict,
     )
+    run_metadata = {**metadata_dict, "capacity_conversion_runtime": "20250101_120000"}
+    mocker.patch(f"{main_path}.add_run_details", return_value=run_metadata)
 
     mock_assumptions = pd.DataFrame()
     mocker.patch(f"{main_path}.load_assumptions", return_value=mock_assumptions)
@@ -71,6 +69,13 @@ def test_main(mocker):
     main_mod = __import__(main_path, fromlist=["dummy"])
     main_mod.load_metadata_from_ats.assert_called_once_with(
         "dataset", "GUID123", "AZ_TABLE_ENDPOINT", "TABLE_NAME"
+    )
+    main_mod.add_run_details.assert_called_once_with(
+        metadata_dict,
+        "CAPACITY_MODEL_VERSION",
+        ip_sites="ip_sites",
+        op_sites="op_sites",
+        aae_sites="aae_sites",
     )
     main_mod.load_assumptions.assert_called_once_with("assumptions.csv")
 
@@ -116,3 +121,6 @@ def test_main(mocker):
         any_order=False,
     )
     mock_save.assert_called_once()
+    saved = mock_save.call_args.args[0]
+    assert saved["metadata"].to_dict() == run_metadata
+    assert saved["assumptions"] is mock_assumptions
