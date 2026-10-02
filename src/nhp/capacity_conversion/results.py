@@ -66,9 +66,6 @@ def tidy_metadata(
         keep = [
             "dataset",
             "capacity_model_version",
-            "ip_sites",
-            "op_sites",
-            "aae_sites",
             "capacity_conversion_runtime",
             *rename,
         ]
@@ -156,6 +153,7 @@ def create_and_format_baseline_df(dfs: list[pd.DataFrame]) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Formatted dataframe of baseline_year_activity_counts
     """
+    dfs = [df.reorder_levels(["measure", "sitetret", "functional_area"]) for df in dfs]
     df = pd.concat(dfs)
     df.index = df.index.set_names(
         [
@@ -175,22 +173,8 @@ def create_and_format_predicted_vols_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
     Returns:
         pd.DataFrame: Formatted dataframe of predicted_activity_volumes
     """
-
-    def add_measure_index(df: pd.DataFrame) -> pd.DataFrame:
-        if "measure" not in df.index.names:
-            df = df.copy()
-            index_names = [str(name) for name in df.index.names if name != "model_run"]
-            df["measure"] = [
-                label.split("_")[-1]
-                for label in df.index.get_level_values(index_names[0])
-            ]
-            df = df.set_index("measure", append=True)
-
-            # Ensure consistent ordering
-            df.index = df.index.reorder_levels(index_names + ["measure"])  # ty: ignore
-        return df
-
-    dfs = [add_measure_index(df) for df in dfs]
+    # align index order
+    dfs = [df.reorder_levels(["measure", "sitetret", "functional_area"]) for df in dfs]
     df = pd.concat(dfs)
     return df
 
@@ -204,8 +188,11 @@ def create_and_format_capacity_needs_df(dfs: list[pd.DataFrame]) -> pd.DataFrame
     Returns:
         pd.DataFrame: Formatted dataframe of estimated_capacity_needs
     """
+    dfs = [df.reorder_levels(["sitetret", "output"]) for df in dfs]
     df = pd.concat(dfs)
-    df.index.name = "resource"
+    df.index = df.index.set_names(
+        ["resource" if name == "output" else name for name in df.index.names]
+    )
     return df
 
 

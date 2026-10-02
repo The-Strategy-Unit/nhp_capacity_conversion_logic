@@ -99,7 +99,7 @@ def calculate_procedure_time(
         treatment_hours["measure"] = "total_time_hours"
         treatment_hours = treatment_hours.set_index(
             ["functional_area", "measure"], append=True
-        ).reorder_levels(["model_run", "measure", "functional_area"])
+        ).reorder_levels(["model_run", "measure", "functional_area", "sitetret"])
         functional_areas = pd.concat([functional_areas, treatment_hours])
     return functional_areas
 

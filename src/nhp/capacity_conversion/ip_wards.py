@@ -178,7 +178,7 @@ def derive_ward_beddays(
             key=(grouping + "_zerolos", "count"), level=["functional_area", "measure"]
         )["value"],
         zero_day_los,
-    )
+    ).fillna(0)
 
     critical_care_percentage = cast(
         float,
@@ -190,7 +190,7 @@ def derive_ward_beddays(
             key=(grouping + "_nonzerolos", "duration_days"),
             level=["functional_area", "measure"],
         )["value"]
-    )
+    ).fillna(0)
     # Assessment beddays are always 0 for elective activity
     assessment_beddays = pd.Series(0, index=critical_care_beddays.index.copy())
     if admission_type == "nonelective":
@@ -213,7 +213,7 @@ def derive_ward_beddays(
         )
         assessment_beddays = derive_beddays_from_spells(
             assessment_spells, assessment_los
-        )
+        ).fillna(0)
     ward_beddays = (
         functional_areas.xs(
             key=(grouping + "_nonzerolos", "duration_days"),
@@ -248,7 +248,7 @@ def group_ip_wards_beddays(ip_wards_bedday_pools: pd.DataFrame) -> pd.DataFrame:
                 ),
                 column,
             ]
-            .groupby(level="model_run")
+            .groupby(level=["model_run", "sitetret"])
             .sum(numeric_only=True)
             .rename(new_group)
             for new_group, (groups, column) in WARD_GROUP_DEFINITIONS.items()
@@ -256,10 +256,10 @@ def group_ip_wards_beddays(ip_wards_bedday_pools: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     grouped = pd.Series(grouped.stack()).rename("value").to_frame()
-    grouped.index.names = ["model_run", "functional_area"]
+    grouped.index.names = ["model_run", "sitetret", "functional_area"]
     grouped["measure"] = "calculated_beddays"
     grouped = grouped.set_index("measure", append=True).reorder_levels(
-        ["model_run", "measure", "functional_area"]
+        ["model_run", "measure", "functional_area", "sitetret"]
     )
     return grouped
 

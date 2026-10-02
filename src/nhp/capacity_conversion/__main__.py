@@ -59,21 +59,6 @@ def main():
         help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
         default=ASSUMPTIONS_URL,
     )
-    parser.add_argument(
-        "--ip_sites",
-        help="IP sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
-        default="ALL",
-    )
-    parser.add_argument(
-        "--op_sites",
-        help="OP sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
-        default="ALL",
-    )
-    parser.add_argument(
-        "--aae_sites",
-        help="AAE sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
-        default="ALL",
-    )
     args = parser.parse_args()
 
     config = validate_required_env_vars()
@@ -85,13 +70,7 @@ def main():
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
     )
-    run_metadata = add_run_details(
-        metadata,
-        config["CAPACITY_MODEL_VERSION"],
-        ip_sites=args.ip_sites,
-        op_sites=args.op_sites,
-        aae_sites=args.aae_sites,
-    )
+    run_metadata = add_run_details(metadata, config["CAPACITY_MODEL_VERSION"])
     data_to_save["metadata"] = pd.Series(run_metadata)
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
@@ -103,19 +82,17 @@ def main():
         create_aggregations_path(metadata),
     )
 
-    op_aggregations = filter_aggregations(aggregations, args.op_sites, "op")
+    op_aggregations = filter_aggregations(aggregations, "op")
     process_activity_type(
         "op", op_aggregations, calculate_op_capacity, assumptions, data_to_save
     )
 
-    aae_aggregations = filter_aggregations(aggregations, args.aae_sites, "aae")
+    aae_aggregations = filter_aggregations(aggregations, "aae")
     process_activity_type(
         "aae", aae_aggregations, calculate_aae_capacity, assumptions, data_to_save
     )
 
-    ip_daycase_aggregations = filter_aggregations(
-        aggregations, args.ip_sites, "ip_daycase"
-    )
+    ip_daycase_aggregations = filter_aggregations(aggregations, "ip_daycase")
     process_activity_type(
         "ip_daycase",
         ip_daycase_aggregations,
@@ -123,9 +100,7 @@ def main():
         assumptions,
         data_to_save,
     )
-    ip_maternity_aggregations = filter_aggregations(
-        aggregations, args.ip_sites, "ip_maternity"
-    )
+    ip_maternity_aggregations = filter_aggregations(aggregations, "ip_maternity")
     process_activity_type(
         "ip_maternity",
         ip_maternity_aggregations,
@@ -134,7 +109,7 @@ def main():
         data_to_save,
         preprocess=preprocess_ip_maternity_data,
     )
-    ip_wards_aggregations = filter_aggregations(aggregations, args.ip_sites, "ip_wards")
+    ip_wards_aggregations = filter_aggregations(aggregations, "ip_wards")
     process_activity_type(
         "ip_wards",
         ip_wards_aggregations,
@@ -145,7 +120,7 @@ def main():
     )
 
     ip_theatres_aggregations = filter_aggregations(
-        aggregations, args.ip_sites, "ip_procedures_and_theatres"
+        aggregations, "ip_procedures_and_theatres"
     )
     process_activity_type(
         "ip_procedures_and_theatres",

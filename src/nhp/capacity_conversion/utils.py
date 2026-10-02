@@ -84,9 +84,7 @@ def get_baseline_activity(aggregations: pd.DataFrame) -> pd.DataFrame:
     """
     value_columns = aggregations.select_dtypes("number").columns.tolist()
     groupby_col = [
-        name
-        for name in aggregations.index.names
-        if name not in ["model_run", "sitetret"]
+        name for name in aggregations.index.names if name not in ["model_run"]
     ]
     baseline = (
         aggregations.loc[aggregations.index.get_level_values("model_run") == 0, :]
@@ -438,11 +436,6 @@ def run_single_activity_type(
         help=f"Path to assumptions file (default: '{ASSUMPTIONS_URL}')",
         default=ASSUMPTIONS_URL,
     )
-    parser.add_argument(
-        "--sites",
-        help="Sites to filter to (default: ALL). Sites should be supplied in the format SITE_A,SITE_B,SITE_C",
-        default="ALL",
-    )
     args = parser.parse_args()
 
     config = validate_required_env_vars()
@@ -454,9 +447,7 @@ def run_single_activity_type(
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
     )
-    run_metadata = add_run_details(
-        metadata, config["CAPACITY_MODEL_VERSION"], sites=args.sites
-    )
+    run_metadata = add_run_details(metadata, config["CAPACITY_MODEL_VERSION"])
     data_to_save["metadata"] = pd.Series(run_metadata)
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
@@ -466,7 +457,7 @@ def run_single_activity_type(
         config["AZ_STORAGE_RESULTS"],
         create_aggregations_path(metadata),
     )
-    aggregations = filter_aggregations(aggregations, args.sites, activity_type)
+    aggregations = filter_aggregations(aggregations, activity_type)
 
     process_activity_type(
         name=activity_type,
@@ -482,37 +473,15 @@ def run_single_activity_type(
     return 0
 
 
-def validate_sites(aggregations: pd.DataFrame, sites: list[str]) -> None:
-    """Validates that all supplied sites exist in the aggregations sitetret column
+def filter_aggregations(aggregations: pd.DataFrame, subset: str) -> pd.DataFrame:
+    """Filters aggregations to functional areas required for specific subset
 
     Args:
-        aggregations (pd.DataFrame): Aggregations by functional area, with sitetret column
-        sites (list[str]): List of sites to validate
-
-    Raises:
-        ValueError: If any of the supplied sites are not present in the sitetret column
-    """
-    valid_sites = set(aggregations["sitetret"])
-    invalid_sites = [site for site in sites if site not in valid_sites]
-
-    if invalid_sites:
-        raise ValueError(
-            f"The following sites are not valid: {', '.join(invalid_sites)}"
-        )
-
-
-def filter_aggregations(
-    aggregations: pd.DataFrame, sites: str, subset: str
-) -> pd.DataFrame:
-    """Filters aggregations by selected sites
-
-    Args:
-        aggregations (pd.DataFrame): Aggregations by functional area, with sitetret column
-        sites (str): Sites to filter to.
+        aggregations (pd.DataFrame): Aggregations by functional area
         subset (str): Aggregation subset to filter to.
 
     Returns:
-        pd.DataFrame: Filtered aggregations, with sitetret column removed
+        pd.DataFrame: Filtered aggregations, with index names model_run, sitetret, functional_area, measure
     """
     logger.info(f"Filtering to {subset}")
     functional_areas = AGGREGATION_SUBSETS[subset]
@@ -523,16 +492,8 @@ def filter_aggregations(
             f"Functional areas not found in aggregations: {sorted(missing_functional_areas)}"
         )
     aggregations = aggregations[aggregations["functional_area"].isin(functional_areas)]
-    logger.info(f"Filtering by sites: {sites}")
-    if sites != "ALL":
-        sites_split = sites.upper().split(",")
-        validate_sites(aggregations, sites_split)
-        aggregations = aggregations[aggregations["sitetret"].isin(sites_split)]
-    # collapse all remaining sites
     groupby_cols = [
-        col
-        for col in aggregations.select_dtypes(exclude=["number"]).columns.tolist()
-        if col != "sitetret"
+        col for col in aggregations.select_dtypes(exclude=["number"]).columns.tolist()
     ]
     aggregations = aggregations.groupby(["model_run"] + groupby_cols).sum(
         numeric_only=True

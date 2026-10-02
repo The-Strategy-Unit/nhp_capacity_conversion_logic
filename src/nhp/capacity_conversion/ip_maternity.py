@@ -106,7 +106,13 @@ def derive_total_maternity_ward_beddays(
     Returns:
         pd.Series: Calculated total maternity ward beddays
     """
-    birth_related_ward_beddays = pd.Series(dtype=float64)
+
+    multi_index = pd.MultiIndex(
+        levels=[[], [], []],
+        codes=[[], [], []],
+        names=["model_run", "measure", "sitetret"],
+    )
+    birth_related_ward_beddays = pd.Series(index=multi_index, dtype=float64)
     for functional_area in [
         "maternity_normal_delivery",
         "maternity_assisted_delivery",
@@ -132,7 +138,7 @@ def derive_total_maternity_ward_beddays(
         )["value"]
     else:
         no_birth_ward_beddays = 0
-    return birth_related_ward_beddays + no_birth_ward_beddays
+    return (birth_related_ward_beddays + no_birth_ward_beddays).droplevel("measure")
 
 
 def calculate_maternity_ward_beds(
@@ -166,7 +172,7 @@ def calculate_maternity_ward_beds(
         total_ward_beddays, maternity_ward_operational_days, maternity_ward_occupancy
     ).to_frame(name="value")
     maternity_ward_beds.loc[:, "output"] = "MATERNITY_WARD_BEDS"
-    results = maternity_ward_beds.reset_index().set_index(["output", "model_run"])
+    results = maternity_ward_beds.set_index("output", append=True)
     return results
 
 
@@ -313,7 +319,7 @@ def calculate_maternity_birth_rooms(
         calculate_beds(birthroom_beddays, operational_days, occupancy)
     )
     results.loc[:, "output"] = output
-    results = results.reset_index().set_index(["output", "model_run"])
+    results = results.set_index("output", append=True)
     return results
 
 
@@ -358,7 +364,7 @@ def calculate_theatres_obstetric_proc(
         )
     )
     results.loc[:, "output"] = output
-    results = results.reset_index().set_index(["output", "model_run"])
+    results = results.set_index("output", append=True)
     return results
 
 
@@ -397,7 +403,7 @@ def calculate_maternity_assessment_beds(
         )
     )
     results.loc[:, "output"] = "MATERNITY_ASSESSMENT_BEDS"
-    results = results.reset_index().set_index(["output", "model_run"])
+    results = results.set_index("output", append=True)
     return results
 
 
