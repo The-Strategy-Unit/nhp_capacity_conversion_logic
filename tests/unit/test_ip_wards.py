@@ -39,16 +39,17 @@ def make_functional_areas(grouping: str) -> pd.DataFrame:
     """Create the minimum dataframe needed by derive_ward_beddays."""
     index = pd.MultiIndex.from_tuples(
         [
-            (f"{grouping}_zerolos", 1),
-            (f"{grouping}_nonzerolos", 1),
+            (f"{grouping}_zerolos", 1, "count"),
+            (f"{grouping}_nonzerolos", 1, "count"),
+            (f"{grouping}_zerolos", 1, "duration_days"),
+            (f"{grouping}_nonzerolos", 1, "duration_days"),
         ],
-        names=["grouping", "model_run"],
+        names=["functional_area", "model_run", "measure"],
     )
 
     return pd.DataFrame(
         {
-            "spells": [10, 20],
-            "beddays": [0, 100],
+            "value": [10, 20, 0, 100],
         },
         index=index,
     )
@@ -76,7 +77,7 @@ def test_derive_ward_beddays_elective(
     )
 
     expected_critical_care = pd.Series(
-        [20.0], index=pd.Index([1], name="model_run"), name="beddays"
+        [20.0], index=pd.Index([1], name="model_run"), name="value"
     )
     expected_assessment = pd.Series([0], index=pd.Index([1], name="model_run"))
     expected_ward = pd.Series([85.0], index=pd.Index([1], name="model_run"))
@@ -101,7 +102,7 @@ def test_derive_ward_beddays_elective(
 
     assert_series_equal(
         spells_arg,
-        pd.Series([10], index=pd.Index([1], name="model_run"), name="spells"),
+        pd.Series([10], index=pd.Index([1], name="model_run"), name="value"),
     )
     assert los_arg == 0.5
 
@@ -139,7 +140,7 @@ def test_derive_ward_beddays_nonelective(
     # ward = 100 + 5 - 10 - 20 = 75
     expected_ward = pd.Series([75.0], pd.Index([1], name="model_run"))
     expected_critical_care = pd.Series(
-        [20.0], pd.Index([1], name="model_run"), name="beddays"
+        [20.0], pd.Index([1], name="model_run"), name="value"
     )
     expected_assessment = pd.Series([10.0], pd.Index([1], name="model_run"))
 
@@ -163,7 +164,7 @@ def test_derive_ward_beddays_nonelective(
 
     assert_series_equal(
         zero_day_spells,
-        pd.Series([10], pd.Index([1], name="model_run"), name="spells"),
+        pd.Series([10], pd.Index([1], name="model_run"), name="value"),
     )
     assert zero_day_los == 0.5
 
@@ -172,7 +173,7 @@ def test_derive_ward_beddays_nonelective(
 
     assert_series_equal(
         assessment_spells,
-        pd.Series([30], pd.Index([1], name="model_run"), name="spells"),
+        pd.Series([30], pd.Index([1], name="model_run"), name="value"),
     )
     assert assessment_los == 1.0
 
@@ -198,7 +199,7 @@ def test_group_ip_wards_beddays():
             ("paediatric_nonelective_surgical", 2),
             ("paediatric_elective_surgical", 2),
         ],
-        names=["grouping", "model_run"],
+        names=["functional_area", "model_run"],
     )
 
     df = pd.DataFrame(
@@ -268,7 +269,7 @@ def test_group_ip_wards_beddays():
 
     expected = pd.DataFrame(
         {
-            "total": [
+            "value": [
                 104,
                 100,
                 600,
@@ -287,22 +288,22 @@ def test_group_ip_wards_beddays():
         },
         index=pd.MultiIndex.from_tuples(
             [
-                (1, "adult_assessment_beddays"),
-                (1, "adult_critical_care_beddays"),
-                (1, "adult_elective_wards_beddays"),
-                (1, "adult_nonelective_wards_beddays"),
-                (1, "paediatric_assessment_beddays"),
-                (1, "paediatric_critical_care_beddays"),
-                (1, "paediatric_wards_beddays"),
-                (2, "adult_assessment_beddays"),
-                (2, "adult_critical_care_beddays"),
-                (2, "adult_elective_wards_beddays"),
-                (2, "adult_nonelective_wards_beddays"),
-                (2, "paediatric_assessment_beddays"),
-                (2, "paediatric_critical_care_beddays"),
-                (2, "paediatric_wards_beddays"),
+                (1, "calculated_beddays", "adult_assessment_beddays"),
+                (1, "calculated_beddays", "adult_critical_care_beddays"),
+                (1, "calculated_beddays", "adult_elective_wards_beddays"),
+                (1, "calculated_beddays", "adult_nonelective_wards_beddays"),
+                (1, "calculated_beddays", "paediatric_assessment_beddays"),
+                (1, "calculated_beddays", "paediatric_critical_care_beddays"),
+                (1, "calculated_beddays", "paediatric_wards_beddays"),
+                (2, "calculated_beddays", "adult_assessment_beddays"),
+                (2, "calculated_beddays", "adult_critical_care_beddays"),
+                (2, "calculated_beddays", "adult_elective_wards_beddays"),
+                (2, "calculated_beddays", "adult_nonelective_wards_beddays"),
+                (2, "calculated_beddays", "paediatric_assessment_beddays"),
+                (2, "calculated_beddays", "paediatric_critical_care_beddays"),
+                (2, "calculated_beddays", "paediatric_wards_beddays"),
             ],
-            names=["model_run", "grouping"],
+            names=["model_run", "measure", "functional_area"],
         ),
     )
     assert_frame_equal(result, expected)
@@ -330,10 +331,10 @@ def test_preprocess_ip_wards_data(mocker):
     )
 
     expected_result = pd.DataFrame(
-        {"total": [321.0]},
+        {"value": [321.0]},
         index=pd.MultiIndex.from_tuples(
-            [(1, "grouping")],
-            names=["model_run", "grouping"],
+            [(1, "calculated_beddays", "functional_area")],
+            names=["model_run", "measure", "functional_area"],
         ),
     )
 
@@ -370,8 +371,8 @@ def test_preprocess_ip_wards_data(mocker):
     expected_input = pd.concat(
         [
             pd.DataFrame(derived_beddays)
-            .assign(grouping=grouping)
-            .set_index("grouping", append=True)
+            .assign(functional_area=grouping)
+            .set_index("functional_area", append=True)
             for grouping in WARD_WORKLOAD_ASSUMPTIONS_DICT
         ]
     )
@@ -385,26 +386,26 @@ def test_preprocess_ip_wards_data(mocker):
 def test_calculate_ip_wards_capacity(mocker):
     functional_areas_processed = pd.DataFrame(
         {
-            "total": [1] * 14,
+            "value": [1] * 14,
         },
         index=pd.MultiIndex.from_tuples(
             [
-                ("adult_assessment_beddays", 1),
-                ("adult_assessment_beddays", 2),
-                ("adult_critical_care_beddays", 1),
-                ("adult_critical_care_beddays", 2),
-                ("adult_elective_wards_beddays", 1),
-                ("adult_elective_wards_beddays", 2),
-                ("adult_nonelective_wards_beddays", 1),
-                ("adult_nonelective_wards_beddays", 2),
-                ("paediatric_assessment_beddays", 1),
-                ("paediatric_assessment_beddays", 2),
-                ("paediatric_critical_care_beddays", 1),
-                ("paediatric_critical_care_beddays", 2),
-                ("paediatric_wards_beddays", 1),
-                ("paediatric_wards_beddays", 2),
+                ("adult_assessment_beddays", "calculated_beddays", 1),
+                ("adult_assessment_beddays", "calculated_beddays", 2),
+                ("adult_critical_care_beddays", "calculated_beddays", 1),
+                ("adult_critical_care_beddays", "calculated_beddays", 2),
+                ("adult_elective_wards_beddays", "calculated_beddays", 1),
+                ("adult_elective_wards_beddays", "calculated_beddays", 2),
+                ("adult_nonelective_wards_beddays", "calculated_beddays", 1),
+                ("adult_nonelective_wards_beddays", "calculated_beddays", 2),
+                ("paediatric_assessment_beddays", "calculated_beddays", 1),
+                ("paediatric_assessment_beddays", "calculated_beddays", 2),
+                ("paediatric_critical_care_beddays", "calculated_beddays", 1),
+                ("paediatric_critical_care_beddays", "calculated_beddays", 2),
+                ("paediatric_wards_beddays", "calculated_beddays", 1),
+                ("paediatric_wards_beddays", "calculated_beddays", 2),
             ],
-            names=["grouping", "model_run"],
+            names=["functional_area", "measure", "model_run"],
         ),
     )
 
@@ -450,22 +451,22 @@ def test_calculate_ip_wards_capacity(mocker):
         },
         index=pd.MultiIndex.from_tuples(
             [
-                ("ADULT_INPATIENT_ASSESSMENT_BEDS", 1),
-                ("ADULT_INPATIENT_ASSESSMENT_BEDS", 2),
-                ("ADULT_CRITICAL_CARE_BEDS", 1),
-                ("ADULT_CRITICAL_CARE_BEDS", 2),
-                ("ADULT_ELECTIVE_INPATIENT_WARD_BEDS", 1),
-                ("ADULT_ELECTIVE_INPATIENT_WARD_BEDS", 2),
-                ("ADULT_NON_ELECTIVE_INPATIENT_WARD_BEDS", 1),
-                ("ADULT_NON_ELECTIVE_INPATIENT_WARD_BEDS", 2),
-                ("PAEDIATRIC_INPATIENT_ASSESSMENT_BEDS", 1),
-                ("PAEDIATRIC_INPATIENT_ASSESSMENT_BEDS", 2),
-                ("PAEDIATRIC_CRITICAL_CARE_BEDS", 1),
-                ("PAEDIATRIC_CRITICAL_CARE_BEDS", 2),
-                ("PAEDIATRIC_INPATIENT_WARD_BEDS", 1),
-                ("PAEDIATRIC_INPATIENT_WARD_BEDS", 2),
+                (1, "ADULT_INPATIENT_ASSESSMENT_BEDS"),
+                (2, "ADULT_INPATIENT_ASSESSMENT_BEDS"),
+                (1, "ADULT_CRITICAL_CARE_BEDS"),
+                (2, "ADULT_CRITICAL_CARE_BEDS"),
+                (1, "ADULT_ELECTIVE_INPATIENT_WARD_BEDS"),
+                (2, "ADULT_ELECTIVE_INPATIENT_WARD_BEDS"),
+                (1, "ADULT_NON_ELECTIVE_INPATIENT_WARD_BEDS"),
+                (2, "ADULT_NON_ELECTIVE_INPATIENT_WARD_BEDS"),
+                (1, "PAEDIATRIC_INPATIENT_ASSESSMENT_BEDS"),
+                (2, "PAEDIATRIC_INPATIENT_ASSESSMENT_BEDS"),
+                (1, "PAEDIATRIC_CRITICAL_CARE_BEDS"),
+                (2, "PAEDIATRIC_CRITICAL_CARE_BEDS"),
+                (1, "PAEDIATRIC_INPATIENT_WARD_BEDS"),
+                (2, "PAEDIATRIC_INPATIENT_WARD_BEDS"),
             ],
-            names=["output", "model_run"],
+            names=["model_run", "output"],
         ),
     )
 

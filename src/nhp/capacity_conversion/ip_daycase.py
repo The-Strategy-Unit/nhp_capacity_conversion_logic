@@ -67,7 +67,8 @@ def calculate_daycase_frm_time_util(
         )
     )
     results.loc[:, "output"] = output
-    results = results.reset_index().set_index(["output", "model_run"])
+    results = results.set_index("output", append=True)
+    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -109,7 +110,8 @@ def calculate_daycase_frm_recovery_occupancy(
         )
     )
     results.loc[:, "output"] = output
-    results = results.reset_index().set_index(["output", "model_run"])
+    results = results.set_index("output", append=True)
+    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -142,12 +144,13 @@ def calculate_daycase_frm_session_capacity(
         )
     )
     results.loc[:, "output"] = output
-    results = results.reset_index().set_index(["output", "model_run"])
+    results = results.set_index("output", append=True)
+    results.index = results.index.droplevel("measure")
     return results
 
 
 DAYCASE_CONFIG = {
-    "daycase_haem_onc_spells": [
+    "daycase_haem_onc": [
         DaycaseConfig(
             formula=calculate_daycase_frm_time_util,
             assumptions={
@@ -158,7 +161,7 @@ DAYCASE_CONFIG = {
             },
         )
     ],
-    "daycase_endoscopy_spells": [
+    "daycase_endoscopy": [
         DaycaseConfig(
             formula=calculate_daycase_frm_time_util,
             assumptions={
@@ -178,7 +181,7 @@ DAYCASE_CONFIG = {
             },
         ),
     ],
-    "daycase_renal_spells": [
+    "daycase_renal": [
         DaycaseConfig(
             formula=calculate_daycase_frm_session_capacity,
             assumptions={
@@ -187,7 +190,7 @@ DAYCASE_CONFIG = {
             },
         )
     ],
-    "daycase_adult_medical_spells": [
+    "adult_daycase_medical": [
         DaycaseConfig(
             formula=calculate_daycase_frm_recovery_occupancy,
             assumptions={
@@ -198,7 +201,7 @@ DAYCASE_CONFIG = {
             },
         )
     ],
-    "daycase_adult_surgical_spells": [
+    "adult_daycase_surgical": [
         DaycaseConfig(
             formula=calculate_daycase_frm_recovery_occupancy,
             assumptions={
@@ -209,7 +212,7 @@ DAYCASE_CONFIG = {
             },
         )
     ],
-    "daycase_child_medical_spells": [
+    "paediatric_daycase_medical": [
         DaycaseConfig(
             formula=calculate_daycase_frm_recovery_occupancy,
             assumptions={
@@ -220,7 +223,7 @@ DAYCASE_CONFIG = {
             },
         )
     ],
-    "daycase_child_surgical_spells": [
+    "paediatric_daycase_surgical": [
         DaycaseConfig(
             formula=calculate_daycase_frm_recovery_occupancy,
             assumptions={
@@ -251,18 +254,19 @@ def calculate_daycase_capacity(
     logger.info("Calculating IP daycase capacity")
     results_list = []
     for subgroup, calculations in config.items():
-        functional_area_subgroup = functional_areas.xs(key=subgroup, level="grouping")[
-            "total"
-        ]
-        for calculation in calculations:
-            results_list.append(
-                calculation.formula(
-                    subgroup=subgroup,
-                    assumptions=calculation.assumptions,
-                    functional_area_subgroup=functional_area_subgroup,
-                    assumptions_df=assumptions_df,
+        if subgroup in functional_areas.index.get_level_values("functional_area"):
+            functional_area_subgroup = functional_areas.xs(
+                key=subgroup, level="functional_area"
+            )["value"]
+            for calculation in calculations:
+                results_list.append(
+                    calculation.formula(
+                        subgroup=subgroup,
+                        assumptions=calculation.assumptions,
+                        functional_area_subgroup=functional_area_subgroup,
+                        assumptions_df=assumptions_df,
+                    )
                 )
-            )
     return pd.concat(results_list)
 
 

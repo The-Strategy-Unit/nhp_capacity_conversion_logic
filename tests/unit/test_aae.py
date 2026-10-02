@@ -54,10 +54,10 @@ def test_calculate_aae_capacity(mocker, caplog):
     )
 
     functional_areas = pd.DataFrame(
-        {"total": [0]},
+        {"value": [0]},
         index=pd.MultiIndex.from_tuples(
-            [("test_subgroup", 1)],
-            names=["grouping", "model_run"],
+            [(1, "test_subgroup", "measure")],
+            names=["model_run", "functional_area", "measure"],
         ),
     )
     mock_workload = mocker.patch(
@@ -65,8 +65,11 @@ def test_calculate_aae_capacity(mocker, caplog):
         return_value="workload",
     )
     returned_capacity = pd.DataFrame(
-        {"total": [0]},
-        index=pd.Index([1], name="model_run"),
+        {"value": [0]},
+        index=pd.MultiIndex.from_tuples(
+            [(1, "measure")],
+            names=["model_run", "measure"],
+        ),
     )
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.aae.convert_aae_capacity",
@@ -94,7 +97,7 @@ def test_calculate_aae_capacity(mocker, caplog):
     assert args[1] == "LOS"
     assert_series_equal(
         args[0],
-        functional_areas.xs("test_subgroup", level="grouping")["total"],
+        functional_areas.xs("test_subgroup", level="functional_area")["value"],
     )
 
     mock_convert.assert_called_once_with(
@@ -103,10 +106,10 @@ def test_calculate_aae_capacity(mocker, caplog):
 
     # output structure
     expected = pd.DataFrame(
-        {"total": [0]},
+        {"value": [0]},
         index=pd.MultiIndex.from_tuples(
-            [("output_spaces", 1)],
-            names=["output", "model_run"],
+            [(1, "output_spaces")],
+            names=["model_run", "output"],
         ),
     )
 
