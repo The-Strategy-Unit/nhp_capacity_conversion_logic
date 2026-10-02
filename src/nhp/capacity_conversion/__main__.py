@@ -1,5 +1,4 @@
 import argparse
-import datetime
 import sys
 from logging import INFO
 
@@ -23,7 +22,9 @@ from nhp.capacity_conversion.ip_wards import (
 from nhp.capacity_conversion.op import calculate_op_capacity
 from nhp.capacity_conversion.results import process_and_save_results_to_excel
 from nhp.capacity_conversion.utils import (
+    add_run_details,
     configure_logging,
+    create_aggregations_path,
     filter_aggregations,
     load_aggregations,
     load_assumptions,
@@ -41,9 +42,6 @@ def main():
         int: Exit code (0 for success, 2 for errors)
     """
     configure_logging(INFO)
-    capacity_conversion_runtime = datetime.datetime.now(tz=datetime.UTC).strftime(
-        "%Y%m%d_%H%M%S"
-    )
 
     parser = argparse.ArgumentParser(
         description="Generate capacity outputs for all available activity types"
@@ -87,21 +85,22 @@ def main():
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
     )
-    metadata["ip_sites"] = args.ip_sites
-    metadata["op_sites"] = args.op_sites
-    metadata["aae_sites"] = args.aae_sites
-    metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
-    metadata["capacity_model_version"] = config["CAPACITY_MODEL_VERSION"]
-    data_to_save["metadata"] = pd.Series(metadata)
+    run_metadata = add_run_details(
+        metadata,
+        config["CAPACITY_MODEL_VERSION"],
+        ip_sites=args.ip_sites,
+        op_sites=args.op_sites,
+        aae_sites=args.aae_sites,
+    )
+    data_to_save["metadata"] = pd.Series(run_metadata)
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
 
-    aggregations_path = (
-        metadata["aggregated_results_path"] + "/functional_areas.parquet"
-    )
     aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path
+        config["AZ_STORAGE_EP"],
+        config["AZ_STORAGE_RESULTS"],
+        create_aggregations_path(metadata),
     )
 
     op_aggregations = filter_aggregations(aggregations, args.op_sites, "op")
