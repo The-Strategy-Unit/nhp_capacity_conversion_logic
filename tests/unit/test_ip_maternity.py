@@ -553,6 +553,59 @@ def test_calculate_maternity_capacity(mocker):
     assert_frame_equal(actual, expected)
 
 
+def test_calculate_maternity_capacity_skips_missing_subgroup(mocker):
+    def mock_formula(
+        assumptions,
+        functional_area_subgroup,
+        assumptions_df,
+    ):
+        return pd.DataFrame(
+            {"output": ["output"], "model_run": [1], "value": [1]}
+        ).set_index(["model_run", "output"])
+
+    fake_config = {
+        "output": MaternityConfig(
+            subgroup="subgroup",
+            measure="count",
+            formula=mock_formula,
+            assumptions={"assumption": "assumption"},
+        )
+    }
+
+    functional_areas = pd.DataFrame(
+        {
+            "model_run": [1],
+            "functional_area": ["different_subgroup"],
+            "measure": ["count"],
+            "value": [1],
+        }
+    ).set_index(["model_run", "functional_area", "measure"])
+
+    assumptions_df = pd.DataFrame({"Value": {"some": 10}})
+    mock_calculate_ward_beds = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.calculate_maternity_ward_beds",
+        return_value=pd.DataFrame(
+            {"output": ["ward_beds"], "model_run": [1], "value": [1]}
+        ).set_index(["model_run", "output"]),
+    )
+
+    actual = calculate_maternity_capacity(
+        functional_areas,
+        assumptions_df,
+        config=fake_config,
+    )
+
+    mock_calculate_ward_beds.assert_called_once_with(
+        functional_areas, assumptions_df, maternity_ward_assumptions_dict
+    )
+
+    expected = pd.DataFrame(
+        {"output": ["ward_beds"], "value": [1], "model_run": [1]}
+    ).set_index(["model_run", "output"])
+
+    assert_frame_equal(actual, expected)
+
+
 def test_main(mocker):
     mock_run_single = mocker.patch(
         "nhp.capacity_conversion.ip_maternity.run_single_activity_type"
