@@ -210,6 +210,50 @@ def test_calculate_daycase_capacity():
     assert_frame_equal(actual, expected)
 
 
+def test_calculate_daycase_capacity_skips_missing_subgroup():
+    def mock_formula(
+        subgroup,
+        assumptions,
+        functional_area_subgroup,
+        assumptions_df,
+    ):
+        return pd.DataFrame({"output": [subgroup]}).set_index("output")
+
+    fake_config = {
+        "subgroup": [
+            DaycaseConfig(
+                formula=mock_formula,
+                assumptions={"assumption": "assumption"},
+            )
+        ],
+        "subgroup_2": [
+            DaycaseConfig(
+                formula=mock_formula,
+                assumptions={"assumption": "assumption"},
+            )
+        ],
+    }
+
+    functional_areas = pd.DataFrame(
+        {
+            "model_run": [1],
+            "functional_area": ["subgroup"],
+            "value": [0],
+        }
+    ).set_index(["model_run", "functional_area"])
+
+    assumptions_df = pd.DataFrame({"Value": {"some": 10}})
+    expected = pd.DataFrame({"output": ["subgroup"]}).set_index("output")
+
+    actual = calculate_daycase_capacity(
+        functional_areas,
+        assumptions_df,
+        config=fake_config,
+    )
+
+    assert_frame_equal(actual, expected)
+
+
 def test_main(mocker):
     mock_run_single = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.run_single_activity_type"

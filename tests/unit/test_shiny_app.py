@@ -1,6 +1,5 @@
 import importlib.util
 import os
-from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import call, patch
@@ -39,16 +38,16 @@ def test_app_registers_favicon():
     assert app.app._static_assets["/"] == Path(app.STATIC_ASSETS_DIR)
 
 
-def _functional_aggregation(**overrides) -> dict:
-    entity = {
-        "PartitionKey": "dev",
-        "RowKey": "guid-123",
+def _model_run(**overrides) -> dict:
+    run = {
+        "guid": "guid-123",
         "dataset": "RXX",
-        "scenario_name": "scenario-a",
-        "scenario_runtime": "20260817_143723",
+        "scenario": "scenario-a",
+        "create_datetime": "2026-08-17T14:37:23.4420972Z",
+        "app_version": "v6.0",
     }
-    entity.update(overrides)
-    return entity
+    run.update(overrides)
+    return run
 
 
 def test_capacity_model_version_is_loaded_from_environment(mocker):
@@ -61,9 +60,6 @@ def test_capacity_model_version_is_loaded_from_environment(mocker):
     configured_app = _load_app_module()
 
     assert configured_app.CAPACITY_MODEL_VERSION == "prod"
-    assert not configured_app._catalogue_frame(
-        [_functional_aggregation(PartitionKey="prod")]
-    ).empty
 
 
 def test_app_requires_capacity_model_version(mocker):
@@ -76,11 +72,14 @@ def test_app_requires_capacity_model_version(mocker):
         _load_app_module()
 
 
-def test_catalogue_frame_validates_and_parses_entities():
-    result = app._catalogue_frame([_functional_aggregation()])
+def test_catalogue_frame_shapes_and_parses_model_runs():
+    result = app._catalogue_frame([_model_run(app_version="v6.1", extra="ignored")])
 
     assert list(result.columns) == list(app.CATALOGUE_COLUMNS)
-    assert result.loc[0, "scenario_runtime"] == pd.Timestamp("2026-08-17T14:37:23Z")
+    assert result.loc[0, "guid"] == "guid-123"
+    assert result.loc[0, "create_datetime"] == pd.Timestamp(
+        "2026-08-17T14:37:23.4420972Z"
+    )
 
 
 def test_catalogue_frame_handles_an_empty_catalogue():
@@ -91,112 +90,22 @@ def test_catalogue_frame_handles_an_empty_catalogue():
 
 
 def test_catalogue_frame_requires_all_columns():
-    entity = _functional_aggregation()
-    del entity["scenario_name"]
+    run = _model_run()
+    del run["scenario"]
+    del run["guid"]
 
     with pytest.raises(
         ValueError,
-        match="Catalogue is missing required columns: scenario_name",
+        match="Catalogue is missing required columns: guid, scenario",
     ):
-        app._catalogue_frame([entity])
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("scenario_name", ""),
-        ("scenario_runtime", "not-a-date"),
-    ],
-)
-def test_catalogue_frame_ignores_invalid_entities(field, value, caplog):
-    result = app._catalogue_frame([_functional_aggregation(**{field: value})])
-
-    assert result.empty
-    assert "Ignored 1 catalogue entities" in caplog.text
-
-
-def test_catalogue_frame_preserves_valid_entities_when_another_is_invalid():
-    invalid = _functional_aggregation(RowKey="invalid-guid")
-    del invalid["scenario_name"]
-
-    result = app._catalogue_frame([_functional_aggregation(), invalid])
-
-    assert result["RowKey"].tolist() == ["guid-123"]
-
-
-def test_catalogue_frame_ignores_an_inconsistent_partition_key():
-    result = app._catalogue_frame([_functional_aggregation(PartitionKey="prod")])
-
-    assert result.empty
-
-
-def _functional_aggregation_catalogue() -> pd.DataFrame:
-    return app._catalogue_frame(
-        [
-            _functional_aggregation(),
-            _functional_aggregation(
-                RowKey="guid-other-dataset",
-                dataset="RYY",
-            ),
-        ]
-    )
-
-
-def test_filter_functional_aggregations_applies_provider_entitlement():
-    result = app._filter_functional_aggregations_for_user(
-        _functional_aggregation_catalogue(),
-        ["nhp_provider_RXX", "unrelated_group"],
-        is_local=False,
-    )
-
-    assert result["RowKey"].tolist() == ["guid-123"]
-
-
-@pytest.mark.parametrize("group", ["nhp_devs", "nhp_power_users"])
-def test_filter_functional_aggregations_allows_privileged_groups(group):
-    result = app._filter_functional_aggregations_for_user(
-        _functional_aggregation_catalogue(),
-        [group],
-        is_local=False,
-    )
-
-    assert result["RowKey"].tolist() == [
-        "guid-123",
-        "guid-other-dataset",
-    ]
-
-
-def test_filter_functional_aggregations_allows_all_runs_locally():
-    result = app._filter_functional_aggregations_for_user(
-        _functional_aggregation_catalogue(),
-        None,
-        is_local=True,
-    )
-
-    assert result["RowKey"].tolist() == [
-        "guid-123",
-        "guid-other-dataset",
-    ]
-
-
-def test_filter_functional_aggregations_fails_closed_without_connect_groups():
-    result = app._filter_functional_aggregations_for_user(
-        _functional_aggregation_catalogue(),
-        None,
-        is_local=False,
-    )
-
-    assert result.empty
+        app._catalogue_frame([run])
 
 
 def test_functional_aggregation_choices_are_newest_first():
     functional_aggregations = app._catalogue_frame(
         [
-            _functional_aggregation(),
-            _functional_aggregation(
-                RowKey="guid-newer",
-                scenario_runtime="20260818_090500",
-            ),
+            _model_run(),
+            _model_run(guid="guid-newer", create_datetime="2026-08-18T09:05:00Z"),
         ]
     )
 
@@ -208,51 +117,152 @@ def test_functional_aggregation_choices_are_newest_first():
     }
 
 
-def test_authorise_functional_aggregation_revalidates_the_selected_entity():
-    entity = _functional_aggregation()
+@pytest.mark.parametrize(
+    ("groups", "is_local", "expected"),
+    [
+        (["nhp_devs"], False, True),
+        (["nhp_power_users", "other"], False, True),
+        (None, True, True),
+        (["nhp_provider_RXX"], False, False),
+        (None, False, False),
+        ([], False, False),
+    ],
+)
+def test_is_privileged(groups, is_local, expected):
+    assert app._is_privileged(groups, is_local=is_local) is expected
 
-    result = app._authorise_functional_aggregation(
-        entity,
-        dataset="RXX",
-        scenario="scenario-a",
-        functional_aggregation_guid="guid-123",
-        groups=["nhp_provider_RXX"],
-        is_local=False,
-    )
 
-    assert result == entity
-    assert result is not entity
+def test_provider_datasets():
+    groups = ["nhp_provider_RXX", "nhp_provider_RYY", "nhp_provider_", "unrelated"]
+
+    assert app._provider_datasets(groups) == {"RXX", "RYY"}
+    assert app._provider_datasets(None) == set()
 
 
 @pytest.mark.parametrize(
-    ("selection", "groups"),
+    ("dataset", "groups", "is_local", "expected"),
     [
-        ({"dataset": "RYY"}, ["nhp_provider_RXX"]),
-        ({"scenario": "different-scenario"}, ["nhp_provider_RXX"]),
-        (
-            {"functional_aggregation_guid": "different-guid"},
-            ["nhp_provider_RXX"],
-        ),
-        ({}, ["nhp_provider_RYY"]),
+        ("RXX", ["nhp_provider_RXX", "unrelated_group"], False, True),
+        ("RYY", ["nhp_provider_RXX"], False, False),
+        ("RXX", ["nhp_devs"], False, True),
+        ("RXX", ["nhp_power_users"], False, True),
+        ("RXX", None, True, True),
+        ("RXX", None, False, False),  # fails closed without Connect groups
     ],
 )
-def test_authorise_functional_aggregation_rejects_stale_or_unauthorised_selections(
-    selection,
-    groups,
-):
-    expected_selection = {
+def test_may_access_dataset(dataset, groups, is_local, expected):
+    assert app._may_access_dataset(dataset, groups, is_local=is_local) is expected
+
+
+def test_available_datasets_for_privileged_users_scans_the_table(mocker):
+    mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
+    load_datasets = mocker.patch.object(
+        app, "load_datasets_from_ats", return_value=["RXX", "RYY"]
+    )
+
+    result = app._available_datasets(["nhp_devs"], is_local=False)
+
+    assert result == ["RXX", "RYY"]
+    load_datasets.assert_called_once_with("https://table.example.com", "metadata")
+
+
+def test_available_datasets_for_local_development_scans_the_table(mocker):
+    mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
+    load_datasets = mocker.patch.object(
+        app, "load_datasets_from_ats", return_value=["RXX"]
+    )
+
+    assert app._available_datasets(None, is_local=True) == ["RXX"]
+    load_datasets.assert_called_once()
+
+
+def test_available_datasets_for_providers_uses_groups_without_querying(mocker):
+    load_datasets = mocker.patch.object(app, "load_datasets_from_ats")
+
+    result = app._available_datasets(
+        ["nhp_provider_RYY", "nhp_provider_RXX", "unrelated_group"],
+        is_local=False,
+    )
+
+    assert result == ["RXX", "RYY"]
+    load_datasets.assert_not_called()
+
+
+def _metadata(**overrides) -> dict:
+    metadata = {
+        "guid": "guid-123",
         "dataset": "RXX",
         "scenario": "scenario-a",
-        "functional_aggregation_guid": "guid-123",
-    } | selection
+        "create_datetime": "2026-08-17T14:37:23.442097+00:00",
+        "app_version": "v6.0",
+        "aggregated_results_path": "aggregated/results",
+    }
+    metadata.update(overrides)
+    return metadata
+
+
+def _selection(**overrides) -> dict:
+    return {
+        "dataset": "RXX",
+        "scenario": "scenario-a",
+        "guid": "guid-123",
+        "groups": ["nhp_provider_RXX"],
+        "is_local": False,
+    } | overrides
+
+
+def test_load_authorised_metadata_returns_the_selected_run(mocker):
+    mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
+    metadata = _metadata()
+    load_metadata = mocker.patch.object(
+        app, "load_metadata_from_ats", return_value=metadata
+    )
+
+    result = app._load_authorised_metadata(**_selection())
+
+    assert result == metadata
+    load_metadata.assert_called_once_with(
+        "RXX", "guid-123", "https://table.example.com", "metadata"
+    )
+
+
+@pytest.mark.parametrize(
+    "fetched",
+    [
+        {"dataset": "RYY"},
+        {"scenario": "different-scenario"},
+        {"guid": "different-guid"},
+    ],
+)
+def test_load_authorised_metadata_rejects_stale_selections(mocker, fetched):
+    mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
+    mocker.patch.object(
+        app, "load_metadata_from_ats", return_value=_metadata(**fetched)
+    )
 
     with pytest.raises(PermissionError, match="not available"):
-        app._authorise_functional_aggregation(
-            _functional_aggregation(),
-            **expected_selection,
-            groups=groups,
-            is_local=False,
-        )
+        app._load_authorised_metadata(**_selection())
+
+
+def test_load_authorised_metadata_checks_entitlement_before_querying(mocker):
+    load_metadata = mocker.patch.object(app, "load_metadata_from_ats")
+
+    with pytest.raises(PermissionError, match="not available"):
+        app._load_authorised_metadata(**_selection(groups=["nhp_provider_RYY"]))
+
+    load_metadata.assert_not_called()
+
+
+def test_load_authorised_metadata_propagates_unusable_runs(mocker):
+    mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
+    mocker.patch.object(
+        app,
+        "load_metadata_from_ats",
+        side_effect=ValueError("unsupported app_version 'dev'"),
+    )
+
+    with pytest.raises(ValueError, match="unsupported app_version"):
+        app._load_authorised_metadata(**_selection())
 
 
 def test_is_local_development(mocker):
@@ -265,14 +275,7 @@ def test_is_local_development(mocker):
 
 def test_load_capacity_results(mocker):
     mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
-    functional_aggregation = _functional_aggregation(
-        Timestamp=datetime(2026, 8, 17, 14, 50, tzinfo=UTC),
-    )
-    create_path = mocker.patch.object(
-        app,
-        "create_aggregations_path",
-        return_value="functional-aggregations/dev/guid-123/",
-    )
+    metadata = _metadata()
     aggregations = pd.DataFrame({"total": [1]})
     load_aggregation = mocker.patch.object(
         app,
@@ -288,26 +291,18 @@ def test_load_capacity_results(mocker):
     mocker.patch.object(app, "load_assumptions", return_value=assumptions)
     process = mocker.patch.object(app, "process_activity_type")
 
-    data_to_save = app._load_capacity_results(functional_aggregation)
+    data_to_save = app._load_capacity_results(metadata)
 
-    metadata = create_path.call_args.args[0]
-    assert metadata["guid"] == "guid-123"
-    assert metadata["capacity_model_version"] == "dev"
-    assert metadata["Timestamp"] == "2026-08-17T14:50:00+00:00"
-    create_path.assert_called_once_with(metadata)
-    load_aggregation.assert_has_calls(
-        [
-            call(
-                "https://storage.example.com",
-                "results",
-                "functional-aggregations/dev/guid-123/",
-                activity_type,
-            )
-            for activity_type in app.ACTIVITY_TYPES
-        ]
+    # the aggregations file is downloaded once, then filtered per activity type
+    load_aggregation.assert_called_once_with(
+        "https://storage.example.com",
+        "results",
+        "aggregated/results/functional_areas.parquet",
     )
-    assert load_aggregation.call_count == 6
-    assert filter_aggregation.call_count == 6
+    assert filter_aggregation.call_args_list == [
+        call(load_aggregation.return_value, "ALL", activity_type)
+        for activity_type in app.ACTIVITY_TYPES
+    ]
     process.assert_has_calls(
         [
             call(
@@ -361,17 +356,23 @@ def test_load_capacity_results(mocker):
         ]
     )
     assert process.call_count == 6
-    runtime = data_to_save["metadata"].loc["capacity_conversion_runtime"]
+    assert data_to_save["assumptions"] is assumptions
+    run_metadata = data_to_save["metadata"]
+    assert run_metadata.loc["guid"] == "guid-123"
+    assert run_metadata.loc["create_datetime"] == "2026-08-17T14:37:23.442097+00:00"
+    assert run_metadata.loc["capacity_model_version"] == "dev"
+    runtime = run_metadata.loc["capacity_conversion_runtime"]
     assert len(runtime) == 15
     assert runtime[8] == "_"
     assert runtime.replace("_", "").isdigit()
-    assert data_to_save["metadata"].loc[
-        ["ip_sites", "op_sites", "aae_sites"]
-    ].to_dict() == {
+    assert run_metadata.loc[["ip_sites", "op_sites", "aae_sites"]].to_dict() == {
         "ip_sites": "ALL",
         "op_sites": "ALL",
         "aae_sites": "ALL",
     }
+    assert "PartitionKey" not in run_metadata.index
+    assert "RowKey" not in run_metadata.index
+    assert metadata == _metadata()  # the input metadata is not modified
 
 
 def test_load_capacity_results_requires_storage_configuration(mocker):
@@ -389,7 +390,7 @@ def test_load_capacity_results_requires_storage_configuration(mocker):
         RuntimeError,
         match="Missing required environment variable: AZ_STORAGE_RESULTS",
     ):
-        app._load_capacity_results(_functional_aggregation())
+        app._load_capacity_results(_metadata())
 
 
 def test_create_workbook_uses_shared_writer(mocker):

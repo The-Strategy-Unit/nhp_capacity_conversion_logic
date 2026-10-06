@@ -1,6 +1,5 @@
 import logging
 import os
-from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import cast
@@ -31,10 +30,12 @@ from nhp.capacity_conversion.results import (
     summarise_model_runs,
 )
 from nhp.capacity_conversion.utils import (
+    add_run_details,
     create_aggregations_path,
     filter_aggregations,
     load_aggregations,
     load_assumptions,
+    load_datasets_from_ats,
     load_functional_aggregations_from_ats,
     load_metadata_from_ats,
     process_activity_type,
@@ -57,11 +58,10 @@ SITES = {activity_type: ALL_SITES for activity_type in ACTIVITY_TYPES}
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
 PROVIDER_GROUP_PREFIX = "nhp_provider_"
 CATALOGUE_COLUMNS = (
-    "PartitionKey",
-    "RowKey",
+    "guid",
     "dataset",
-    "scenario_name",
-    "scenario_runtime",
+    "scenario",
+    "create_datetime",
 )
 
 FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
@@ -88,49 +88,34 @@ CAPACITY_PREPROCESSORS = {
 }
 
 
-def _catalogue_frame(entities: list[dict]) -> pd.DataFrame:
-    """Validate catalogue entities and return them in a selection-ready frame."""
-    if not entities:
+def _catalogue_frame(model_runs: list[dict]) -> pd.DataFrame:
+    """Return model-run metadata in a selection-ready frame.
+
+    The package has already validated each run (required fields, app version and
+    dataset), so this only shapes the data and parses the ISO 8601 timestamps.
+
+    Args:
+        model_runs (list[dict]): List of model runs, from load_functional_aggregations_from_ats
+
+    Returns:
+        pd.DataFrame: Formatted dataframe with data for selection dropdowns.
+    """
+    if not model_runs:
         return pd.DataFrame(columns=CATALOGUE_COLUMNS)
 
-    catalogue = pd.DataFrame(entities)
+    catalogue = pd.DataFrame(model_runs)
     missing_columns = set(CATALOGUE_COLUMNS).difference(catalogue.columns)
     if missing_columns:
         missing = ", ".join(sorted(missing_columns))
         raise ValueError(f"Catalogue is missing required columns: {missing}")
 
-    valid_rows = pd.Series(True, index=catalogue.index, dtype=bool)
-    string_columns = [
-        "PartitionKey",
-        "RowKey",
-        "dataset",
-        "scenario_name",
-        "scenario_runtime",
-    ]
-    for column in string_columns:
-        normalised = catalogue[column].map(
-            lambda value: value.strip() if isinstance(value, str) else None
-        )
-        valid_rows &= normalised.notna() & normalised.ne("")
-        catalogue[column] = normalised
-
-    catalogue["scenario_runtime"] = pd.to_datetime(
-        catalogue["scenario_runtime"],
-        format="%Y%m%d_%H%M%S",
-        errors="coerce",
+    catalogue = catalogue.loc[:, list(CATALOGUE_COLUMNS)].copy()
+    catalogue["create_datetime"] = pd.to_datetime(
+        catalogue["create_datetime"],
+        format="ISO8601",
         utc=True,
     )
-    valid_rows &= catalogue["scenario_runtime"].notna()
-    valid_rows &= catalogue["PartitionKey"].eq(CAPACITY_MODEL_VERSION)
-
-    invalid_count = int((~valid_rows).sum())
-    if invalid_count:
-        logger.warning(
-            "Ignored %d catalogue entities with invalid selection metadata.",
-            invalid_count,
-        )
-
-    return catalogue.loc[valid_rows, list(CATALOGUE_COLUMNS)].copy()
+    return catalogue
 
 
 def _is_local_development() -> bool:
@@ -138,24 +123,45 @@ def _is_local_development() -> bool:
     return os.getenv("POSIT_PRODUCT") != "CONNECT"
 
 
-def _filter_functional_aggregations_for_user(
-    catalogue: pd.DataFrame,
+def _is_privileged(groups: list[str] | None, *, is_local: bool) -> bool:
+    """Return whether the user may access every dataset."""
+    return is_local or bool(set(groups or []).intersection(PRIVILEGED_GROUPS))
+
+
+def _provider_datasets(groups: list[str] | None) -> set[str]:
+    """Return the datasets a provider user is entitled to through their groups."""
+    return {
+        group.removeprefix(PROVIDER_GROUP_PREFIX)
+        for group in groups or []
+        if group.startswith(PROVIDER_GROUP_PREFIX) and group != PROVIDER_GROUP_PREFIX
+    }
+
+
+def _may_access_dataset(
+    dataset: str,
     groups: list[str] | None,
     *,
     is_local: bool,
-) -> pd.DataFrame:
-    """Apply dataset-entitlement rules to available functional aggregations."""
-    group_names = set(groups or [])
-    if is_local or group_names.intersection(PRIVILEGED_GROUPS):
-        return catalogue.copy()
+) -> bool:
+    """Apply dataset-entitlement rules for a single dataset."""
+    return _is_privileged(groups, is_local=is_local) or dataset in _provider_datasets(
+        groups
+    )
 
-    permitted_datasets = {
-        group.removeprefix(PROVIDER_GROUP_PREFIX)
-        for group in group_names
-        if group.startswith(PROVIDER_GROUP_PREFIX) and group != PROVIDER_GROUP_PREFIX
-    }
-    permitted = catalogue["dataset"].isin(permitted_datasets)
-    return catalogue.loc[permitted].copy()
+
+def _available_datasets(groups: list[str] | None, *, is_local: bool) -> list[str]:
+    """List the datasets the user may choose from.
+
+    Privileged users see every dataset with a supported model run. Provider users
+    see only the datasets named by their groups, so other partitions are never
+    queried on their behalf.
+    """
+    if _is_privileged(groups, is_local=is_local):
+        return load_datasets_from_ats(
+            _required_environment_variable("AZ_TABLE_ENDPOINT"),
+            _required_environment_variable("TABLE_NAME"),
+        )
+    return sorted(_provider_datasets(groups))
 
 
 def _functional_aggregation_choices(
@@ -164,87 +170,84 @@ def _functional_aggregation_choices(
     """Create newest-first GUID-to-label choices for a model-run dropdown."""
     choices: dict[str, str] = {}
     ordered_aggregations = functional_aggregations.sort_values(
-        "scenario_runtime",
+        "create_datetime",
         ascending=False,
     )
     for _, functional_aggregation in ordered_aggregations.iterrows():
-        scenario_runtime = cast(
+        create_datetime = cast(
             pd.Timestamp,
-            functional_aggregation["scenario_runtime"],
+            functional_aggregation["create_datetime"],
         )
-        guid = cast(str, functional_aggregation["RowKey"])
-        run_time = scenario_runtime.strftime("%d %b %Y, %H:%M UTC")
+        guid = cast(str, functional_aggregation["guid"])
+        run_time = create_datetime.strftime("%d %b %Y, %H:%M UTC")
         choices[guid] = run_time
     return choices
 
 
-def _authorise_functional_aggregation(
-    entity: dict,
+def _load_authorised_metadata(
     *,
     dataset: str,
     scenario: str,
-    functional_aggregation_guid: str,
+    guid: str,
     groups: list[str] | None,
     is_local: bool,
 ) -> dict:
-    """Revalidate a selected aggregation and confirm that the user may load it."""
-    catalogue = _catalogue_frame([entity])
-    permitted = _filter_functional_aggregations_for_user(
-        catalogue,
-        groups,
-        is_local=is_local,
-    )
-    matches_selection = (
-        permitted["dataset"].eq(dataset)
-        & permitted["scenario_name"].eq(scenario)
-        & permitted["RowKey"].eq(functional_aggregation_guid)
-    )
-    if matches_selection.sum() != 1:
+    """Check the user may load the selected run, then fetch its metadata.
+
+    Entitlement is checked before the table is queried. The metadata is then
+    re-fetched and validated (including the app-version rule), and must match the
+    dropdown selection, so a tampered or stale selection is rejected.
+    """
+    if not _may_access_dataset(dataset, groups, is_local=is_local):
         raise PermissionError("The selected model run is not available.")
-    return dict(entity)
+
+    metadata = load_metadata_from_ats(
+        dataset,
+        guid,
+        _required_environment_variable("AZ_TABLE_ENDPOINT"),
+        _required_environment_variable("TABLE_NAME"),
+    )
+    if (
+        metadata["dataset"] != dataset
+        or metadata["scenario"] != scenario
+        or metadata["guid"] != guid
+    ):
+        raise PermissionError("The selected model run is not available.")
+    return metadata
 
 
 def _load_capacity_results(
-    functional_aggregation: dict,
+    metadata: dict,
 ) -> dict[str, pd.DataFrame | pd.Series]:
-    guid = str(functional_aggregation["RowKey"])
     storage_endpoint = _required_environment_variable("AZ_STORAGE_EP")
     results_container = _required_environment_variable("AZ_STORAGE_RESULTS")
-    metadata = dict(functional_aggregation)
-    metadata["guid"] = guid
-    metadata["capacity_model_version"] = CAPACITY_MODEL_VERSION
-    metadata["capacity_conversion_runtime"] = datetime.now(tz=UTC).strftime(
-        "%Y%m%d_%H%M%S"
+    run_metadata = add_run_details(
+        metadata,
+        CAPACITY_MODEL_VERSION,
+        ip_sites=ALL_SITES,
+        op_sites=ALL_SITES,
+        aae_sites=ALL_SITES,
     )
-    metadata.update(
-        {
-            "ip_sites": ALL_SITES,
-            "op_sites": ALL_SITES,
-            "aae_sites": ALL_SITES,
-        }
-    )
-
-    for key, value in metadata.items():
-        if isinstance(value, datetime) and value.tzinfo is not None:
-            metadata[key] = value.isoformat()
 
     assumptions = load_assumptions(ASSUMPTIONS_URL)
     data_to_save: dict[str, pd.DataFrame | pd.Series] = {
-        "metadata": pd.Series(metadata).drop(
-            ["PartitionKey", "RowKey"], errors="ignore"
-        ),
+        "metadata": pd.Series(run_metadata),
         "assumptions": assumptions,
     }
-    aggregations_path = create_aggregations_path(metadata)
 
+    # The aggregations file is the same for every activity type, so download it
+    # once and filter it per activity type.
+    all_aggregations = load_aggregations(
+        storage_endpoint,
+        results_container,
+        create_aggregations_path(metadata),
+    )
     for activity_type in ACTIVITY_TYPES:
-        aggregations = load_aggregations(
-            storage_endpoint,
-            results_container,
-            aggregations_path,
+        aggregations = filter_aggregations(
+            all_aggregations,
+            SITES[activity_type],
             activity_type,
         )
-        aggregations = filter_aggregations(aggregations, SITES[activity_type])
         process_activity_type(
             activity_type,
             aggregations,
@@ -358,27 +361,50 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session) -> None:
+    datasets: reactive.Value[list[str]] = reactive.value([])
     catalogue = reactive.value(_catalogue_frame([]))
     capacity_results: reactive.Value[dict[str, pd.DataFrame | pd.Series] | None] = (
         reactive.value(None)
     )
 
     @reactive.effect
-    def load_catalogue() -> None:
+    def load_datasets() -> None:
         try:
-            entities = load_functional_aggregations_from_ats(
-                _required_environment_variable("AZ_TABLE_ENDPOINT"),
-                _required_environment_variable("TABLE_NAME"),
-                CAPACITY_MODEL_VERSION,
-            )
-            validated = _catalogue_frame(entities)
-            catalogue.set(
-                _filter_functional_aggregations_for_user(
-                    validated,
+            datasets.set(
+                _available_datasets(
                     session.groups,
                     is_local=_is_local_development(),
                 )
             )
+        except Exception:
+            logger.exception("Unable to load the list of datasets.")
+            datasets.set([])
+            ui.notification_show(
+                "Datasets are temporarily unavailable. Please try again later.",
+                type="error",
+                duration=None,
+            )
+
+    @reactive.effect
+    def load_catalogue() -> None:
+        selected_dataset = input.dataset()
+        if not selected_dataset:
+            catalogue.set(_catalogue_frame([]))
+            return
+
+        try:
+            if not _may_access_dataset(
+                selected_dataset,
+                session.groups,
+                is_local=_is_local_development(),
+            ):
+                raise PermissionError("The selected dataset is not available.")
+            model_runs = load_functional_aggregations_from_ats(
+                selected_dataset,
+                _required_environment_variable("AZ_TABLE_ENDPOINT"),
+                _required_environment_variable("TABLE_NAME"),
+            )
+            catalogue.set(_catalogue_frame(model_runs))
         except Exception:
             logger.exception("Unable to load the model-run catalogue.")
             catalogue.set(_catalogue_frame([]))
@@ -390,8 +416,9 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
 
     @reactive.effect
     def update_datasets() -> None:
-        datasets = sorted(catalogue.get()["dataset"].unique())
-        choices = {"": "Select a dataset"} | {dataset: dataset for dataset in datasets}
+        choices = {"": "Select a dataset"} | {
+            dataset: dataset for dataset in datasets.get()
+        }
         ui.update_select("dataset", choices=choices, selected="")
 
     @reactive.effect
@@ -401,7 +428,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         scenarios = sorted(
             functional_aggregations.loc[
                 functional_aggregations["dataset"].eq(selected_dataset),
-                "scenario_name",
+                "scenario",
             ].unique()
         )
         choices = {"": "Select a scenario"} | {
@@ -416,7 +443,7 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         functional_aggregations = catalogue.get()
         matching_aggregations = functional_aggregations.loc[
             functional_aggregations["dataset"].eq(selected_dataset)
-            & functional_aggregations["scenario_name"].eq(selected_scenario)
+            & functional_aggregations["scenario"].eq(selected_scenario)
         ]
         choices = {"": "Select a model run"} | _functional_aggregation_choices(
             matching_aggregations
@@ -475,22 +502,15 @@ def server(input: Inputs, output: Outputs, session: Session) -> None:
         try:
             with ui.Progress(min=0, max=2) as progress:
                 progress.set(0, message="Checking model-run access")
-                entity = load_metadata_from_ats(
-                    selected_guid,
-                    _required_environment_variable("AZ_TABLE_ENDPOINT"),
-                    _required_environment_variable("TABLE_NAME"),
-                    CAPACITY_MODEL_VERSION,
-                )
-                authorised_aggregation = _authorise_functional_aggregation(
-                    entity,
+                metadata = _load_authorised_metadata(
                     dataset=selected_dataset,
                     scenario=selected_scenario,
-                    functional_aggregation_guid=selected_guid,
+                    guid=selected_guid,
                     groups=session.groups,
                     is_local=_is_local_development(),
                 )
                 progress.set(1, message="Generating capacity estimates")
-                capacity_results.set(_load_capacity_results(authorised_aggregation))
+                capacity_results.set(_load_capacity_results(metadata))
                 progress.set(2)
         except Exception:
             logger.exception("Unable to generate capacity estimates.")
