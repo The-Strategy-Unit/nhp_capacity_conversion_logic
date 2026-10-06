@@ -18,7 +18,13 @@ def _load_app_module() -> ModuleType:
     return module
 
 
-with patch.dict(os.environ, {"CAPACITY_MODEL_VERSION": "dev"}):
+with patch.dict(
+    os.environ,
+    {
+        "CAPACITY_MODEL_VERSION": "dev",
+        "DOCUMENTATION_URL": "https://docs.example.test/capacity-model/",
+    },
+):
     app = _load_app_module()
 
 APP_ENVIRONMENT = {
@@ -26,6 +32,7 @@ APP_ENVIRONMENT = {
     "AZ_STORAGE_RESULTS": "results",
     "AZ_TABLE_ENDPOINT": "https://table.example.com",
     "CAPACITY_MODEL_VERSION": "dev",
+    "DOCUMENTATION_URL": "https://docs.example.test/capacity-model/",
     "TABLE_NAME": "metadata",
 }
 
@@ -36,6 +43,15 @@ def test_app_registers_favicon():
 
     assert '<link rel="icon" type="image/x-icon" href="favicon.ico"/>' in html
     assert app.app._static_assets["/"] == Path(app.STATIC_ASSETS_DIR)
+
+
+def test_app_links_to_documentation():
+    html = app.app_ui.get_html_string()
+
+    assert f'href="{app.DOCUMENTATION_URL}"' in html
+    assert 'class="btn btn-primary btn-sm">Documentation</a>' in html
+    assert 'target="_blank"' in html
+    assert 'rel="noopener noreferrer"' in html
 
 
 def _model_run(**overrides) -> dict:
@@ -53,7 +69,10 @@ def _model_run(**overrides) -> dict:
 def test_capacity_model_version_is_loaded_from_environment(mocker):
     mocker.patch.dict(
         os.environ,
-        {"CAPACITY_MODEL_VERSION": "prod"},
+        {
+            "CAPACITY_MODEL_VERSION": "prod",
+            "DOCUMENTATION_URL": "https://docs.example.test/capacity-model/",
+        },
         clear=True,
     )
 
@@ -62,12 +81,67 @@ def test_capacity_model_version_is_loaded_from_environment(mocker):
     assert configured_app.CAPACITY_MODEL_VERSION == "prod"
 
 
+def test_documentation_url_is_loaded_from_environment(mocker):
+    documentation_url = "https://docs.example.test/capacity-model/"
+    mocker.patch.dict(
+        os.environ,
+        {
+            "CAPACITY_MODEL_VERSION": "dev",
+            "DOCUMENTATION_URL": documentation_url,
+        },
+        clear=True,
+    )
+
+    configured_app = _load_app_module()
+
+    assert configured_app.DOCUMENTATION_URL == documentation_url
+
+
 def test_app_requires_capacity_model_version(mocker):
     mocker.patch.dict(os.environ, {}, clear=True)
 
     with pytest.raises(
         RuntimeError,
         match="Missing required environment variable: CAPACITY_MODEL_VERSION",
+    ):
+        _load_app_module()
+
+
+def test_app_requires_documentation_url(mocker):
+    mocker.patch.dict(
+        os.environ,
+        {"CAPACITY_MODEL_VERSION": "dev"},
+        clear=True,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Missing required environment variable: DOCUMENTATION_URL",
+    ):
+        _load_app_module()
+
+
+@pytest.mark.parametrize(
+    "documentation_url",
+    [
+        "http://docs.example.test/capacity-model/",
+        "https://user:password@docs.example.test/capacity-model/",
+        "https://[invalid",
+    ],
+)
+def test_app_requires_valid_https_documentation_url(mocker, documentation_url):
+    mocker.patch.dict(
+        os.environ,
+        {
+            "CAPACITY_MODEL_VERSION": "dev",
+            "DOCUMENTATION_URL": documentation_url,
+        },
+        clear=True,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="DOCUMENTATION_URL must be a valid HTTPS URL",
     ):
         _load_app_module()
 

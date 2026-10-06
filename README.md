@@ -43,8 +43,11 @@ The application requires:
 - `AZ_STORAGE_EP`: Azure Blob Storage account endpoint.
 - `AZ_STORAGE_RESULTS`: container containing functional aggregations.
 - `AZ_TABLE_ENDPOINT`: Azure Table Storage account endpoint.
-- `CAPACITY_MODEL_VERSION`: Capacity model version, following semantic versioning guidelines, or `dev`
-- `TABLE_NAME`: table containing NHP demand model run metadata.
+- `CAPACITY_MODEL_VERSION`: functional-aggregation catalogue partition and blob
+  path version, such as `dev` or `prod`.
+- `DOCUMENTATION_URL`: HTTPS URL for the capacity-model documentation linked
+  from the application.
+- `TABLE_NAME`: table containing functional-aggregation metadata.
 
 `FEEDBACK_FORM_URL` is required. Set it to the `src` URL from the Microsoft Forms
 [embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
@@ -138,6 +141,7 @@ the target's configuration and GitHub can mask their values in workflow logs:
 - `AZ_STORAGE_RESULTS`
 - `AZ_TABLE_ENDPOINT`
 - `CAPACITY_MODEL_VERSION`
+- `DOCUMENTATION_URL`
 - `TABLE_NAME`
 - `FEEDBACK_FORM_URL`
 

@@ -51,8 +51,26 @@ def _required_environment_variable(name: str) -> str:
     return value
 
 
+def _required_https_environment_variable(name: str) -> str:
+    value = _required_environment_variable(name)
+    try:
+        parsed_url = urlparse(value)
+        valid_url = (
+            parsed_url.scheme.casefold() == "https"
+            and parsed_url.hostname is not None
+            and parsed_url.username is None
+            and parsed_url.password is None
+        )
+    except ValueError:
+        valid_url = False
+    if not valid_url:
+        raise RuntimeError(f"{name} must be a valid HTTPS URL")
+    return value
+
+
 APP_TITLE = "OpenPlan Capacity Model"
 CAPACITY_MODEL_VERSION = _required_environment_variable("CAPACITY_MODEL_VERSION")
+DOCUMENTATION_URL = _required_https_environment_variable("DOCUMENTATION_URL")
 ALL_SITES = "ALL"
 SITES = {activity_type: ALL_SITES for activity_type in ACTIVITY_TYPES}
 PRIVILEGED_GROUPS = frozenset({"nhp_devs", "nhp_power_users"})
@@ -300,10 +318,20 @@ app_ui = ui.page_fluid(
     ui.div(
         ui.div(
             ui.h1("Capacity estimates", class_="mb-0"),
-            ui.input_action_button(
-                "feedback",
-                "Feedback",
-                class_="btn-primary btn-sm",
+            ui.div(
+                ui.a(
+                    "Documentation",
+                    href=DOCUMENTATION_URL,
+                    target="_blank",
+                    rel="noopener noreferrer",
+                    class_="btn btn-primary btn-sm",
+                ),
+                ui.input_action_button(
+                    "feedback",
+                    "Feedback",
+                    class_="btn-primary btn-sm",
+                ),
+                class_="d-flex align-items-center gap-2",
             ),
             class_=(
                 "d-flex flex-column flex-sm-row align-items-sm-center "
