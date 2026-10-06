@@ -11,7 +11,7 @@ from nhp.capacity_conversion.ip_formulas import (
     calculate_beds,
     calculate_recovery_capacity,
     calculate_time_util_capacity,
-    derive_beddays_from_spells,
+    derive_beddays_from_activity_count,
     derive_recovery_occupancy_hours,
     derive_treatment_hours,
 )
@@ -54,7 +54,7 @@ def derive_birth_related_ward_beddays(
         functional_area + "_zerolos"
         in functional_areas_processed.index.get_level_values("functional_area")
     ):
-        zero_day_beddays = derive_beddays_from_spells(
+        zero_day_beddays = derive_beddays_from_activity_count(
             functional_areas_processed.xs(
                 key=(functional_area + "_zerolos", "count"),
                 level=["functional_area", "measure"],
@@ -68,7 +68,7 @@ def derive_birth_related_ward_beddays(
             float,
             assumptions_df.at[assumptions["birthroom_los"], "Value"],
         )
-        birth_room_beddays = derive_beddays_from_spells(
+        birth_room_beddays = derive_beddays_from_activity_count(
             functional_areas_processed.xs(
                 key=(functional_area, "count"), level=["functional_area", "measure"]
             )["value"],
@@ -81,13 +81,13 @@ def derive_birth_related_ward_beddays(
         functional_area + "_nonzerolos"
         in functional_areas_processed.index.get_level_values("functional_area")
     ):
-        birth_spell_overnight_beddays = functional_areas_processed.xs(
+        birth_episode_overnight_beddays = functional_areas_processed.xs(
             key=(functional_area + "_nonzerolos", "duration_days"),
             level=["functional_area", "measure"],
         )["value"]
     else:
-        birth_spell_overnight_beddays = 0
-    return birth_spell_overnight_beddays + zero_day_beddays - birth_room_beddays
+        birth_episode_overnight_beddays = 0
+    return birth_episode_overnight_beddays + zero_day_beddays - birth_room_beddays
 
 
 def derive_total_maternity_ward_beddays(
@@ -308,7 +308,9 @@ def calculate_maternity_birth_rooms(
         ],
     )
     output = assumptions["output"]
-    birthroom_beddays = derive_beddays_from_spells(functional_area_subgroup, los)
+    birthroom_beddays = derive_beddays_from_activity_count(
+        functional_area_subgroup, los
+    )
     results = pd.DataFrame(
         calculate_beds(birthroom_beddays, operational_days, occupancy)
     )

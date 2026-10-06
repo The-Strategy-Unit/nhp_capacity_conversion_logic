@@ -65,7 +65,7 @@ def test_derive_ward_beddays_elective(
     functional_areas = make_functional_areas(grouping)
 
     mock_derive_beddays = mocker.patch(
-        "nhp.capacity_conversion.ip_wards.derive_beddays_from_spells",
+        "nhp.capacity_conversion.ip_wards.derive_beddays_from_activity_count",
         return_value=pd.Series([5], index=pd.Index([1], name="model_run")),
     )
 
@@ -95,13 +95,13 @@ def test_derive_ward_beddays_elective(
         expected_ward,
     )
 
-    # Only zero-day spells should be passed to derive_beddays_from_spells.
+    # Only zero-day episodes should be passed to derive_beddays_from_activity_count.
     mock_derive_beddays.assert_called_once()
 
-    spells_arg, los_arg = mock_derive_beddays.call_args.args
+    episodes_arg, los_arg = mock_derive_beddays.call_args.args
 
     assert_series_equal(
-        spells_arg,
+        episodes_arg,
         pd.Series([10], index=pd.Index([1], name="model_run"), name="value"),
     )
     assert los_arg == 0.5
@@ -119,7 +119,7 @@ def test_derive_ward_beddays_nonelective(
     # First call = zero-day beddays.
     # Second call = assessment beddays.
     mock_derive_beddays = mocker.patch(
-        "nhp.capacity_conversion.ip_wards.derive_beddays_from_spells",
+        "nhp.capacity_conversion.ip_wards.derive_beddays_from_activity_count",
         side_effect=[
             pd.Series([5.0], pd.Index([1], name="model_run")),
             pd.Series([10.0], pd.Index([1], name="model_run")),
@@ -159,20 +159,20 @@ def test_derive_ward_beddays_nonelective(
 
     assert mock_derive_beddays.call_count == 2
 
-    # First call: zero-day spells and zero-day LOS
-    zero_day_spells, zero_day_los = mock_derive_beddays.call_args_list[0].args
+    # First call: zero-day episodes and zero-day LOS
+    zero_day_episodes, zero_day_los = mock_derive_beddays.call_args_list[0].args
 
     assert_series_equal(
-        zero_day_spells,
+        zero_day_episodes,
         pd.Series([10], pd.Index([1], name="model_run"), name="value"),
     )
     assert zero_day_los == 0.5
 
-    # Second call: nonzero + zero-day spells and assessment LOS
-    assessment_spells, assessment_los = mock_derive_beddays.call_args_list[1].args
+    # Second call: nonzero + zero-day episodes and assessment LOS
+    assessment_episodes, assessment_los = mock_derive_beddays.call_args_list[1].args
 
     assert_series_equal(
-        assessment_spells,
+        assessment_episodes,
         pd.Series([30], pd.Index([1], name="model_run"), name="value"),
     )
     assert assessment_los == 1.0

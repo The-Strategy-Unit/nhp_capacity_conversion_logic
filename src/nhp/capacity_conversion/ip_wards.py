@@ -6,7 +6,7 @@ import pandas as pd
 
 from nhp.capacity_conversion.ip_formulas import (
     calculate_beds,
-    derive_beddays_from_spells,
+    derive_beddays_from_activity_count,
 )
 from nhp.capacity_conversion.utils import run_single_activity_type
 
@@ -173,7 +173,7 @@ def derive_ward_beddays(
             "Value",
         ],
     )
-    zero_day_beddays = derive_beddays_from_spells(
+    zero_day_beddays = derive_beddays_from_activity_count(
         functional_areas.xs(
             key=(grouping + "_zerolos", "count"), level=["functional_area", "measure"]
         )["value"],
@@ -201,7 +201,7 @@ def derive_ward_beddays(
                 "Value",
             ],
         )
-        assessment_spells = (
+        assessment_episodes = (
             functional_areas.xs(
                 key=(grouping + "_nonzerolos", "count"),
                 level=["functional_area", "measure"],
@@ -211,8 +211,8 @@ def derive_ward_beddays(
                 level=["functional_area", "measure"],
             )["value"]
         )
-        assessment_beddays = derive_beddays_from_spells(
-            assessment_spells, assessment_los
+        assessment_beddays = derive_beddays_from_activity_count(
+            assessment_episodes, assessment_los
         )
     ward_beddays = (
         functional_areas.xs(

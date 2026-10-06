@@ -21,7 +21,7 @@ from nhp.capacity_conversion.ip_maternity import (
 def test_derive_birth_related_ward_beddays(mocker):
     # Arrange
     mock_derive = mocker.patch(
-        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells"
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_activity_count"
     )
 
     # First call = zero-day beddays, second call = birth room beddays
@@ -73,7 +73,7 @@ def test_derive_birth_related_ward_beddays(mocker):
 
 def test_derive_birth_related_ward_beddays_elective_csection(mocker):
     mock_derive = mocker.patch(
-        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_activity_count",
         return_value=pd.Series([5], index=[1]),
     )
 
@@ -114,7 +114,7 @@ def test_derive_birth_related_ward_beddays_elective_csection(mocker):
 def test_derive_birth_related_ward_beddays_no_zero_day_los(mocker):
     """Should return 0 for zero-day beddays when *_zerolos is absent."""
     mock_derive = mocker.patch(
-        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_activity_count",
         return_value=pd.Series([3, 4], index=pd.Index([1, 2], name="model_run")),
     )
 
@@ -152,7 +152,7 @@ def test_derive_birth_related_ward_beddays_no_zero_day_los(mocker):
     # No zero-day calculation; only birth-room calculation
     mock_derive.assert_called_once()
 
-    # 30 - 3, 40 - 4 (birth_spell_overnight_beddays - birth_room_beddays)
+    # 30 - 3, 40 - 4 (birth_episode_overnight_beddays - birth_room_beddays)
     expected = pd.Series([27, 36], index=pd.Index([1, 2], name="model_run"))
     assert_series_equal(actual, expected)  # ty: ignore
 
@@ -160,7 +160,7 @@ def test_derive_birth_related_ward_beddays_no_zero_day_los(mocker):
 def test_derive_birth_related_ward_beddays_no_nonzero_day_los(mocker):
     """Should return 0 for overnight beddays when *_nonzerolos is absent."""
     mock_derive = mocker.patch(
-        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_activity_count",
         side_effect=[
             pd.Series(
                 [10, 20], index=pd.Index([1, 2], name="model_run")
@@ -205,7 +205,7 @@ def test_derive_birth_related_ward_beddays_no_nonzero_day_los(mocker):
     # Zero-day and birth room calculations
     assert mock_derive.call_count == 2
 
-    # birth_spell_overnight_beddays = 0
+    # birth_episode_overnight_beddays = 0
     # 10 - 3, 20 - 4 (zero_day_beddays - birth_room_beddays)
     expected = pd.Series([7, 16], index=pd.Index([1, 2], name="model_run"))
     assert_series_equal(actual, expected)  # ty: ignore
@@ -431,7 +431,7 @@ def test_calculate_maternity_birth_rooms(mocker):
     )
     functional_area_subgroup = pd.Series()
     mock_derive = mocker.patch(
-        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_activity_count",
         return_value="birthroom_beddays",
     )
     mock_calculate = mocker.patch(
