@@ -12,7 +12,7 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import ContainerClient
 from dotenv import load_dotenv
 
-from nhp.capacity_conversion.config import ASSUMPTIONS_URL
+from nhp.capacity_conversion.config import AGGREGATION_SUBSETS, ASSUMPTIONS_URL
 from nhp.capacity_conversion.results import process_and_save_results_to_excel
 
 logger = logging.getLogger(__name__)
@@ -124,19 +124,19 @@ def load_assumptions(path_to_csv: str) -> pd.DataFrame:
 
 
 def load_metadata_from_ats(
+    dataset: str,
     guid: str,
     storage_endpoint: str,
     table_name: str,
-    capacity_model_version: str,
 ) -> dict:
     """Loads metadata for scenario converted to functional area aggregations
     from Azure Table Storage
 
     Args:
+        dataset (str): Dataset, used as the PartitionKey in the table
         guid (str): GUID for functional area aggregation
         storage_endpoint (str): Azure Table Storage endpoint, in format "https://{storage_account_name}.table.core.windows.net"
         table_name (str): Table name containing metadata for Functional Area Aggregations
-        capacity_model_version (str): Version of capacity model.
 
     Returns:
         dict: Dictionary with metadata for given Functional Area aggregation
@@ -145,10 +145,20 @@ def load_metadata_from_ats(
     table_client = TableClient(
         endpoint=storage_endpoint, table_name=table_name, credential=credential
     )
-    entity = table_client.get_entity(partition_key=capacity_model_version, row_key=guid)
-    metadata = dict(entity)
+    entity = table_client.get_entity(partition_key=dataset, row_key=guid)
+
+    keys_to_keep = [
+        "app_version",
+        "dataset",
+        "start_year",
+        "end_year",
+        "scenario",
+        "create_datetime",
+        "model_run_id",
+        "aggregated_results_path",
+    ]
+    metadata = {k: str(v) for k, v in entity.items() if k in keys_to_keep}
     metadata["guid"] = guid
-    metadata["capacity_model_version"] = capacity_model_version
     return metadata
 
 
@@ -171,18 +181,6 @@ def load_functional_aggregations_from_ats(
     return [dict(entity) for entity in entities]
 
 
-def create_aggregations_path(metadata: dict) -> str:
-    """Create path to aggregations parquet files on Azure Storage
-
-    Args:
-        metadata (dict): Dictionary of metadata for capacity conversion
-
-    Returns:
-        str: Full path to the specific functional area aggregations to be converted to capacity
-    """
-    return f"functional-aggregations/{metadata['capacity_model_version']}/{metadata['guid']}/"
-
-
 def validate_required_env_vars() -> dict:
     """
     Loads environment variables and ensures required variables are present.
@@ -197,6 +195,7 @@ def validate_required_env_vars() -> dict:
         "AZ_STORAGE_RESULTS",
         "TABLE_NAME",
         "AZ_TABLE_ENDPOINT",
+        "CAPACITY_MODEL_VERSION",
     ]
 
     values = {}
@@ -221,7 +220,6 @@ def load_aggregations(
     account_url: str,
     results_container: str,
     aggregations_path: str,
-    aggregation_type: str,
 ) -> pd.DataFrame:
     """Loads aggregated data from Azure
 
@@ -229,17 +227,13 @@ def load_aggregations(
         account_url (str): Azure Storage account URL
         results_container (str): Azure Storage container name with results
         aggregations_path (str): Path to "folder" with data to load
-        aggregation_type (str): Path to
 
     Returns:
         pd.DataFrame: Loads aggregated data
     """
-    logger.info(f"Loading {aggregation_type} data from {aggregations_path}...")
+    logger.info(f"Loading data from {aggregations_path}...")
     results_connection = connect_to_container(account_url, results_container)
-    aggregations = load_parquet_file(
-        results_connection,
-        f"{aggregations_path.rstrip('/')}/{aggregation_type}.parquet",
-    )
+    aggregations = load_parquet_file(results_connection, aggregations_path)
     return aggregations
 
 
@@ -289,13 +283,12 @@ def run_single_activity_type(
         description=f"Generate {activity_type.upper()} capacity outputs given functional area aggregations of {activity_type.upper()} activity"
     )
     parser.add_argument(
-        "guid",
-        help="GUID of functional area aggregation to convert into capacity",
+        "dataset",
+        help="Dataset of functional area aggregation to convert into capacity",
     )
     parser.add_argument(
-        "--capacity_model_version",
-        help="Capacity model version",
-        default="dev",
+        "guid",
+        help="GUID of functional area aggregation to convert into capacity",
     )
     parser.add_argument(
         "--path_to_assumptions_file",
@@ -313,26 +306,25 @@ def run_single_activity_type(
     data_to_save = {}
 
     metadata = load_metadata_from_ats(
+        args.dataset,
         args.guid,
         config["AZ_TABLE_ENDPOINT"],
         config["TABLE_NAME"],
-        args.capacity_model_version,
     )
     metadata["capacity_conversion_runtime"] = capacity_conversion_runtime
     metadata["sites"] = args.sites
-    data_to_save["metadata"] = pd.Series(metadata).drop(["PartitionKey", "RowKey"])
+    metadata["capacity_model_version"] = config["CAPACITY_MODEL_VERSION"]
+    data_to_save["metadata"] = pd.Series(metadata)
 
     assumptions = load_assumptions(args.path_to_assumptions_file)
     data_to_save["assumptions"] = assumptions
-
-    aggregations_path = create_aggregations_path(metadata)
-    aggregations = load_aggregations(
-        config["AZ_STORAGE_EP"],
-        config["AZ_STORAGE_RESULTS"],
-        aggregations_path,
-        activity_type,
+    aggregations_path = (
+        metadata["aggregated_results_path"] + "/functional_areas.parquet"
     )
-    aggregations = filter_aggregations(aggregations, args.sites)
+    aggregations = load_aggregations(
+        config["AZ_STORAGE_EP"], config["AZ_STORAGE_RESULTS"], aggregations_path
+    )
+    aggregations = filter_aggregations(aggregations, args.sites, activity_type)
 
     process_activity_type(
         name=activity_type,
@@ -367,16 +359,28 @@ def validate_sites(aggregations: pd.DataFrame, sites: list[str]) -> None:
         )
 
 
-def filter_aggregations(aggregations: pd.DataFrame, sites: str) -> pd.DataFrame:
+def filter_aggregations(
+    aggregations: pd.DataFrame, sites: str, subset: str
+) -> pd.DataFrame:
     """Filters aggregations by selected sites
 
     Args:
         aggregations (pd.DataFrame): Aggregations by functional area, with sitetret column
-        sites (list[str]): List of sites to filter to.
+        sites (str): Sites to filter to.
+        subset (str): Aggregation subset to filter to.
 
     Returns:
         pd.DataFrame: Filtered aggregations, with sitetret column removed
     """
+    logger.info(f"Filtering to {subset}")
+    functional_areas = AGGREGATION_SUBSETS[subset]
+    available_functional_areas = set(aggregations["functional_area"])
+    missing_functional_areas = set(functional_areas) - available_functional_areas
+    if missing_functional_areas:
+        logger.warning(
+            f"Functional areas not found in aggregations: {sorted(missing_functional_areas)}"
+        )
+    aggregations = aggregations[aggregations["functional_area"].isin(functional_areas)]
     logger.info(f"Filtering by sites: {sites}")
     if sites != "ALL":
         sites_split = sites.upper().split(",")

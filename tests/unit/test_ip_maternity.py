@@ -32,26 +32,20 @@ def test_derive_birth_related_ward_beddays(mocker):
 
     functional_areas_processed = pd.DataFrame(
         {
-            "grouping": [
+            "functional_area": [
                 "maternity_zerolos",
                 "maternity_zerolos",
                 "maternity",
                 "maternity",
                 "maternity_nonzerolos",
                 "maternity_nonzerolos",
-            ],
-            "model_run": [
-                1,
-                2,
-                1,
-                2,
-                1,
-                2,
-            ],
-            "spells": [100, 200, 50, 60, 0, 0],
-            "beddays": [0, 0, 30, 40, 30, 40],
+            ]
+            * 2,
+            "model_run": [1, 2] * 6,
+            "value": [100, 200, 50, 60, 0, 0, 0, 0, 30, 40, 30, 40],
+            "measure": ["count"] * 6 + ["duration_days"] * 6,
         }
-    ).set_index(["grouping", "model_run"])
+    ).set_index(["functional_area", "model_run", "measure"])
 
     assumptions_df = pd.DataFrame(
         {"Value": ["zero_day_los", "birthroom_los"]},
@@ -65,14 +59,14 @@ def test_derive_birth_related_ward_beddays(mocker):
 
     # Act
     actual = derive_birth_related_ward_beddays(
-        grouping="maternity",
+        functional_area="maternity",
         functional_areas_processed=functional_areas_processed,
         assumptions_df=assumptions_df,
         assumptions=assumptions,
     )
     # Assert
     expected = pd.Series([37, 56], index=pd.Index([1, 2], name="model_run"))
-    assert_series_equal(actual, expected)
+    assert_series_equal(actual, expected)  # ty: ignore
 
     assert mock_derive.call_count == 2
 
@@ -85,15 +79,16 @@ def test_derive_birth_related_ward_beddays_elective_csection(mocker):
 
     functional_areas_processed = pd.DataFrame(
         {
-            "grouping": [
+            "functional_area": [
                 "maternity_elective_csection_nonzerolos",
                 "maternity_elective_csection_zerolos",
-            ],
-            "model_run": [1, 1],
-            "spells": [1, 2],
-            "beddays": [10, 0],
+            ]
+            * 2,
+            "model_run": [1] * 4,
+            "value": [1, 2, 10, 0],
+            "measure": ["count", "count", "duration_days", "duration_days"],
         }
-    ).set_index(["grouping", "model_run"])
+    ).set_index(["functional_area", "model_run", "measure"])
     assumptions_df = pd.DataFrame(
         {"Value": ["zero_day_los", "birthroom_los"]},
         index=["zero_day_los", "birthroom_los"],
@@ -104,7 +99,7 @@ def test_derive_birth_related_ward_beddays_elective_csection(mocker):
         "birthroom_los": "birthroom_los",
     }
     actual = derive_birth_related_ward_beddays(
-        grouping="maternity_elective_csection",
+        functional_area="maternity_elective_csection",
         functional_areas_processed=functional_areas_processed,
         assumptions_df=assumptions_df,
         assumptions=assumptions,
@@ -113,22 +108,154 @@ def test_derive_birth_related_ward_beddays_elective_csection(mocker):
 
     # Only the zero-day calculation should be performed
     mock_derive.assert_called_once()
-    assert_series_equal(actual, expected)
+    assert_series_equal(actual, expected)  # ty: ignore
+
+
+def test_derive_birth_related_ward_beddays_no_zero_day_los(mocker):
+    """Should return 0 for zero-day beddays when *_zerolos is absent."""
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        return_value=pd.Series([3, 4], index=pd.Index([1, 2], name="model_run")),
+    )
+
+    functional_areas_processed = pd.DataFrame(
+        {
+            "functional_area": [
+                "maternity",
+                "maternity",
+                "maternity_nonzerolos",
+                "maternity_nonzerolos",
+            ],
+            "model_run": [1, 2, 1, 2],
+            "value": [50, 60, 30, 40],
+            "measure": ["count", "count", "duration_days", "duration_days"],
+        }
+    ).set_index(["functional_area", "model_run", "measure"])
+
+    assumptions_df = pd.DataFrame(
+        {"Value": [0.5, 1.0]},
+        index=["zero_day_los", "birthroom_los"],
+    )
+
+    assumptions = {
+        "zero_day_los": "zero_day_los",
+        "birthroom_los": "birthroom_los",
+    }
+
+    actual = derive_birth_related_ward_beddays(
+        functional_area="maternity",
+        functional_areas_processed=functional_areas_processed,
+        assumptions_df=assumptions_df,
+        assumptions=assumptions,
+    )
+
+    # No zero-day calculation; only birth-room calculation
+    mock_derive.assert_called_once()
+
+    # 30 - 3, 40 - 4 (birth_spell_overnight_beddays - birth_room_beddays)
+    expected = pd.Series([27, 36], index=pd.Index([1, 2], name="model_run"))
+    assert_series_equal(actual, expected)  # ty: ignore
+
+
+def test_derive_birth_related_ward_beddays_no_nonzero_day_los(mocker):
+    """Should return 0 for overnight beddays when *_nonzerolos is absent."""
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_beddays_from_spells",
+        side_effect=[
+            pd.Series(
+                [10, 20], index=pd.Index([1, 2], name="model_run")
+            ),  # zero_day_beddays
+            pd.Series(
+                [3, 4], index=pd.Index([1, 2], name="model_run")
+            ),  # birth_room_beddays
+        ],
+    )
+
+    functional_areas_processed = pd.DataFrame(
+        {
+            "functional_area": [
+                "maternity",
+                "maternity",
+                "maternity_zerolos",
+                "maternity_zerolos",
+            ],
+            "model_run": [1, 2, 1, 2],
+            "value": [50, 60, 30, 40],
+            "measure": ["count", "count", "duration_days", "duration_days"],
+        }
+    ).set_index(["functional_area", "model_run", "measure"])
+
+    assumptions_df = pd.DataFrame(
+        {"Value": [0.5, 1.0]},
+        index=["zero_day_los", "birthroom_los"],
+    )
+
+    assumptions = {
+        "zero_day_los": "zero_day_los",
+        "birthroom_los": "birthroom_los",
+    }
+
+    actual = derive_birth_related_ward_beddays(
+        functional_area="maternity",
+        functional_areas_processed=functional_areas_processed,
+        assumptions_df=assumptions_df,
+        assumptions=assumptions,
+    )
+
+    # Zero-day and birth room calculations
+    assert mock_derive.call_count == 2
+
+    # birth_spell_overnight_beddays = 0
+    # 10 - 3, 20 - 4 (zero_day_beddays - birth_room_beddays)
+    expected = pd.Series([7, 16], index=pd.Index([1, 2], name="model_run"))
+    assert_series_equal(actual, expected)  # ty: ignore
 
 
 def test_derive_total_maternity_ward_beddays(mocker):
     functional_areas_processed = pd.DataFrame(
         {
             "model_run": [1],
-            "grouping": ["maternity_overnight_no_birth"],
-            "beddays": [1],
+            "functional_area": ["maternity_overnight_no_birth"],
+            "measure": ["duration_days"],
+            "value": [1],
         }
-    ).set_index(["model_run", "grouping"])
+    ).set_index(["model_run", "functional_area", "measure"])
     mock_derive = mocker.patch(
         "nhp.capacity_conversion.ip_maternity.derive_birth_related_ward_beddays",
         return_value=pd.Series([1], index=pd.Index([1], name="model_run")),
     )
     expected = pd.Series([5.0], index=pd.Index([1], name="model_run"))
+    actual = derive_total_maternity_ward_beddays(
+        functional_areas_processed,
+        assumptions_df=pd.DataFrame(),
+        assumptions_dict={
+            grouping: {"assumption": "assumption_name"}
+            for grouping in [
+                "maternity_normal_delivery",
+                "maternity_assisted_delivery",
+                "maternity_elective_csection",
+                "maternity_nonelective_csection",
+            ]
+        },
+    )
+    assert mock_derive.call_count == 4
+    assert_series_equal(actual, expected)
+
+
+def test_derive_total_maternity_ward_beddays_no_maternity_overnight_no_birth(mocker):
+    functional_areas_processed = pd.DataFrame(
+        {
+            "model_run": [1],
+            "functional_area": ["maternity"],
+            "measure": ["duration_days"],
+            "value": [1],
+        }
+    ).set_index(["model_run", "functional_area", "measure"])
+    mock_derive = mocker.patch(
+        "nhp.capacity_conversion.ip_maternity.derive_birth_related_ward_beddays",
+        return_value=pd.Series([1], index=pd.Index([1], name="model_run")),
+    )
+    expected = pd.Series([4.0], index=pd.Index([1], name="model_run"))
     actual = derive_total_maternity_ward_beddays(
         functional_areas_processed,
         assumptions_df=pd.DataFrame(),
@@ -153,7 +280,9 @@ def test_calculate_maternity_ward_beds(mocker):
     )
     mock_calculate = mocker.patch(
         "nhp.capacity_conversion.ip_maternity.calculate_beds",
-        return_value=pd.Series([1.0], index=pd.Index([1], name="model_run")),
+        return_value=pd.Series(
+            [1.0], index=pd.Index([1], name="model_run"), name="value"
+        ),
     )
     functional_areas_processed = pd.DataFrame()
     assumptions_df = pd.DataFrame(
@@ -161,7 +290,7 @@ def test_calculate_maternity_ward_beds(mocker):
         index=["MATERNITY_WARD_OCC", "MATERNITY_WARD_ANNUAL_OPERATIONAL_DAYS"],
     )
     expected = pd.DataFrame(
-        {"output": ["MATERNITY_WARD_BEDS"], "model_run": [1], "total": [1.0]}
+        {"output": ["MATERNITY_WARD_BEDS"], "model_run": [1], "value": [1.0]}
     ).set_index(["output", "model_run"])
     actual = calculate_maternity_ward_beds(
         functional_areas_processed, assumptions_df, maternity_ward_assumptions_dict
@@ -180,35 +309,43 @@ def test_calculate_maternity_ward_beds(mocker):
 def test_process_theatres_obstetric_proc_data():
     functional_areas = pd.DataFrame(
         {
-            "grouping": [
+            "functional_area": [
                 "maternity_elective_csection_nonzerolos",
                 "maternity_nonelective_csection_nonzerolos",
                 "maternity_elective_csection_zerolos",
                 "maternity_nonelective_csection_zerolos",
                 "maternity_group",
-            ],
-            "beddays": [1] * 5,
-            "spells": [1] * 5,
-        },
-        index=pd.Index([1] * 5, name="model_run"),
-    ).set_index("grouping", append=True)
+            ]
+            * 2,
+            "value": [1] * 10,
+            "measure": ["duration_days"] * 5 + ["count"] * 5,
+            "model_run": [1] * 10,
+        }
+    ).set_index(["functional_area", "model_run", "measure"])
     expected = (
         pd.DataFrame(
             {
-                "grouping": [
+                "functional_area": [
                     "maternity_elective_csection_nonzerolos",
                     "maternity_nonelective_csection_nonzerolos",
                     "maternity_elective_csection_zerolos",
                     "maternity_nonelective_csection_zerolos",
                     "maternity_group",
                     "obstetric_theatre_procedures",
-                ],
-                "beddays": [1] * 5 + [4],
-                "spells": [1] * 5 + [4],
-            },
-            index=pd.Index([1] * 6, name="model_run"),
+                ]
+                * 2,
+                "value": [1, 1, 1, 1, 1, 4] * 2,
+                "measure": ["duration_days"] * 6 + ["count"] * 6,
+                "model_run": [1] * 12,
+            }
         )
-        .set_index("grouping", append=True)
+        .set_index(
+            [
+                "model_run",
+                "measure",
+                "functional_area",
+            ]
+        )
         .sort_index()
     )
     actual = process_theatres_obstetric_proc_data(functional_areas)
@@ -218,7 +355,7 @@ def test_process_theatres_obstetric_proc_data():
 def test_process_maternity_birth_data():
     functional_areas = pd.DataFrame(
         {
-            "grouping": [
+            "functional_area": [
                 "maternity_group",
                 "maternity_normal_delivery_zerolos",
                 "maternity_normal_delivery_nonzerolos",
@@ -226,16 +363,17 @@ def test_process_maternity_birth_data():
                 "maternity_assisted_delivery_nonzerolos",
                 "maternity_nonelective_csection_zerolos",
                 "maternity_nonelective_csection_nonzerolos",
-            ],
-            "beddays": [0, 1, 1, 2, 2, 3, 3],
-            "spells": [0, 1, 1, 2, 2, 3, 3],
-        },
-        index=pd.Index([1] * 7, name="model_run"),
-    ).set_index("grouping", append=True)
+            ]
+            * 2,
+            "measure": ["duration_days"] * 7 + ["count"] * 7,
+            "model_run": [1] * 14,
+            "value": [0, 1, 1, 2, 2, 3, 3] * 2,
+        }
+    ).set_index(["functional_area", "model_run", "measure"])
     expected = (
         pd.DataFrame(
             {
-                "grouping": [
+                "functional_area": [
                     "maternity_group",
                     "maternity_normal_delivery_zerolos",
                     "maternity_normal_delivery_nonzerolos",
@@ -246,13 +384,20 @@ def test_process_maternity_birth_data():
                     "maternity_normal_delivery",
                     "maternity_assisted_delivery",
                     "maternity_nonelective_csection",
-                ],
-                "beddays": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
-                "spells": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6],
-            },
-            index=pd.Index([1] * 10, name="model_run"),
+                ]
+                * 2,
+                "measure": ["duration_days"] * 10 + ["count"] * 10,
+                "value": [0, 1, 1, 2, 2, 3, 3, 2, 4, 6] * 2,
+                "model_run": [1] * 20,
+            }
         )
-        .set_index("grouping", append=True)
+        .set_index(
+            [
+                "model_run",
+                "measure",
+                "functional_area",
+            ]
+        )
         .sort_index()
     )
     actual = process_maternity_birth_data(functional_areas)
@@ -366,28 +511,33 @@ def test_calculate_maternity_capacity(mocker):
         assumptions_df,
     ):
         return pd.DataFrame(
-            {"output": ["output"], "model_run": [1], "total": [1]}
-        ).set_index(["output", "model_run"])
+            {"output": ["output"], "model_run": [1], "value": [1]}
+        ).set_index(["model_run", "output"])
 
     fake_config = {
         "output": MaternityConfig(
             subgroup="subgroup",
-            col_to_use="spells",
+            measure="count",
             formula=mock_formula,
             assumptions={"assumption": "assumption"},
         )
     }
 
     functional_areas = pd.DataFrame(
-        {"model_run": [1], "grouping": ["subgroup"], "spells": [1], "beddays": [2]}
-    ).set_index(["model_run", "grouping"])
+        {
+            "model_run": [1, 1],
+            "functional_area": ["subgroup", "subgroup"],
+            "measure": ["count", "duration_days"],
+            "value": [1, 2],
+        }
+    ).set_index(["model_run", "functional_area", "measure"])
 
     assumptions_df = pd.DataFrame({"Value": {"some": 10}})
     mock_calculate_ward_beds = mocker.patch(
         "nhp.capacity_conversion.ip_maternity.calculate_maternity_ward_beds",
         return_value=pd.DataFrame(
-            {"output": ["ward_beds"], "model_run": [1], "total": [1]}
-        ).set_index(["output", "model_run"]),
+            {"output": ["ward_beds"], "model_run": [1], "value": [1]}
+        ).set_index(["model_run", "output"]),
     )
     actual = calculate_maternity_capacity(
         functional_areas,
@@ -398,8 +548,8 @@ def test_calculate_maternity_capacity(mocker):
         functional_areas, assumptions_df, maternity_ward_assumptions_dict
     )
     expected = pd.DataFrame(
-        {"output": ["output", "ward_beds"], "total": [1, 1], "model_run": [1, 1]}
-    ).set_index(["output", "model_run"])
+        {"output": ["output", "ward_beds"], "value": [1, 1], "model_run": [1, 1]}
+    ).set_index(["model_run", "output"])
     assert_frame_equal(actual, expected)
 
 
