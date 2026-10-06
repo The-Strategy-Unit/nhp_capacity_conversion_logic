@@ -671,6 +671,8 @@ def test_filter_aggregations_missing_functional_area(filter_agg_df, mocker):
     assert_frame_equal(actual, expected)
     assert mock_logger.info.call_args_list == [
         call("Filtering to activity_type"),
-        call("Functional areas not found in aggregations: ['Z']"),
         call("Filtering by sites: A"),
     ]
+    mock_logger.warning.assert_called_once_with(
+        "Functional areas not found in aggregations: ['Z']"
+    )
