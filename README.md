@@ -4,13 +4,12 @@
 
 [![codecov](https://codecov.io/gh/The-Strategy-Unit/nhp_capacity_conversion_logic/graph/badge.svg?token=D46wl0Y3vO)](https://codecov.io/gh/The-Strategy-Unit/nhp_capacity_conversion_logic)
 
-[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
+[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
 <!-- badges: end -->
 
 This repository contains a Python CLI and Shiny application for converting NHP
 demand-model activity aggregated into functional areas into capacity estimates.
-It is a work in progress intended for internal use only.
 
 ## For developers
 
@@ -23,15 +22,15 @@ verified with `uv 0.12.1`.
 Run the complete capacity conversion pipeline for all sites or selected sites:
 
 ```console
-uv run --locked -m nhp.capacity_conversion GUID
-uv run --locked -m nhp.capacity_conversion GUID --ip-sites ALL --op-sites SITEA,SITEB --aae-sites SITEA
+uv run --locked -m nhp.capacity_conversion DATASET GUID
+uv run --locked -m nhp.capacity_conversion DATASET GUID --ip-sites ALL --op-sites SITEA,SITEB --aae-sites SITEA
 ```
 
 Run a single activity type:
 
 ```console
-uv run --locked -m nhp.capacity_conversion.op GUID
-uv run --locked -m nhp.capacity_conversion.aae GUID --sites SITEA
+uv run --locked -m nhp.capacity_conversion.op DATASET GUID
+uv run --locked -m nhp.capacity_conversion.aae DATASET GUID --sites SITEA
 ```
 
 Running the pipeline will create a `results/GUID/RUNTIME` folder, with a
@@ -44,9 +43,8 @@ The application requires:
 - `AZ_STORAGE_EP`: Azure Blob Storage account endpoint.
 - `AZ_STORAGE_RESULTS`: container containing functional aggregations.
 - `AZ_TABLE_ENDPOINT`: Azure Table Storage account endpoint.
-- `CAPACITY_MODEL_VERSION`: functional-aggregation catalogue partition and blob
-  path version, such as `dev` or `prod`.
-- `TABLE_NAME`: table containing functional-aggregation metadata.
+- `CAPACITY_MODEL_VERSION`: Capacity model version, following semantic versioning guidelines, or `dev`
+- `TABLE_NAME`: table containing NHP demand model run metadata.
 
 `FEEDBACK_FORM_URL` is required. Set it to the `src` URL from the Microsoft Forms
 [embed code](https://support.microsoft.com/en-gb/office/share-a-form-384371be-f1e7-4628-bcba-abd3d6123917).
@@ -64,18 +62,19 @@ server from the repository root, pointing `uv` to your `.env` file:
 uv run --env-file .env --locked --group app shiny run --reload app.py
 ```
 
-The application queries the table partition configured by
-`CAPACITY_MODEL_VERSION`. It presents permitted datasets, `scenario_name`
-values and `scenario_runtime` model-run times, using the selected entity's
-`RowKey` as the functional aggregation GUID. It loads OP, A&E, IP day-case, IP
-maternity and IP wards aggregations, reshaping each across all sites before
-capacity conversion. It displays their capacity summaries and includes all
-five activity types in the Excel download.
-
-On Posit Connect, `nhp_provider_<dataset>` grants access to one dataset, while
+On Posit Connect, `nhp_provider_<dataset>` grants access to that specific dataset, while
 `nhp_devs` and `nhp_power_users` grant access to every available aggregation.
 Unrecognised or absent Connect groups grant no dataset access. Local development
-permits all available aggregations.
+permits all available aggregations. Users may belong to multiple `nhp_provider_<dataset>` groups.
+
+The application queries the permitted table partitions (allowed datasets) for each user.
+The capacity model is only compatible with demand model results >= v6.0, so incompatible 
+scenarios are filtered out. The application then presents permitted datasets, `scenario_name`
+values and `scenario_runtime` model-run times, using the selected entity's
+`RowKey` as the functional aggregation GUID. It loads OP, A&E and IP
+aggregations, reshaping each across all sites before
+capacity conversion. It displays their capacity summaries and includes all
+five activity types in the Excel download.
 
 The Shiny dependencies are in the `app` dependency group. `requirements.txt` is
 generated for Posit Connect and must not be edited manually.
