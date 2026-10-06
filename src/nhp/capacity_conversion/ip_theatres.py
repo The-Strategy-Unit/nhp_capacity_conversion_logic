@@ -67,7 +67,7 @@ THEATRES_ASSUMPTIONS_DICT = {
 def calculate_procedure_time(
     functional_areas: pd.DataFrame, assumptions_df: pd.DataFrame
 ) -> pd.DataFrame:
-    """Calculates procedure time for spells with an unknown procedure time
+    """Calculates procedure time for procedures using assumption values
 
     Args:
         functional_areas (pd.DataFrame): Functional areas from Azure for IP procedures and theatres
