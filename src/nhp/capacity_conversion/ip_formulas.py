@@ -4,26 +4,28 @@ import pandas as pd
 
 
 @overload
-def derive_beddays_from_spells(spells: float, los: float) -> float: ...
+def derive_beddays_from_activity_count(activity_count: float, los: float) -> float: ...
 
 
 @overload
-def derive_beddays_from_spells(spells: pd.Series, los: float) -> pd.Series: ...
+def derive_beddays_from_activity_count(
+    activity_count: pd.Series, los: float
+) -> pd.Series: ...
 
 
-def derive_beddays_from_spells(
-    spells: float | pd.Series, los: float
+def derive_beddays_from_activity_count(
+    activity_count: float | pd.Series, los: float
 ) -> float | pd.Series:
-    """Derive beddays given LOS assumption and number of spells
+    """Derive beddays given LOS assumption and counts of activity
 
     Args:
-        spells (float | pd.Series): Number of spells
+        activity_count (float | pd.Series): Count of activity
         los (float): LOS in minutes
 
     Returns:
-        float | pd.Series: Calculated beddays for spells
+        float | pd.Series: Calculated beddays for the activity
     """
-    return spells * (los / 1440)
+    return activity_count * (los / 1440)
 
 
 @overload
@@ -116,30 +118,32 @@ def calculate_time_util_capacity(
 
 
 @overload
-def derive_recovery_occupancy_hours(spells: float, recovery_time: float) -> float: ...
+def derive_recovery_occupancy_hours(
+    activity_count: float, recovery_time: float
+) -> float: ...
 
 
 @overload
 def derive_recovery_occupancy_hours(
-    spells: pd.Series, recovery_time: float
+    activity_count: pd.Series, recovery_time: float
 ) -> pd.Series: ...
 
 
 def derive_recovery_occupancy_hours(
-    spells: float | pd.Series, recovery_time: float
+    activity_count: float | pd.Series, recovery_time: float
 ) -> float | pd.Series:
-    """Formula used for calculating occupancy hours from number of spells and
+    """Formula used for calculating occupancy hours from counts of activity and
     estimated recovery time. Aligns with FRM_RECOVERY_OCCUPANCY in conversion
     archetypes catalogue.
 
     Args:
-        spells (float | pd.Series): Number of spells
+        activity_count (float | pd.Series): Counts of activity
         recovery_time (float): Estimated recovery time in minutes
 
     Returns:
         float | pd.Series: Calculated occupancy hours workload requirement
     """
-    return spells * (recovery_time / 60)
+    return activity_count * (recovery_time / 60)
 
 
 @overload
@@ -163,7 +167,7 @@ def calculate_recovery_capacity(
     annual_operational_hours: float,
     occupancy_rate: float,
 ) -> float | pd.Series:
-    """Formula used for calculating recovery capacity requirements from number of spells and
+    """Formula used for calculating recovery capacity requirements from counts of activity and
     estimated recovery time. Aligns with FRM_RECOVERY_OCCUPANCY in conversion archetypes catalogue.
 
     Args:
@@ -197,7 +201,7 @@ def calculate_beds_from_session_capacity(
 
 
     Args:
-        treatment_sessions (float | pd.Series): Number of renal daycase spells / treatment sessions
+        treatment_sessions (float | pd.Series): Number of renal daycase treatment sessions
         annual_session_capacity (float): Annual session capacity per bed
 
     Returns:
