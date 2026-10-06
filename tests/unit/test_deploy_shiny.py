@@ -367,13 +367,13 @@ def test_preflight_reports_missing_tools_and_bundle_files(
             deploy.DeploymentType.NEW,
             ["--new"],
             deploy.DeploymentTarget.DEV,
-            "OpenPlan Capacity Conversion Model (development)",
+            "OpenPlan Capacity Model (development)",
         ),
         (
             deploy.DeploymentType.REDEPLOY,
             ["--app-id", "app-guid"],
             deploy.DeploymentTarget.PROD,
-            "OpenPlan Capacity Conversion Model",
+            "OpenPlan Capacity Model",
         ),
     ],
 )
@@ -519,7 +519,7 @@ def test_describe_deployment_target_returns_validated_content_url(
                 {
                     "guid": "app-guid",
                     "app_mode": "python-shiny",
-                    "title": "OpenPlan Capacity Conversion Model",
+                    "title": "OpenPlan Capacity Model",
                     "content_url": "https://connect.example.test/content/app-guid/",
                 }
             ]
@@ -565,7 +565,7 @@ def test_describe_deployment_target_returns_validated_content_url(
                     {
                         "guid": "different-guid",
                         "app_mode": "python-shiny",
-                        "title": "OpenPlan Capacity Conversion Model",
+                        "title": "OpenPlan Capacity Model",
                         "content_url": "https://connect.example.test/content/app-guid",
                     }
                 ]
@@ -578,7 +578,7 @@ def test_describe_deployment_target_returns_validated_content_url(
                     {
                         "guid": "app-guid",
                         "app_mode": "shiny",
-                        "title": "OpenPlan Capacity Conversion Model",
+                        "title": "OpenPlan Capacity Model",
                         "content_url": "https://connect.example.test/content/app-guid",
                     }
                 ]
@@ -604,7 +604,7 @@ def test_describe_deployment_target_returns_validated_content_url(
                     {
                         "guid": "app-guid",
                         "app_mode": "python-shiny",
-                        "title": "OpenPlan Capacity Conversion Model",
+                        "title": "OpenPlan Capacity Model",
                         "content_url": "https://other.example.test/content/app-guid",
                     }
                 ]

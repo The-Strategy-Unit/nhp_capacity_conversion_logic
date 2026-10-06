@@ -1,4 +1,4 @@
-# OpenPlan Capacity Conversion Model
+# OpenPlan Capacity Model
 
 <!-- badges: start -->
 
@@ -184,13 +184,3 @@ bundle from the application's **Content Bundles** page in Connect. Restore any
 previous runtime configuration separately because it is not stored in the
 bundle. Then revert the faulty change on `main` and publish a new patch release;
 for example, recover from `v1.4.2` with `v1.4.3` rather than rerunning `v1.4.1`.
-
-After the initial deployment, set its **Custom content URL** under **Settings →
-Manage access** to:
-
-```text
-/nhp/dev/capacity-conversion/
-```
-
-The development application is available at
-[connect.strategyunitwm.nhs.uk/nhp/dev/capacity-conversion/](https://connect.strategyunitwm.nhs.uk/nhp/dev/capacity-conversion/).

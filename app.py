@@ -51,7 +51,7 @@ def _required_environment_variable(name: str) -> str:
     return value
 
 
-APP_TITLE = "OpenPlan Capacity Conversion Model"
+APP_TITLE = "OpenPlan Capacity Model"
 CAPACITY_MODEL_VERSION = _required_environment_variable("CAPACITY_MODEL_VERSION")
 ALL_SITES = "ALL"
 SITES = {activity_type: ALL_SITES for activity_type in ACTIVITY_TYPES}

@@ -26,7 +26,7 @@ def test_app_displays_capacity_conversion_interface(
 ) -> None:
     page.goto(app.url)
 
-    expect(page).to_have_title("OpenPlan Capacity Conversion Model")
+    expect(page).to_have_title("OpenPlan Capacity Model")
     favicon = page.locator("head link[rel='icon']")
     expect(favicon).to_have_attribute("href", "favicon.ico")
     favicon_response = page.request.get(f"{app.url}/favicon.ico")
@@ -37,9 +37,7 @@ def test_app_displays_capacity_conversion_interface(
     }
 
     banner = page.get_by_role("banner")
-    expect(
-        banner.get_by_text("OpenPlan Capacity Conversion Model", exact=True)
-    ).to_be_visible()
+    expect(banner.get_by_text("OpenPlan Capacity Model", exact=True)).to_be_visible()
     expect(page.get_by_role("heading", name="Capacity estimates")).to_be_visible()
     logo = page.get_by_role("img", name="The Strategy Unit and NHS")
     dataset = controller.InputSelect(page, "dataset")

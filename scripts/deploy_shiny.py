@@ -122,8 +122,8 @@ class _SameOriginRedirectHandler(HTTPRedirectHandler):
 
 
 APP_TITLES = {
-    DeploymentTarget.DEV: "OpenPlan Capacity Conversion Model (development)",
-    DeploymentTarget.PROD: "OpenPlan Capacity Conversion Model",
+    DeploymentTarget.DEV: "OpenPlan Capacity Model (development)",
+    DeploymentTarget.PROD: "OpenPlan Capacity Model",
 }
 SMOKE_CHECK_ATTEMPTS = 3
 SMOKE_CHECK_RETRY_SECONDS = 5
@@ -515,7 +515,7 @@ def main(arguments: Sequence[str] = ()) -> int:
         use_dotenv_file=options.use_dotenv_file
     )
 
-    print("OpenPlan Capacity Conversion Model deployment\n")
+    print("OpenPlan Capacity Model deployment\n")
     deployment_type = options.deployment_type or choose_deployment_type()
     if deployment_type is None:
         print("Deployment cancelled.")
