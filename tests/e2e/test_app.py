@@ -13,6 +13,7 @@ app = create_app_fixture(
         "AZ_STORAGE_RESULTS": "results",
         "AZ_TABLE_ENDPOINT": "https://table.example.com",
         "CAPACITY_MODEL_VERSION": "dev",
+        "DOCUMENTATION_URL": "https://docs.example.test/capacity-model/",
         "FEEDBACK_FORM_URL": "",
         "SHINY_TESTMODE": "1",
         "TABLE_NAME": "catalogue",
@@ -45,6 +46,7 @@ def test_app_displays_capacity_conversion_interface(
     model_run = controller.InputSelect(page, "model_run")
     generate = controller.InputActionButton(page, "generate")
     estimates = controller.OutputDataFrame(page, "estimates")
+    documentation = page.get_by_role("link", name="Documentation", exact=True)
     feedback = controller.InputActionButton(page, "feedback")
     download = controller.DownloadButton(page, "download_estimates")
     results_card = page.locator(".card").filter(
@@ -71,6 +73,14 @@ def test_app_displays_capacity_conversion_interface(
     expect(estimates.loc).to_be_visible()
     expect(estimates.loc).to_contain_text("ip_wards")
     expect(estimates.loc).to_contain_text("ip_procedures_and_theatres")
+    expect(documentation).to_be_visible()
+    expect(documentation).to_have_attribute(
+        "href", "https://docs.example.test/capacity-model/"
+    )
+    expect(documentation).to_have_attribute("target", "_blank")
+    expect(documentation).to_have_attribute("rel", "noopener noreferrer")
+    expect(documentation).to_have_class(re.compile(r"\bbtn-primary\b"))
+    expect(documentation).to_have_class(re.compile(r"\bbtn-sm\b"))
     expect(feedback.loc).to_be_visible()
     expect(feedback.loc).to_have_class(re.compile(r"\bbtn-sm\b"))
     expect(download.loc).to_be_visible()

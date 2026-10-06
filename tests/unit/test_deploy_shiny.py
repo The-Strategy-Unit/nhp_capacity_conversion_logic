@@ -125,6 +125,10 @@ def _configure_valid_preflight(
     monkeypatch.setenv("AZ_TABLE_ENDPOINT", "https://table.example.test")
     monkeypatch.setenv("CONNECT_SERVER", "https://connect.example.test")
     monkeypatch.setenv(
+        "DOCUMENTATION_URL",
+        "https://docs.example.test/capacity-model/",
+    )
+    monkeypatch.setenv(
         "FEEDBACK_FORM_URL",
         "https://forms.example.test/feedback",
     )
@@ -158,12 +162,14 @@ def test_new_deployment_does_not_require_app_id(
     assert checks[".env file"].required is False
 
 
-def test_new_deployment_requires_feedback_form_url(
+@pytest.mark.parametrize("required_url", ["DOCUMENTATION_URL", "FEEDBACK_FORM_URL"])
+def test_new_deployment_requires_runtime_url(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    required_url: str,
 ) -> None:
     _configure_valid_preflight(monkeypatch, tmp_path)
-    monkeypatch.delenv("FEEDBACK_FORM_URL")
+    monkeypatch.delenv(required_url)
 
     checks = {
         check.label: check
@@ -173,9 +179,9 @@ def test_new_deployment_requires_feedback_form_url(
         )
     }
 
-    assert checks["FEEDBACK_FORM_URL"].passed is False
-    assert checks["FEEDBACK_FORM_URL"].required is True
-    assert checks["FEEDBACK_FORM_URL"].source is deploy.EnvironmentSource.UNSET
+    assert checks[required_url].passed is False
+    assert checks[required_url].required is True
+    assert checks[required_url].source is deploy.EnvironmentSource.UNSET
     assert "AZ_FUNC_AGG_GUID" not in deploy.RUNTIME_ENV_VARS
 
 
@@ -263,7 +269,13 @@ def test_preflight_rejects_invalid_feedback_url_from_current_environment(
 
 @pytest.mark.parametrize(
     "env_var",
-    ["AZ_STORAGE_EP", "AZ_TABLE_ENDPOINT", "CONNECT_SERVER", "FEEDBACK_FORM_URL"],
+    [
+        "AZ_STORAGE_EP",
+        "AZ_TABLE_ENDPOINT",
+        "CONNECT_SERVER",
+        "DOCUMENTATION_URL",
+        "FEEDBACK_FORM_URL",
+    ],
 )
 def test_preflight_rejects_non_https_endpoint(
     monkeypatch: pytest.MonkeyPatch,

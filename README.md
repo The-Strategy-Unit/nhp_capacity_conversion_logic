@@ -46,6 +46,8 @@ The application requires:
 - `AZ_TABLE_ENDPOINT`: Azure Table Storage account endpoint.
 - `CAPACITY_MODEL_VERSION`: functional-aggregation catalogue partition and blob
   path version, such as `dev` or `prod`.
+- `DOCUMENTATION_URL`: HTTPS URL for the capacity-model documentation linked
+  from the application.
 - `TABLE_NAME`: table containing functional-aggregation metadata.
 
 `FEEDBACK_FORM_URL` is required. Set it to the `src` URL from the Microsoft Forms
@@ -139,6 +141,7 @@ the target's configuration and GitHub can mask their values in workflow logs:
 - `AZ_STORAGE_RESULTS`
 - `AZ_TABLE_ENDPOINT`
 - `CAPACITY_MODEL_VERSION`
+- `DOCUMENTATION_URL`
 - `TABLE_NAME`
 - `FEEDBACK_FORM_URL`
 
