@@ -43,12 +43,7 @@ def test_calculate_daycase_frm_time_util(mocker):
     mock_convert = mocker.patch(
         "nhp.capacity_conversion.ip_daycase.calculate_time_util_capacity",
         return_value=pd.Series(
-            [1],
-            name="value",
-            index=pd.MultiIndex.from_tuples(
-                [(0, "measure")],
-                names=["model_run", "measure"],
-            ),
+            [1], name="value", index=pd.Index([0], name="model_run")
         ),
     )
     expected = pd.DataFrame(
@@ -106,10 +101,7 @@ def test_calculate_daycase_frm_recovery_occupancy(mocker):
         return_value=pd.Series(
             [1],
             name="value",
-            index=pd.MultiIndex.from_tuples(
-                [(0, "measure")],
-                names=["model_run", "measure"],
-            ),
+            index=pd.Index([0], name="model_run"),
         ),
     )
     expected = pd.DataFrame(
@@ -150,10 +142,7 @@ def test_calculate_daycase_frm_session_capacity(mocker):
         return_value=pd.Series(
             [1],
             name="value",
-            index=pd.MultiIndex.from_tuples(
-                [(0, "measure")],
-                names=["model_run", "measure"],
-            ),
+            index=pd.Index([0], name="model_run"),
         ),
     )
     expected = pd.DataFrame(
@@ -194,11 +183,12 @@ def test_calculate_daycase_capacity():
 
     functional_areas = pd.DataFrame(
         {
-            "model_run": [1] * 2,
-            "functional_area": ["subgroup", "subgroup_2"],
-            "value": [0] * 2,
+            "model_run": [1] * 4,
+            "functional_area": ["subgroup", "subgroup_2"] * 2,
+            "measure": ["count", "duration_days"] * 2,
+            "value": [1, 0] * 2,
         }
-    ).set_index(["model_run", "functional_area"])
+    ).set_index(["model_run", "measure", "functional_area"])
 
     assumptions_df = pd.DataFrame({"Value": {"some": 10}})
     expected = pd.DataFrame({"output": ["subgroup", "subgroup_2"]}).set_index("output")
@@ -238,9 +228,10 @@ def test_calculate_daycase_capacity_skips_missing_subgroup():
         {
             "model_run": [1],
             "functional_area": ["subgroup"],
+            "measure": ["count"],
             "value": [0],
         }
-    ).set_index(["model_run", "functional_area"])
+    ).set_index(["model_run", "measure", "functional_area"])
 
     assumptions_df = pd.DataFrame({"Value": {"some": 10}})
     expected = pd.DataFrame({"output": ["subgroup"]}).set_index("output")
