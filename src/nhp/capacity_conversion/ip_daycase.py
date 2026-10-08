@@ -68,7 +68,6 @@ def calculate_daycase_frm_time_util(
     )
     results.loc[:, "output"] = output
     results = results.set_index("output", append=True)
-    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -111,7 +110,6 @@ def calculate_daycase_frm_recovery_occupancy(
     )
     results.loc[:, "output"] = output
     results = results.set_index("output", append=True)
-    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -145,7 +143,6 @@ def calculate_daycase_frm_session_capacity(
     )
     results.loc[:, "output"] = output
     results = results.set_index("output", append=True)
-    results.index = results.index.droplevel("measure")
     return results
 
 
@@ -256,7 +253,7 @@ def calculate_daycase_capacity(
     for subgroup, calculations in config.items():
         if subgroup in functional_areas.index.get_level_values("functional_area"):
             functional_area_subgroup = functional_areas.xs(
-                key=subgroup, level="functional_area"
+                key=(subgroup, "count"), level=["functional_area", "measure"]
             )["value"]
             for calculation in calculations:
                 results_list.append(
