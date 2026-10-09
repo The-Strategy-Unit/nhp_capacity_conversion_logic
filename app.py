@@ -1,4 +1,3 @@
-import logging
 import os
 from io import BytesIO
 from pathlib import Path
@@ -7,8 +6,18 @@ from urllib.parse import urlparse
 
 import pandas as pd
 from htmltools import HTMLDependency
-from shiny import App, Inputs, Outputs, Session, reactive, render, req, ui
+from shiny import App, Inputs, Outputs, Session, req, ui
 
+from app_modules import (
+    app_header_ui,
+    capacity_results_server,
+    capacity_results_ui,
+    feedback_server,
+    feedback_ui,
+    model_run_server,
+    model_run_ui,
+    page_heading_ui,
+)
 from nhp.capacity_conversion.aae import calculate_aae_capacity
 from nhp.capacity_conversion.config import ACTIVITY_TYPES, ASSUMPTIONS_URL
 from nhp.capacity_conversion.ip_daycase import calculate_daycase_capacity
@@ -40,8 +49,6 @@ from nhp.capacity_conversion.utils import (
     load_metadata_from_ats,
     process_activity_type,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def _required_environment_variable(name: str) -> str:
@@ -81,6 +88,9 @@ CATALOGUE_COLUMNS = (
     "scenario",
     "create_datetime",
 )
+FEEDBACK_MODULE_ID = "feedback"
+MODEL_RUN_MODULE_ID = "model_run"
+CAPACITY_RESULTS_MODULE_ID = "capacity_results"
 
 FEEDBACK_FORM_URL = os.getenv("FEEDBACK_FORM_URL")
 STATIC_ASSETS_DIR = Path(__file__).parent / "www"
@@ -180,6 +190,23 @@ def _available_datasets(groups: list[str] | None, *, is_local: bool) -> list[str
             _required_environment_variable("TABLE_NAME"),
         )
     return sorted(_provider_datasets(groups))
+
+
+def _load_catalogue(
+    dataset: str,
+    groups: list[str] | None,
+    *,
+    is_local: bool,
+) -> pd.DataFrame:
+    """Load the model-run catalogue after checking dataset entitlement."""
+    if not _may_access_dataset(dataset, groups, is_local=is_local):
+        raise PermissionError("The selected dataset is not available.")
+    model_runs = load_functional_aggregations_from_ats(
+        dataset,
+        _required_environment_variable("AZ_TABLE_ENDPOINT"),
+        _required_environment_variable("TABLE_NAME"),
+    )
+    return _catalogue_frame(model_runs)
 
 
 def _functional_aggregation_choices(
@@ -297,90 +324,14 @@ def _require_capacity_results(
 app_ui = ui.page_fluid(
     FAVICON_DEPENDENCY,
     ui.head_content(ui.include_css(STATIC_ASSETS_DIR / "app.css")),
-    ui.tags.header(
-        ui.div(
-            ui.span(APP_TITLE, class_="fs-4 fw-semibold"),
-            ui.div(
-                ui.img(
-                    src="strategy-unit-nhs-logo.png",
-                    alt="The Strategy Unit and NHS",
-                    class_="brand-logo-image",
-                ),
-                class_="brand-logo-frame",
-            ),
-            class_=(
-                "container d-flex flex-column flex-sm-row align-items-start "
-                "align-items-sm-center justify-content-sm-between gap-2 py-3"
-            ),
-        ),
-        class_="border-bottom bg-white",
-    ),
+    app_header_ui(APP_TITLE),
     ui.div(
-        ui.div(
-            ui.h1("Capacity estimates", class_="mb-0"),
-            ui.div(
-                ui.a(
-                    "Documentation",
-                    href=DOCUMENTATION_URL,
-                    target="_blank",
-                    rel="noopener noreferrer",
-                    class_="btn btn-primary btn-sm",
-                ),
-                ui.input_action_button(
-                    "feedback",
-                    "Feedback",
-                    class_="btn-primary btn-sm",
-                ),
-                class_="d-flex align-items-center gap-2",
-            ),
-            class_=(
-                "d-flex flex-column flex-sm-row align-items-sm-center "
-                "justify-content-between gap-3 mb-3"
-            ),
+        page_heading_ui(
+            DOCUMENTATION_URL,
+            feedback_ui(FEEDBACK_MODULE_ID),
         ),
-        ui.card(
-            ui.card_header("Select model run"),
-            ui.layout_columns(
-                ui.input_select(
-                    "dataset",
-                    "Dataset",
-                    {"": "Select a dataset"},
-                ),
-                ui.input_select(
-                    "scenario",
-                    "Scenario",
-                    {"": "Select a scenario"},
-                ),
-                ui.input_select(
-                    "model_run",
-                    "Model run time",
-                    {"": "Select a model run"},
-                ),
-                col_widths=(4, 4, 4),
-            ),
-            ui.div(
-                ui.input_action_button(
-                    "generate",
-                    "Generate capacity estimates",
-                    class_="btn-primary btn-sm",
-                ),
-                class_="d-flex justify-content-end",
-            ),
-            class_="mb-3",
-        ),
-        ui.card(
-            ui.card_header("Capacity estimates"),
-            ui.output_ui("results_status"),
-            ui.output_data_frame("estimates"),
-            ui.div(
-                ui.download_button(
-                    "download_estimates",
-                    "Download Estimates",
-                    class_="btn-primary btn-sm",
-                ),
-                class_="d-flex justify-content-end mt-3",
-            ),
-        ),
+        model_run_ui(MODEL_RUN_MODULE_ID),
+        capacity_results_ui(CAPACITY_RESULTS_MODULE_ID),
         class_="container-fluid py-4",
     ),
     title=APP_TITLE,
@@ -389,201 +340,29 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session) -> None:
-    datasets: reactive.Value[list[str]] = reactive.value([])
-    catalogue = reactive.value(_catalogue_frame([]))
-    capacity_results: reactive.Value[dict[str, pd.DataFrame | pd.Series] | None] = (
-        reactive.value(None)
+    feedback_server(
+        FEEDBACK_MODULE_ID,
+        feedback_form_url=FEEDBACK_FORM_URL,
     )
-
-    @reactive.effect
-    def load_datasets() -> None:
-        try:
-            datasets.set(
-                _available_datasets(
-                    session.groups,
-                    is_local=_is_local_development(),
-                )
-            )
-        except Exception:
-            logger.exception("Unable to load the list of datasets.")
-            datasets.set([])
-            ui.notification_show(
-                "Datasets are temporarily unavailable. Please try again later.",
-                type="error",
-                duration=None,
-            )
-
-    @reactive.effect
-    def load_catalogue() -> None:
-        selected_dataset = input.dataset()
-        if not selected_dataset:
-            catalogue.set(_catalogue_frame([]))
-            return
-
-        try:
-            if not _may_access_dataset(
-                selected_dataset,
-                session.groups,
-                is_local=_is_local_development(),
-            ):
-                raise PermissionError("The selected dataset is not available.")
-            model_runs = load_functional_aggregations_from_ats(
-                selected_dataset,
-                _required_environment_variable("AZ_TABLE_ENDPOINT"),
-                _required_environment_variable("TABLE_NAME"),
-            )
-            catalogue.set(_catalogue_frame(model_runs))
-        except Exception:
-            logger.exception("Unable to load the model-run catalogue.")
-            catalogue.set(_catalogue_frame([]))
-            ui.notification_show(
-                "Model runs are temporarily unavailable. Please try again later.",
-                type="error",
-                duration=None,
-            )
-
-    @reactive.effect
-    def update_datasets() -> None:
-        choices = {"": "Select a dataset"} | {
-            dataset: dataset for dataset in datasets.get()
-        }
-        ui.update_select("dataset", choices=choices, selected="")
-
-    @reactive.effect
-    def update_scenarios() -> None:
-        selected_dataset = input.dataset()
-        functional_aggregations = catalogue.get()
-        scenarios = sorted(
-            functional_aggregations.loc[
-                functional_aggregations["dataset"].eq(selected_dataset),
-                "scenario",
-            ].unique()
-        )
-        choices = {"": "Select a scenario"} | {
-            scenario: scenario for scenario in scenarios
-        }
-        ui.update_select("scenario", choices=choices, selected="")
-
-    @reactive.effect
-    def update_model_runs() -> None:
-        selected_dataset = input.dataset()
-        selected_scenario = input.scenario()
-        functional_aggregations = catalogue.get()
-        matching_aggregations = functional_aggregations.loc[
-            functional_aggregations["dataset"].eq(selected_dataset)
-            & functional_aggregations["scenario"].eq(selected_scenario)
-        ]
-        choices = {"": "Select a model run"} | _functional_aggregation_choices(
-            matching_aggregations
-        )
-        ui.update_select("model_run", choices=choices, selected="")
-
-    @reactive.effect
-    @reactive.event(input.feedback)
-    def show_feedback_form() -> None:
-        feedback_url = urlparse(FEEDBACK_FORM_URL or "")
-        if feedback_url.scheme != "https" or not feedback_url.netloc:
-            ui.modal_show(
-                ui.modal(
-                    ui.p("The feedback form is not currently available."),
-                    title="Feedback",
-                    easy_close=True,
-                    footer=ui.modal_button(
-                        "Close",
-                        class_="btn-primary btn-sm",
-                    ),
-                )
-            )
-            return
-
-        ui.modal_show(
-            ui.modal(
-                ui.tags.iframe(
-                    src=FEEDBACK_FORM_URL,
-                    title="Feedback form",
-                    style="width: 100%; height: 70vh; border: 0;",
-                ),
-                title="Feedback",
-                size="l",
-                easy_close=True,
-                footer=ui.modal_button(
-                    "Close",
-                    class_="btn-primary btn-sm",
-                ),
-            )
-        )
-
-    @reactive.effect
-    @reactive.event(input.generate)
-    def generate_capacity_results() -> None:
-        selected_dataset = input.dataset()
-        selected_scenario = input.scenario()
-        selected_guid = input.model_run()
-        if not selected_dataset or not selected_scenario or not selected_guid:
-            ui.notification_show(
-                "Select a dataset, scenario and model run before generating results.",
-                type="warning",
-            )
-            return
-
-        capacity_results.set(None)
-        try:
-            with ui.Progress(min=0, max=2) as progress:
-                progress.set(0, message="Checking model-run access")
-                metadata = _load_authorised_metadata(
-                    dataset=selected_dataset,
-                    scenario=selected_scenario,
-                    guid=selected_guid,
-                    groups=session.groups,
-                    is_local=_is_local_development(),
-                )
-                progress.set(1, message="Generating capacity estimates")
-                capacity_results.set(_load_capacity_results(metadata))
-                progress.set(2)
-        except Exception:
-            logger.exception("Unable to generate capacity estimates.")
-            ui.notification_show(
-                "Capacity estimates could not be generated. Please try again later.",
-                type="error",
-                duration=None,
-            )
-
-    @render.ui
-    def results_status():
-        if capacity_results.get() is None:
-            return ui.p(
-                "Select a model run and generate estimates to view the results.",
-                class_="text-muted",
-            )
-        return None
-
-    @render.data_frame
-    def estimates():
-        data_to_save = _require_capacity_results(capacity_results.get())
-        estimates_to_display = []
-
-        for activity_type in ACTIVITY_TYPES:
-            capacity_data = data_to_save[f"{activity_type}_capacity"]
-            if not isinstance(capacity_data, pd.DataFrame):
-                raise TypeError("Capacity results must be a DataFrame.")
-            capacity_summary = summarise_model_runs(capacity_data).reset_index()
-            capacity_summary.insert(0, "activity_type", activity_type)
-            estimates_to_display.append(capacity_summary)
-
-        return render.DataTable(
-            pd.concat(estimates_to_display, ignore_index=True),
-            width="100%",
-            summary=False,
-        )
-
-    @render.download_button(
-        filename="capacity_conversion_results.xlsx",
-        media_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
+    capacity_results = model_run_server(
+        MODEL_RUN_MODULE_ID,
+        empty_catalogue=_catalogue_frame([]),
+        functional_aggregation_choices=_functional_aggregation_choices,
+        groups=session.groups,
+        is_local_development=_is_local_development,
+        load_available_datasets=_available_datasets,
+        load_authorised_metadata=_load_authorised_metadata,
+        load_catalogue=_load_catalogue,
+        load_capacity_results=_load_capacity_results,
     )
-    def download_estimates():
-        yield _create_workbook(_require_capacity_results(capacity_results.get()))
+    capacity_results_server(
+        CAPACITY_RESULTS_MODULE_ID,
+        capacity_results,
+        activity_types=ACTIVITY_TYPES,
+        create_workbook=_create_workbook,
+        require_capacity_results=_require_capacity_results,
+        summarise_model_runs=summarise_model_runs,
+    )
 
 
 app = App(
