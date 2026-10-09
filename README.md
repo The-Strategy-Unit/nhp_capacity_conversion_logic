@@ -81,6 +81,8 @@ five activity types in the Excel download.
 
 The Shiny dependencies are in the `app` dependency group. `requirements.txt` is
 generated for Posit Connect and must not be edited manually.
+The application entry point composes the Shiny modules in `app_modules/`, where
+the model-run selection, feedback dialog and capacity-results components live.
 
 Regenerate and validate the Connect requirements after changing dependencies:
 
