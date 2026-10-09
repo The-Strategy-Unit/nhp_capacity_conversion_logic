@@ -49,6 +49,11 @@ REQUIRED_RUNTIME_ENV_VARS = (
 RUNTIME_ENV_VARS = REQUIRED_RUNTIME_ENV_VARS
 BUNDLE_FILES = (
     "app.py",
+    "app_modules/__init__.py",
+    "app_modules/capacity_results.py",
+    "app_modules/feedback.py",
+    "app_modules/layout.py",
+    "app_modules/model_run.py",
     "_brand.yml",
     "README.md",
     "pyproject.toml",

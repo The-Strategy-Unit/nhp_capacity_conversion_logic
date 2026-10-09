@@ -36,6 +36,16 @@ def test_deployment_bundle_includes_static_assets() -> None:
     } <= set(deploy.BUNDLE_FILES)
 
 
+def test_deployment_bundle_includes_shiny_modules() -> None:
+    assert {
+        "app_modules/__init__.py",
+        "app_modules/capacity_results.py",
+        "app_modules/feedback.py",
+        "app_modules/layout.py",
+        "app_modules/model_run.py",
+    } <= set(deploy.BUNDLE_FILES)
+
+
 @pytest.mark.parametrize(
     (
         "arguments",
