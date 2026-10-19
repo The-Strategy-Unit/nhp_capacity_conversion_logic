@@ -155,6 +155,10 @@ passed to the deployed application. The explicit manifest excludes `.env`, so
 repository content cannot override GitHub secrets. Configure required reviewers
 and deployment protection rules on the `prod` GitHub Environment.
 
+Both the manual helper and workflow use the bundle list in
+`scripts/deploy_shiny.py`. Add new deployable Shiny modules to `BUNDLE_FILES`
+there; the conversion package's Python files are included automatically.
+
 Pull requests and deployments use the same reusable CI workflow for the
 lockfile, generated requirements, formatting, lint, type, unit and browser
 checks. Requiring its pull-request status check is optional; deployment always
