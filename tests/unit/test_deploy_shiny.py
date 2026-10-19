@@ -36,6 +36,109 @@ def test_deployment_bundle_includes_static_assets() -> None:
     } <= set(deploy.BUNDLE_FILES)
 
 
+def test_deployment_bundle_includes_shiny_modules() -> None:
+    assert {
+        "app_modules/__init__.py",
+        "app_modules/capacity_results.py",
+        "app_modules/feedback.py",
+        "app_modules/layout.py",
+        "app_modules/model_run.py",
+    } <= set(deploy.BUNDLE_FILES)
+
+
+def test_manifest_and_manual_deployment_use_the_same_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_directory = tmp_path / "src" / "nhp" / "capacity_conversion"
+    source_directory.mkdir(parents=True)
+    (source_directory / "capacity.py").touch()
+    (tmp_path / "app.py").touch()
+    monkeypatch.setattr(deploy, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(deploy, "BUNDLE_FILES", ("app.py",))
+
+    manual_command = deploy.build_deploy_command(deploy.DeploymentType.NEW, "rsconnect")
+    manifest_command = deploy.build_manifest_command("rsconnect")
+
+    assert manifest_command[:3] == ["rsconnect", "write-manifest", "shiny"]
+    assert manual_command[manual_command.index("--exclude=**") :] == [
+        "--exclude=**",
+        ".",
+        "app.py",
+        "src/nhp/capacity_conversion/capacity.py",
+    ]
+    assert (
+        manifest_command[manifest_command.index("--exclude=**") :]
+        == (manual_command[manual_command.index("--exclude=**") :])
+    )
+
+
+@pytest.mark.parametrize(
+    ("named_file_present", "source_file_present", "failure_label"),
+    [
+        (False, True, "deployment bundle files"),
+        (True, False, "capacity-conversion source files"),
+    ],
+)
+def test_manifest_stops_before_rsconnect_for_missing_bundle_input(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mocker,
+    capsys: pytest.CaptureFixture[str],
+    named_file_present: bool,
+    source_file_present: bool,
+    failure_label: str,
+) -> None:
+    monkeypatch.setattr(deploy, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(deploy, "BUNDLE_FILES", ("app.py",))
+    if named_file_present:
+        (tmp_path / "app.py").touch()
+    if source_file_present:
+        source_directory = tmp_path / "src" / "nhp" / "capacity_conversion"
+        source_directory.mkdir(parents=True)
+        (source_directory / "capacity.py").touch()
+    run_command = mocker.patch.object(deploy, "run_command")
+
+    assert deploy.main(["--write-manifest"]) == 1
+    assert failure_label in capsys.readouterr().out
+    run_command.assert_not_called()
+
+
+def test_manifest_runs_without_loading_deployment_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mocker,
+) -> None:
+    source_directory = tmp_path / "src" / "nhp" / "capacity_conversion"
+    source_directory.mkdir(parents=True)
+    (source_directory / "capacity.py").touch()
+    (tmp_path / "app.py").touch()
+    monkeypatch.setattr(deploy, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(deploy, "BUNDLE_FILES", ("app.py",))
+    mocker.patch.object(deploy.shutil, "which", return_value="/bin/rsconnect")
+    load_environment = mocker.patch.object(deploy, "load_deployment_environment")
+    run_command = mocker.patch.object(deploy, "run_command", return_value=0)
+
+    assert deploy.main(["--write-manifest"]) == 0
+    load_environment.assert_not_called()
+    run_command.assert_called_once_with(
+        [
+            "/bin/rsconnect",
+            "write-manifest",
+            "shiny",
+            "--overwrite",
+            "--entrypoint",
+            "app:app",
+            "--requirements-file",
+            "requirements.txt",
+            "--exclude=**",
+            ".",
+            "app.py",
+            "src/nhp/capacity_conversion/capacity.py",
+        ]
+    )
+
+
 @pytest.mark.parametrize(
     (
         "arguments",

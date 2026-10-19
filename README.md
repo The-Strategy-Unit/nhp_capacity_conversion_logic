@@ -81,6 +81,8 @@ five activity types in the Excel download.
 
 The Shiny dependencies are in the `app` dependency group. `requirements.txt` is
 generated for Posit Connect and must not be edited manually.
+The application entry point composes the Shiny modules in `app_modules/`, where
+the model-run selection, feedback dialog and capacity-results components live.
 
 Regenerate and validate the Connect requirements after changing dependencies:
 
@@ -152,6 +154,10 @@ passed through the action's `CONNECT_ENV_SET_*` interface; the API key is not
 passed to the deployed application. The explicit manifest excludes `.env`, so
 repository content cannot override GitHub secrets. Configure required reviewers
 and deployment protection rules on the `prod` GitHub Environment.
+
+Both the manual helper and workflow use the bundle list in
+`scripts/deploy_shiny.py`. Add new deployable Shiny modules to `BUNDLE_FILES`
+there; the conversion package's Python files are included automatically.
 
 Pull requests and deployments use the same reusable CI workflow for the
 lockfile, generated requirements, formatting, lint, type, unit and browser

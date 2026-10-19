@@ -49,6 +49,11 @@ REQUIRED_RUNTIME_ENV_VARS = (
 RUNTIME_ENV_VARS = REQUIRED_RUNTIME_ENV_VARS
 BUNDLE_FILES = (
     "app.py",
+    "app_modules/__init__.py",
+    "app_modules/capacity_results.py",
+    "app_modules/feedback.py",
+    "app_modules/layout.py",
+    "app_modules/model_run.py",
     "_brand.yml",
     "README.md",
     "pyproject.toml",
@@ -159,6 +164,7 @@ class DeploymentOptions:
     target: DeploymentTarget
     assume_yes: bool
     use_dotenv_file: bool
+    write_manifest: bool = False
 
 
 def parse_deployment_options(arguments: Sequence[str]) -> DeploymentOptions:
@@ -187,12 +193,18 @@ def parse_deployment_options(arguments: Sequence[str]) -> DeploymentOptions:
         action="store_true",
         help="use only the current environment and do not read .env",
     )
+    parser.add_argument(
+        "--write-manifest",
+        action="store_true",
+        help="write the Connect manifest using the manual deployment bundle",
+    )
     parsed = parser.parse_args(arguments)
     return DeploymentOptions(
         deployment_type=parsed.deployment_type,
         target=parsed.target,
         assume_yes=parsed.yes,
         use_dotenv_file=not parsed.no_dotenv,
+        write_manifest=parsed.write_manifest,
     )
 
 
@@ -266,6 +278,41 @@ def choose_deployment_type() -> DeploymentType | None:
         print("Enter 1, 2, or q.")
 
 
+def bundle_file_checks() -> list[PreflightCheck]:
+    """Check the files shared by manual and automated deployment."""
+    missing_bundle_files = [
+        path for path in BUNDLE_FILES if not (PROJECT_ROOT / path).is_file()
+    ]
+    checks = [
+        PreflightCheck(
+            label="deployment bundle files",
+            passed=not missing_bundle_files,
+            detail=f"missing: {', '.join(missing_bundle_files)}",
+        )
+    ]
+
+    source_files = list(PROJECT_ROOT.glob(CAPACITY_SOURCE_GLOB))
+    checks.append(
+        PreflightCheck(
+            label="capacity-conversion source files",
+            passed=bool(source_files),
+            detail=f"no files match {CAPACITY_SOURCE_GLOB}",
+        )
+    )
+    return checks
+
+
+def resolve_bundle_files() -> list[str]:
+    """Resolve the explicit files and conversion package sources."""
+    return [
+        *BUNDLE_FILES,
+        *(
+            path.relative_to(PROJECT_ROOT).as_posix()
+            for path in sorted(PROJECT_ROOT.glob(CAPACITY_SOURCE_GLOB))
+        ),
+    ]
+
+
 def collect_preflight_checks(
     deployment_type: DeploymentType,
     environment_sources: Mapping[str, EnvironmentSource],
@@ -291,27 +338,8 @@ def collect_preflight_checks(
                 "uv run --locked --group dev scripts/deploy_shiny.py"
             ),
         ),
+        *bundle_file_checks(),
     ]
-
-    missing_bundle_files = [
-        path for path in BUNDLE_FILES if not (PROJECT_ROOT / path).is_file()
-    ]
-    checks.append(
-        PreflightCheck(
-            label="deployment bundle files",
-            passed=not missing_bundle_files,
-            detail=f"missing: {', '.join(missing_bundle_files)}",
-        )
-    )
-
-    source_files = list(PROJECT_ROOT.glob(CAPACITY_SOURCE_GLOB))
-    checks.append(
-        PreflightCheck(
-            label="capacity-conversion source files",
-            passed=bool(source_files),
-            detail=f"no files match {CAPACITY_SOURCE_GLOB}",
-        )
-    )
 
     required_env_vars = [*CONNECT_ENV_VARS, *REQUIRED_RUNTIME_ENV_VARS]
     if deployment_type is DeploymentType.REDEPLOY:
@@ -369,12 +397,25 @@ def build_deploy_command(
     for env_var in RUNTIME_ENV_VARS:
         command.extend(["-E", env_var])
 
-    command.extend(["--exclude=**", ".", *BUNDLE_FILES])
-    command.extend(
-        path.relative_to(PROJECT_ROOT).as_posix()
-        for path in sorted(PROJECT_ROOT.glob(CAPACITY_SOURCE_GLOB))
-    )
+    command.extend(["--exclude=**", ".", *resolve_bundle_files()])
     return command
+
+
+def build_manifest_command(rsconnect_executable: str) -> list[str]:
+    """Build the automated deployment manifest command from the same bundle."""
+    return [
+        rsconnect_executable,
+        "write-manifest",
+        "shiny",
+        "--overwrite",
+        "--entrypoint",
+        "app:app",
+        "--requirements-file",
+        "requirements.txt",
+        "--exclude=**",
+        ".",
+        *resolve_bundle_files(),
+    ]
 
 
 def confirm_deployment(
@@ -513,6 +554,18 @@ def verify_deployed_application(content_url: str) -> bool:
 def main(arguments: Sequence[str] = ()) -> int:
     """Validate configuration and deploy the Shiny app to Posit Connect."""
     options = parse_deployment_options(arguments)
+    if options.write_manifest:
+        checks = bundle_file_checks()
+        print_preflight_checks(checks)
+        if any(not check.passed for check in checks):
+            print("\nManifest cannot be created.")
+            return 1
+        rsconnect_executable = shutil.which("rsconnect")
+        if rsconnect_executable is None:
+            print("rsconnect is not available.")
+            return 1
+        return run_command(build_manifest_command(rsconnect_executable))
+
     environment_sources = load_deployment_environment(
         use_dotenv_file=options.use_dotenv_file
     )

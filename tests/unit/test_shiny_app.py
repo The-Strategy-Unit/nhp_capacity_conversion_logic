@@ -262,6 +262,45 @@ def test_available_datasets_for_providers_uses_groups_without_querying(mocker):
     load_datasets.assert_not_called()
 
 
+def test_load_catalogue_returns_authorised_model_runs(mocker):
+    mocker.patch.dict(os.environ, APP_ENVIRONMENT, clear=True)
+    model_runs = [_model_run()]
+    load_model_runs = mocker.patch.object(
+        app,
+        "load_functional_aggregations_from_ats",
+        return_value=model_runs,
+    )
+
+    result = app._load_catalogue(
+        "RXX",
+        ["nhp_provider_RXX"],
+        is_local=False,
+    )
+
+    assert result.equals(app._catalogue_frame(model_runs))
+    load_model_runs.assert_called_once_with(
+        "RXX",
+        "https://table.example.com",
+        "metadata",
+    )
+
+
+def test_load_catalogue_checks_entitlement_before_querying(mocker):
+    load_model_runs = mocker.patch.object(
+        app,
+        "load_functional_aggregations_from_ats",
+    )
+
+    with pytest.raises(PermissionError, match="not available"):
+        app._load_catalogue(
+            "RXX",
+            ["nhp_provider_RYY"],
+            is_local=False,
+        )
+
+    load_model_runs.assert_not_called()
+
+
 def _metadata(**overrides) -> dict:
     metadata = {
         "guid": "guid-123",
