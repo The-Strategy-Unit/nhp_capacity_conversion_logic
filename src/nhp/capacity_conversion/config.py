@@ -1,4 +1,4 @@
-ASSUMPTIONS_URL = "https://raw.githubusercontent.com/The-Strategy-Unit/open-plan-docs/refs/heads/main/docs/data/assumptions_register.csv"
+ASSUMPTIONS_URL = "https://raw.githubusercontent.com/The-Strategy-Unit/open-plan-docs/refs/heads/main/generate/functional-areas/references/assumptions_register.csv"
 
 # Name of the parquet file holding functional area aggregations, stored inside
 # the "aggregated_results_path" folder recorded against each model run
